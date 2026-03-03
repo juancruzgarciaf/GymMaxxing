@@ -7,7 +7,6 @@ Aplicación web para registro y seguimiento de entrenamientos de gimnasio.
 - Entrenamientos (creación y registro de rutinas)
 - Perfil (historial del usuario)
 
-## Tecnologías (a definir)
+##  (a definir)
 - Frontend:
 - Backend:
-- Base de datos:
