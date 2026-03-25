@@ -166,3 +166,40 @@ export const actualizarUsuario = async (req: Request, res: Response) => {
     });
   }
 };
+export const getUsuarios = async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query("SELECT * FROM usuario");
+
+    res.json(result.rows);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Error obteniendo usuarios",
+    });
+  }
+};
+export const getUsuarioPorId = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      "SELECT * FROM usuario WHERE id = $1",
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: "Usuario no encontrado",
+      });
+    }
+
+    res.json(result.rows[0]);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Error obteniendo usuario",
+    });
+  }
+};
