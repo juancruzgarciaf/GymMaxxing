@@ -1,6 +1,6 @@
 import { useState } from "react"
 
-function Register() {
+function Register({ goToLogin }: { goToLogin: () => void }) {
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -21,68 +21,97 @@ function Register() {
         })
       })
 
-      const text = await res.text()
-      console.log("Respuesta cruda:", text)
-
-      let data
-      try {
-        data = JSON.parse(text)
-      } catch {
-        alert("El backend no devolvió JSON válido")
-        return
-      }
-
-      console.log("Respuesta backend:", data)
+      const data = await res.json()
 
       if (data.id) {
-        alert("Usuario creado correctamente")
+        alert("Usuario creado ✅")
+        goToLogin() // 🔥 vuelve al login automáticamente
       } else {
         alert(data.error || "Error al registrarse")
       }
 
     } catch (error) {
-      console.error("Error:", error)
-      alert("No se pudo conectar al backend")
+      console.error(error)
+      alert("Error conectando al backend")
     }
   }
 
   return (
-    <div>
-      <h1>Register</h1>
+    <div style={styles.container}>
+      <div style={styles.card}>
+        <h1 style={styles.title}>Crear cuenta</h1>
 
-      <input
-        placeholder="Username"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-      />
+        <input style={styles.input} placeholder="Username"
+          value={username} onChange={(e) => setUsername(e.target.value)} />
 
-      <input
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
+        <input style={styles.input} placeholder="Email"
+          value={email} onChange={(e) => setEmail(e.target.value)} />
 
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
+        <input style={styles.input} type="password" placeholder="Password"
+          value={password} onChange={(e) => setPassword(e.target.value)} />
 
-      <select
-        value={tipoUsuario}
-        onChange={(e) => setTipoUsuario(e.target.value)}
-      >
-        <option value="usuario">Usuario</option>
-        <option value="entrenador">Entrenador</option>
-        <option value="gimnasio">Gimnasio</option>
-      </select>
+        <select style={styles.input}
+          value={tipoUsuario}
+          onChange={(e) => setTipoUsuario(e.target.value)}
+        >
+          <option value="usuario">Usuario</option>
+          <option value="entrenador">Entrenador</option>
+          <option value="gimnasio">Gimnasio</option>
+        </select>
 
-      <button onClick={handleRegister}>
-        Registrarse
-      </button>
+        <button style={styles.button} onClick={handleRegister}>
+          Registrarse
+        </button>
+
+        <p style={styles.link} onClick={goToLogin}>
+          Ya tengo cuenta
+        </p>
+      </div>
     </div>
   )
+}
+
+const styles: any = {
+  container: {
+    height: "100vh",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    background: "linear-gradient(135deg, #0f172a, #020617)"
+  },
+  card: {
+    backgroundColor: "#111827",
+    padding: "40px",
+    borderRadius: "16px",
+    width: "320px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "15px"
+  },
+  title: {
+    color: "white",
+    textAlign: "center"
+  },
+  input: {
+    padding: "12px",
+    borderRadius: "8px",
+    border: "none",
+    backgroundColor: "#1f2933",
+    color: "white"
+  },
+  button: {
+    padding: "12px",
+    borderRadius: "8px",
+    border: "none",
+    backgroundColor: "#22c55e",
+    fontWeight: "bold",
+    cursor: "pointer"
+  },
+  link: {
+    color: "#93c5fd",
+    textAlign: "center",
+    cursor: "pointer"
+  }
 }
 
 export default Register

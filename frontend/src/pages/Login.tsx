@@ -1,6 +1,7 @@
-import { useState, CSSProperties } from "react"
+import React, { useState } from "react"
+import logo from "../assets/logo.png"
 
-function Login() {
+function Login({ goToRegister }: { goToRegister: () => void }) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
 
@@ -18,6 +19,7 @@ function Login() {
 
       if (data.usuario) {
         alert("Login exitoso")
+        console.log("Usuario:", data.usuario)
       } else {
         alert(data.error || "Credenciales incorrectas")
       }
@@ -32,6 +34,7 @@ function Login() {
     <div style={styles.container}>
       <div style={styles.card}>
         <h1 style={styles.title}>GymMaxxing</h1>
+        <img src={logo} alt="logo" style={styles.logo} />
 
         <input
           style={styles.input}
@@ -52,7 +55,8 @@ function Login() {
           Iniciar sesión
         </button>
 
-        <p style={styles.link}>
+        {/* 🔥 ACÁ ESTÁ EL CAMBIO IMPORTANTE */}
+        <p style={styles.link} onClick={goToRegister}>
           No tengo cuenta
         </p>
       </div>
@@ -60,13 +64,13 @@ function Login() {
   )
 }
 
-const styles: { [key: string]: CSSProperties } = {
+const styles: Record<string, React.CSSProperties> = {
   container: {
     height: "100vh",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    background: "linear-gradient(135deg, #0f172a, #020617)",
+    background: "linear-gradient(135deg, #ffffff, #020617)",
     fontFamily: "sans-serif"
   },
   card: {
@@ -83,6 +87,11 @@ const styles: { [key: string]: CSSProperties } = {
     color: "white",
     textAlign: "center",
     marginBottom: "10px"
+  },
+  logo: {
+    width: "190px",
+    margin: "0 auto 10px auto",
+    display: "block"
   },
   input: {
     padding: "12px",
