@@ -7,6 +7,8 @@ import authRoutes from "./routes/auth.routes";
 import userRoutes from "./routes/user.routes";
 import rutinaRoutes from "./routes/rutina.routes";
 import entrenamientoRoutes from "./routes/entrenamiento.routes";
+import ejercicioRoutes from "./routes/ejercicio.routes";
+
 
 dotenv.config();
 
@@ -28,4 +30,7 @@ pool.query("SELECT NOW()")
 
 app.listen(3000, () => {
   console.log("Servidor corriendo en http://localhost:3000");
+
+
+app.use("/ejercicios", ejercicioRoutes);
 });
