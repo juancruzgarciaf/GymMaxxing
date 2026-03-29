@@ -1,7 +1,7 @@
 console.log("ENTRÓ AL CONTROLLER");
 import { Request, Response } from "express";
 import { pool } from "../db";
-
+  //authRoutes
 export const crearUsuario = async (req: Request, res: Response) => {
   console.log("ENTRÓ AL CONTROLLER");
 
@@ -25,7 +25,7 @@ export const crearUsuario = async (req: Request, res: Response) => {
       });
     }
 
-    // 🔍 Verificar si existe
+    //Verificar si existe
     const existente = await pool.query(
       "SELECT id FROM usuario WHERE email = $1",
       [email]
@@ -37,7 +37,7 @@ export const crearUsuario = async (req: Request, res: Response) => {
       });
     }
 
-    // 💣 IMPORTANTE: nulls en vez de undefined
+    //IMPORTANTE: nulls en vez de undefined
     const result = await pool.query(
       `INSERT INTO usuario 
       (username, email, password, edad, peso, altura, nacionalidad, nivel_entrenamiento, objetivo_entrenamiento, tipo_usuario)
@@ -108,6 +108,7 @@ export const login = async (req: Request, res: Response) => {
     });
   }
 };
+//userRoutes
 export const actualizarUsuario = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
