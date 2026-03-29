@@ -1,56 +1,78 @@
-import { useState } from "react"
+import { useState, type CSSProperties } from "react";
 
-function Register({ goToLogin }: { goToLogin: () => void }) {
-  const [username, setUsername] = useState("")
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [tipoUsuario, setTipoUsuario] = useState("usuario")
+type RegisterProps = {
+  goToLogin: () => void;
+};
+
+function Register({ goToLogin }: RegisterProps) {
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [tipoUsuario, setTipoUsuario] = useState("usuario");
 
   const handleRegister = async () => {
     try {
-      const res = await fetch("http://localhost:3000/usuarios", {
+      const res = await fetch("http://localhost:3000/auth/register", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           username,
           email,
           password,
-          tipo_usuario: tipoUsuario
-        })
-      })
+          tipo_usuario: tipoUsuario,
+        }),
+      });
 
-      const data = await res.json()
+      const data = (await res.json()) as { id?: number; error?: string };
 
-      if (data.id) {
-        alert("Usuario creado ✅")
-        goToLogin() // 🔥 vuelve al login automáticamente
-      } else {
-        alert(data.error || "Error al registrarse")
+      if (!res.ok) {
+        alert(data.error || "Error al registrarse");
+        return;
       }
 
+      if (data.id) {
+        alert("Usuario creado");
+        goToLogin();
+      } else {
+        alert("Respuesta invalida del servidor");
+      }
     } catch (error) {
-      console.error(error)
-      alert("Error conectando al backend")
+      console.error(error);
+      alert("Error conectando al backend");
     }
-  }
+  };
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
         <h1 style={styles.title}>Crear cuenta</h1>
 
-        <input style={styles.input} placeholder="Username"
-          value={username} onChange={(e) => setUsername(e.target.value)} />
+        <input
+          style={styles.input}
+          placeholder="Username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+        />
 
-        <input style={styles.input} placeholder="Email"
-          value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input
+          style={styles.input}
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
 
-        <input style={styles.input} type="password" placeholder="Password"
-          value={password} onChange={(e) => setPassword(e.target.value)} />
+        <input
+          style={styles.input}
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
 
-        <select style={styles.input}
+        <select
+          style={styles.input}
           value={tipoUsuario}
           onChange={(e) => setTipoUsuario(e.target.value)}
         >
@@ -68,16 +90,16 @@ function Register({ goToLogin }: { goToLogin: () => void }) {
         </p>
       </div>
     </div>
-  )
+  );
 }
 
-const styles: any = {
+const styles: Record<string, CSSProperties> = {
   container: {
     height: "100vh",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    background: "linear-gradient(135deg, #0f172a, #020617)"
+    background: "linear-gradient(135deg, #0f172a, #020617)",
   },
   card: {
     backgroundColor: "#111827",
@@ -86,18 +108,18 @@ const styles: any = {
     width: "320px",
     display: "flex",
     flexDirection: "column",
-    gap: "15px"
+    gap: "15px",
   },
   title: {
     color: "white",
-    textAlign: "center"
+    textAlign: "center",
   },
   input: {
     padding: "12px",
     borderRadius: "8px",
     border: "none",
     backgroundColor: "#1f2933",
-    color: "white"
+    color: "white",
   },
   button: {
     padding: "12px",
@@ -105,13 +127,13 @@ const styles: any = {
     border: "none",
     backgroundColor: "#22c55e",
     fontWeight: "bold",
-    cursor: "pointer"
+    cursor: "pointer",
   },
   link: {
     color: "#93c5fd",
     textAlign: "center",
-    cursor: "pointer"
-  }
-}
+    cursor: "pointer",
+  },
+};
 
-export default Register
+export default Register;
