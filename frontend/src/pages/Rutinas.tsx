@@ -805,11 +805,24 @@ function Rutinas({ usuario }: RutinasProps) {
 
   const agregarSerieAEjercicio = (idEjercicio: number) => {
     setEditorEjercicios((prev) =>
-      prev.map((item) =>
-        item.id_ejercicio === idEjercicio
-          ? { ...item, series: [...item.series, nuevaSerie()] }
-          : item,
-      ),
+      prev.map((item) => {
+        if (item.id_ejercicio !== idEjercicio) {
+          return item;
+        }
+
+        const ultimaSerie = item.series[item.series.length - 1];
+        const nueva = nuevaSerie();
+        const clonada = ultimaSerie
+          ? {
+              ...nueva,
+              kg: ultimaSerie.kg,
+              reps: ultimaSerie.reps,
+              tipo: ultimaSerie.tipo,
+            }
+          : nueva;
+
+        return { ...item, series: [...item.series, clonada] };
+      }),
     );
   };
 
@@ -1100,6 +1113,7 @@ function Rutinas({ usuario }: RutinasProps) {
           return ejercicio;
         }
         const nextNumber = ejercicio.series.length + 1;
+        const ultimaSerie = ejercicio.series[ejercicio.series.length - 1];
         return {
           ...ejercicio,
           series: [
@@ -1107,9 +1121,9 @@ function Rutinas({ usuario }: RutinasProps) {
             {
               id: crypto.randomUUID(),
               numero: nextNumber,
-              kg: "",
-              reps: "",
-              tipo: "serie",
+              kg: ultimaSerie?.kg ?? "",
+              reps: ultimaSerie?.reps ?? "",
+              tipo: ultimaSerie?.tipo ?? "serie",
               completada: false,
               registrada: false,
             },
@@ -1535,7 +1549,12 @@ function Rutinas({ usuario }: RutinasProps) {
                         <span />
                       </div>
 
-                      {ejercicio.series.map((serie, index) => (
+                      {ejercicio.series.map((serie, index) => {
+                        const numeroSerie = ejercicio.series
+                          .slice(0, index + 1)
+                          .filter((item) => item.tipo === "serie").length;
+
+                        return (
                         <div key={serie.id} className="set-row">
                           <div className="set-type-wrap">
                             <select
@@ -1557,7 +1576,7 @@ function Rutinas({ usuario }: RutinasProps) {
                               ))}
                             </select>
                             {serie.tipo === "serie" && (
-                              <span className="set-order-badge">{index + 1}</span>
+                              <span className="set-order-badge">{numeroSerie}</span>
                             )}
                           </div>
                           <input
@@ -1599,7 +1618,8 @@ function Rutinas({ usuario }: RutinasProps) {
                             x
                           </button>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     <button
@@ -1801,7 +1821,12 @@ function Rutinas({ usuario }: RutinasProps) {
                         <span>OK</span>
                       </div>
 
-                      {ejercicio.series.map((serie) => (
+                      {ejercicio.series.map((serie, index) => {
+                        const numeroSerie = ejercicio.series
+                          .slice(0, index + 1)
+                          .filter((item) => item.tipo === "serie").length;
+
+                        return (
                         <div
                           key={serie.id}
                           className={`set-row ${serie.completada ? "completed" : ""}`}
@@ -1826,7 +1851,7 @@ function Rutinas({ usuario }: RutinasProps) {
                               ))}
                             </select>
                             {serie.tipo === "serie" && (
-                              <span className="set-order-badge">{serie.numero}</span>
+                              <span className="set-order-badge">{numeroSerie}</span>
                             )}
                           </div>
                           <input
@@ -1875,7 +1900,8 @@ function Rutinas({ usuario }: RutinasProps) {
                             {serie.completada ? "✓" : "○"}
                           </button>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     <button
