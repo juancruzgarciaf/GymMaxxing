@@ -257,6 +257,46 @@ h2 {
   background: #172821;
 }
 
+.toast-pop {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  min-width: min(640px, calc(100vw - 28px));
+  max-width: min(760px, calc(100vw - 28px));
+  border: 1px solid #35506b;
+  border-radius: 14px;
+  padding: 13px 16px;
+  color: #dff0ff;
+  background: linear-gradient(145deg, #15283a 0%, #102133 100%);
+  box-shadow: 0 16px 26px rgba(0, 0, 0, 0.28);
+  animation: toastIn 180ms ease-out;
+}
+
+.toast-pop.ok {
+  border-color: #2f7d55;
+  background: linear-gradient(145deg, #173028 0%, #13261f 100%);
+  color: #c7f3dd;
+}
+
+.toast-pop.error {
+  border-color: #7a2f35;
+  background: linear-gradient(145deg, #321a1f 0%, #281419 100%);
+  color: #ffc0c6;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
 .panel {
   display: grid;
   gap: 16px;
@@ -557,14 +597,14 @@ h2 {
 .set-table-head,
 .set-row {
   display: grid;
-  grid-template-columns: 90px 1fr 1fr 42px;
+  grid-template-columns: 130px 1fr 1fr 42px;
   gap: 8px;
   align-items: center;
 }
 
 .set-table.execution-mode .set-table-head,
 .set-table.execution-mode .set-row {
-  grid-template-columns: 90px 1fr 1fr 42px 42px;
+  grid-template-columns: 130px 1fr 1fr 42px 42px;
 }
 
 .set-table-head {
@@ -581,6 +621,36 @@ h2 {
   padding: 7px 0;
   color: #d7e5ee;
   font-weight: 600;
+}
+
+.set-type-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.set-type-select {
+  width: 100%;
+  border: 1px solid #33424d;
+  background: #141c23;
+  color: #d8e2ea;
+  border-radius: 8px;
+  padding: 7px 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.set-order-badge {
+  min-width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #32424f;
+  background: #1f2b36;
+  color: #d7e5ee;
+  font-weight: 700;
+  font-size: 12px;
 }
 
 .set-row.completed {
@@ -922,12 +992,12 @@ h2 {
 
   .set-table-head,
   .set-row {
-    grid-template-columns: 70px 1fr 1fr 42px;
+    grid-template-columns: 115px 1fr 1fr 42px;
   }
 
   .set-table.execution-mode .set-table-head,
   .set-table.execution-mode .set-row {
-    grid-template-columns: 60px 1fr 1fr 42px 42px;
+    grid-template-columns: 115px 1fr 1fr 42px 42px;
   }
 
   .exercise-summary-grid {
@@ -941,5 +1011,11 @@ h2 {
 
   .rest-banner-controls {
     flex-wrap: wrap;
+  }
+
+  .toast-pop {
+    top: 72px;
+    min-width: calc(100vw - 20px);
+    max-width: calc(100vw - 20px);
   }
 }

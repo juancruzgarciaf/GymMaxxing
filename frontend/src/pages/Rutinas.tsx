@@ -41,7 +41,10 @@ type SerieDraft = {
   id: string;
   kg: string;
   reps: string;
+  tipo: SetTipo;
 };
+
+type SetTipo = "warmup" | "serie" | "dropset" | "failure";
 
 type EjercicioDraft = {
   id_ejercicio: number;
@@ -63,6 +66,7 @@ type EjecucionSerie = {
   numero: number;
   kg: string;
   reps: string;
+  tipo: SetTipo;
   completada: boolean;
   registrada: boolean;
 };
@@ -101,6 +105,7 @@ type PersistedRutinaEjercicio = {
   series: Array<{
     kg: string;
     reps: string;
+    tipo: SetTipo;
   }>;
 };
 
@@ -111,6 +116,7 @@ const nuevaSerie = (reps = ""): SerieDraft => ({
   id: crypto.randomUUID(),
   kg: "",
   reps,
+  tipo: "serie",
 });
 
 const parseError = async (res: Response, fallback: string) => {
@@ -163,6 +169,13 @@ const readRutinaPrefs = () => {
 const writeRutinaPrefs = (next: Record<string, PersistedRutinaEjercicio[]>) => {
   localStorage.setItem(RUTINA_PREFS_KEY, JSON.stringify(next));
 };
+
+const SET_TIPO_OPTIONS: Array<{ value: SetTipo; label: string }> = [
+  { value: "warmup", label: "WarmUp" },
+  { value: "serie", label: "Serie" },
+  { value: "dropset", label: "DropSet" },
+  { value: "failure", label: "Failure" },
+];
 
 function Rutinas({ usuario }: RutinasProps) {
   const [vista, setVista] = useState<VistaRutinas>("lista");
@@ -431,6 +444,26 @@ function Rutinas({ usuario }: RutinasProps) {
     return () => window.clearInterval(timer);
   }, [vista, sesionActiva]);
 
+  useEffect(() => {
+    if (!mensaje) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setMensaje("");
+    }, 2800);
+    return () => window.clearTimeout(timer);
+  }, [mensaje]);
+
+  useEffect(() => {
+    if (!error) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setError("");
+    }, 4200);
+    return () => window.clearTimeout(timer);
+  }, [error]);
+
   const abrirEditorNuevaRutina = () => {
     setError("");
     setMensaje("");
@@ -471,7 +504,12 @@ function Rutinas({ usuario }: RutinasProps) {
             const serie = nuevaSerie(String(item.repeticiones || ""));
             const persistedSerie = persistedSeries[index];
             return persistedSerie
-              ? { ...serie, kg: persistedSerie.kg ?? "", reps: persistedSerie.reps ?? serie.reps }
+              ? {
+                  ...serie,
+                  kg: persistedSerie.kg ?? "",
+                  reps: persistedSerie.reps ?? serie.reps,
+                  tipo: persistedSerie.tipo ?? "serie",
+                }
               : serie;
           }),
         };
@@ -797,7 +835,7 @@ function Rutinas({ usuario }: RutinasProps) {
   const updateSerieEditor = (
     idEjercicio: number,
     serieId: string,
-    field: "kg" | "reps",
+    field: "kg" | "reps" | "tipo",
     value: string,
   ) => {
     setEditorEjercicios((prev) =>
@@ -813,6 +851,12 @@ function Rutinas({ usuario }: RutinasProps) {
               return serie;
             }
 
+            if (field === "tipo") {
+              return {
+                ...serie,
+                tipo: value as SetTipo,
+              };
+            }
             return { ...serie, [field]: value };
           }),
         };
@@ -892,7 +936,11 @@ function Rutinas({ usuario }: RutinasProps) {
         editorEjercicios.map((ejercicio) => ({
           id_ejercicio: ejercicio.id_ejercicio,
           descansoSegundos: descansoDesdeInputs(ejercicio.descansoMin, ejercicio.descansoSeg),
-          series: ejercicio.series.map((serie) => ({ kg: serie.kg, reps: serie.reps })),
+          series: ejercicio.series.map((serie) => ({
+            kg: serie.kg,
+            reps: serie.reps,
+            tipo: serie.tipo,
+          })),
         })),
       );
 
@@ -979,6 +1027,7 @@ function Rutinas({ usuario }: RutinasProps) {
             numero: index + 1,
             kg: persistedSeries[index]?.kg ?? "",
             reps: persistedSeries[index]?.reps ?? String(item.repeticiones || ""),
+            tipo: persistedSeries[index]?.tipo ?? "serie",
             completada: false,
             registrada: false,
           })),
@@ -1000,7 +1049,7 @@ function Rutinas({ usuario }: RutinasProps) {
   const updateSerieEjecucion = (
     idEjercicio: number,
     serieId: string,
-    field: "kg" | "reps",
+    field: "kg" | "reps" | "tipo",
     value: string,
   ) => {
     setEjecucionEjercicios((prev) =>
@@ -1008,9 +1057,15 @@ function Rutinas({ usuario }: RutinasProps) {
         ejercicio.id_ejercicio === idEjercicio
           ? {
               ...ejercicio,
-              series: ejercicio.series.map((serie) =>
-                serie.id === serieId ? { ...serie, [field]: value } : serie,
-              ),
+              series: ejercicio.series.map((serie) => {
+                if (serie.id !== serieId) {
+                  return serie;
+                }
+                if (field === "tipo") {
+                  return { ...serie, tipo: value as SetTipo };
+                }
+                return { ...serie, [field]: value };
+              }),
             }
           : ejercicio,
       ),
@@ -1054,6 +1109,7 @@ function Rutinas({ usuario }: RutinasProps) {
               numero: nextNumber,
               kg: "",
               reps: "",
+              tipo: "serie",
               completada: false,
               registrada: false,
             },
@@ -1168,7 +1224,11 @@ function Rutinas({ usuario }: RutinasProps) {
           ejecucionEjercicios.map((ejercicio) => ({
             id_ejercicio: ejercicio.id_ejercicio,
             descansoSegundos: Math.max(0, ejercicio.descansoSegundos),
-            series: ejercicio.series.map((serie) => ({ kg: serie.kg, reps: serie.reps })),
+            series: ejercicio.series.map((serie) => ({
+              kg: serie.kg,
+              reps: serie.reps,
+              tipo: serie.tipo,
+            })),
           })),
         );
         await cargarRutinas();
@@ -1284,6 +1344,20 @@ function Rutinas({ usuario }: RutinasProps) {
     </button>
   );
 
+  const renderToast = () => {
+    if (!error && !mensaje) {
+      return null;
+    }
+
+    const isError = Boolean(error);
+    const text = isError ? error : mensaje;
+    return (
+      <div className={`toast-pop ${isError ? "error" : "ok"}`} role="status" aria-live="polite">
+        {text}
+      </div>
+    );
+  };
+
   const renderCarpeta = (carpeta: CarpetaRutina, nivel: number) => {
     const isExpanded = expandedCarpetas[carpeta.id_carpeta] ?? true;
     const rutinasDeCarpeta = rutinasPorCarpeta.get(carpeta.id_carpeta) ?? [];
@@ -1344,6 +1418,7 @@ function Rutinas({ usuario }: RutinasProps) {
   if (vista === "editor") {
     return (
       <main className="app">
+        {renderToast()}
         <section className="hero editor-header">
           <button type="button" className="btn secondary" onClick={() => setVista("lista")}>
             ← Volver
@@ -1355,9 +1430,6 @@ function Rutinas({ usuario }: RutinasProps) {
         </section>
 
         {loading && <p className="status">Guardando...</p>}
-        {error && <p className="status error">{error}</p>}
-        {mensaje && <p className="status ok">{mensaje}</p>}
-
         <section className="panel routine-editor-layout">
           <article className="box">
             <div className="form-grid">
@@ -1465,7 +1537,29 @@ function Rutinas({ usuario }: RutinasProps) {
 
                       {ejercicio.series.map((serie, index) => (
                         <div key={serie.id} className="set-row">
-                          <span className="set-number">{index + 1}</span>
+                          <div className="set-type-wrap">
+                            <select
+                              className="set-type-select"
+                              value={serie.tipo}
+                              onChange={(event) =>
+                                updateSerieEditor(
+                                  ejercicio.id_ejercicio,
+                                  serie.id,
+                                  "tipo",
+                                  event.target.value,
+                                )
+                              }
+                            >
+                              {SET_TIPO_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                            {serie.tipo === "serie" && (
+                              <span className="set-order-badge">{index + 1}</span>
+                            )}
+                          </div>
                           <input
                             className="field compact"
                             type="number"
@@ -1594,6 +1688,7 @@ function Rutinas({ usuario }: RutinasProps) {
   if (vista === "ejecucion") {
     return (
       <main className="app">
+        {renderToast()}
         {descansoActivo && (
           <section
             className={`rest-banner ${descansoActivo.finalizado ? "done" : ""}`}
@@ -1627,9 +1722,6 @@ function Rutinas({ usuario }: RutinasProps) {
             Finalizar rutina
           </button>
         </section>
-
-        {error && <p className="status error">{error}</p>}
-        {mensaje && <p className="status ok">{mensaje}</p>}
 
         <section className="panel two-cols">
           <article className="box">
@@ -1714,7 +1806,29 @@ function Rutinas({ usuario }: RutinasProps) {
                           key={serie.id}
                           className={`set-row ${serie.completada ? "completed" : ""}`}
                         >
-                          <span className="set-number">{serie.numero}</span>
+                          <div className="set-type-wrap">
+                            <select
+                              className="set-type-select"
+                              value={serie.tipo}
+                              onChange={(event) =>
+                                updateSerieEjecucion(
+                                  ejercicio.id_ejercicio,
+                                  serie.id,
+                                  "tipo",
+                                  event.target.value,
+                                )
+                              }
+                            >
+                              {SET_TIPO_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                            {serie.tipo === "serie" && (
+                              <span className="set-order-badge">{serie.numero}</span>
+                            )}
+                          </div>
                           <input
                             className="field compact"
                             type="number"
@@ -1786,15 +1900,13 @@ function Rutinas({ usuario }: RutinasProps) {
 
   return (
     <main className="app">
+      {renderToast()}
       <section className="hero">
         <p className="eyebrow">Rutinas</p>
         <h1>Tus rutinas</h1>
       </section>
 
       {loading && <p className="status">Cargando datos...</p>}
-      {error && <p className="status error">{error}</p>}
-      {mensaje && <p className="status ok">{mensaje}</p>}
-
       <section className="panel two-cols rutinas-main-panels">
         <article className="box">
           <div className="actions-row">
