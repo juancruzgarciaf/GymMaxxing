@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Usuario } from "../types";
 
 type Rutina = {
@@ -48,14 +48,46 @@ type EjercicioDraft = {
   nombre: string;
   grupo_muscular: string;
   tipo_disciplina: string;
+  descansoMin: string;
+  descansoSeg: string;
   series: SerieDraft[];
+};
+
+type EjecucionSerie = {
+  id: string;
+  numero: number;
+  kg: string;
+  reps: string;
+  completada: boolean;
+  registrada: boolean;
+};
+
+type EjecucionEjercicio = {
+  id_ejercicio: number;
+  nombre: string;
+  grupo_muscular: string;
+  tipo_disciplina: string;
+  descansoSegundos: number;
+  series: EjecucionSerie[];
+};
+
+type SesionEntrenamiento = {
+  id_sesion: number;
+  usuario_id: number;
+  rutina_id: number;
+  descripcion: string | null;
 };
 
 type RutinasProps = {
   usuario: Usuario;
 };
 
-type VistaRutinas = "lista" | "editor";
+type VistaRutinas = "lista" | "editor" | "ejecucion";
+
+type DescansoActivo = {
+  restanteSegundos: number;
+  etiqueta: string;
+};
 
 const API = "http://localhost:3000";
 
@@ -74,6 +106,32 @@ const parseError = async (res: Response, fallback: string) => {
   }
 };
 
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const twoDigits = (value: number) => String(value).padStart(2, "0");
+
+const formatDuration = (totalSeconds: number) => {
+  const min = Math.floor(totalSeconds / 60);
+  const sec = totalSeconds % 60;
+  return `${twoDigits(min)}:${twoDigits(sec)}`;
+};
+
+const descansoDesdeInputs = (minRaw: string, secRaw: string) => {
+  const min = Number(minRaw || "0");
+  const sec = Number(secRaw || "0");
+  const safeMin = Number.isNaN(min) ? 0 : clamp(Math.floor(min), 0, 999);
+  const safeSec = Number.isNaN(sec) ? 0 : clamp(Math.floor(sec), 0, 59);
+  return safeMin * 60 + safeSec;
+};
+
+const descansoToInputs = (descansoSegundos: number) => {
+  const safe = Number.isFinite(descansoSegundos) ? Math.max(0, Math.floor(descansoSegundos)) : 0;
+  return {
+    min: String(Math.floor(safe / 60)),
+    sec: String(safe % 60),
+  };
+};
+
 function Rutinas({ usuario }: RutinasProps) {
   const [vista, setVista] = useState<VistaRutinas>("lista");
   const [loading, setLoading] = useState(false);
@@ -87,6 +145,8 @@ function Rutinas({ usuario }: RutinasProps) {
   const [selectedRutinaId, setSelectedRutinaId] = useState<number | null>(null);
   const [expandedCarpetas, setExpandedCarpetas] = useState<Record<number, boolean>>({});
   const [busquedaRutina, setBusquedaRutina] = useState("");
+  const [resumenLoading, setResumenLoading] = useState(false);
+  const [resumenEjercicios, setResumenEjercicios] = useState<string[]>([]);
 
   const [editorRutinaId, setEditorRutinaId] = useState<number | null>(null);
   const [editorNombre, setEditorNombre] = useState("");
@@ -99,10 +159,29 @@ function Rutinas({ usuario }: RutinasProps) {
   const [filtroMusculo, setFiltroMusculo] = useState("");
   const [busquedaEjercicio, setBusquedaEjercicio] = useState("");
 
+  const [rutinaEnEjecucion, setRutinaEnEjecucion] = useState<Rutina | null>(null);
+  const [sesionActiva, setSesionActiva] = useState<SesionEntrenamiento | null>(null);
+  const [ejecucionEjercicios, setEjecucionEjercicios] = useState<EjecucionEjercicio[]>([]);
+  const [descansoActivo, setDescansoActivo] = useState<DescansoActivo | null>(null);
+
   const rutinaSeleccionada =
     selectedRutinaId == null
       ? null
       : rutinas.find((rutina) => rutina.id_rutina === selectedRutinaId) ?? null;
+
+  const totalSeriesEjecucion = useMemo(
+    () => ejecucionEjercicios.reduce((acc, ejercicio) => acc + ejercicio.series.length, 0),
+    [ejecucionEjercicios],
+  );
+
+  const seriesCompletadasEjecucion = useMemo(
+    () =>
+      ejecucionEjercicios.reduce(
+        (acc, ejercicio) => acc + ejercicio.series.filter((serie) => serie.completada).length,
+        0,
+      ),
+    [ejecucionEjercicios],
+  );
 
   const cargarRutinas = async () => {
     const res = await fetch(`${API}/rutinas`);
@@ -139,6 +218,7 @@ function Rutinas({ usuario }: RutinasProps) {
     if (!res.ok) {
       throw new Error(await parseError(res, "No se pudo obtener el catalogo de ejercicios"));
     }
+
     const data = (await res.json()) as Ejercicio[];
     setCatalogoEjercicios(data);
   };
@@ -148,6 +228,7 @@ function Rutinas({ usuario }: RutinasProps) {
     if (!res.ok) {
       throw new Error(await parseError(res, "No se pudieron obtener los ejercicios de la rutina"));
     }
+
     return (await res.json()) as RutinaEjercicio[];
   };
 
@@ -167,6 +248,48 @@ function Rutinas({ usuario }: RutinasProps) {
 
     void init();
   }, []);
+
+  useEffect(() => {
+    if (selectedRutinaId == null) {
+      setResumenEjercicios([]);
+      setResumenLoading(false);
+      return;
+    }
+
+    const loadResumen = async () => {
+      try {
+        setResumenLoading(true);
+        const ejercicios = await cargarEjerciciosDeRutina(selectedRutinaId);
+        setResumenEjercicios(ejercicios.map((item) => item.nombre));
+      } catch {
+        setResumenEjercicios([]);
+      } finally {
+        setResumenLoading(false);
+      }
+    };
+
+    void loadResumen();
+  }, [selectedRutinaId]);
+
+  useEffect(() => {
+    if (!descansoActivo || descansoActivo.restanteSegundos <= 0) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setDescansoActivo((prev) => {
+        if (!prev) {
+          return null;
+        }
+        if (prev.restanteSegundos <= 1) {
+          return null;
+        }
+        return { ...prev, restanteSegundos: prev.restanteSegundos - 1 };
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [descansoActivo]);
 
   const abrirEditorNuevaRutina = () => {
     setError("");
@@ -190,16 +313,20 @@ function Rutinas({ usuario }: RutinasProps) {
       setMensaje("");
 
       const ejercicios = await cargarEjerciciosDeRutina(rutina.id_rutina);
-      const draft = ejercicios.map((item) => ({
-        id_ejercicio: item.id_ejercicio,
-        nombre: item.nombre,
-        grupo_muscular: item.grupo_muscular,
-        tipo_disciplina: item.tipo_disciplina,
-        series: Array.from(
-          { length: Math.max(1, item.series) },
-          () => nuevaSerie(String(item.repeticiones || "")),
-        ),
-      }));
+      const draft = ejercicios.map((item) => {
+        const descanso = descansoToInputs(item.descanso ?? 0);
+        return {
+          id_ejercicio: item.id_ejercicio,
+          nombre: item.nombre,
+          grupo_muscular: item.grupo_muscular,
+          tipo_disciplina: item.tipo_disciplina,
+          descansoMin: descanso.min,
+          descansoSeg: descanso.sec,
+          series: Array.from({ length: Math.max(1, item.series) }, () =>
+            nuevaSerie(String(item.repeticiones || "")),
+          ),
+        };
+      });
 
       setEditorRutinaId(rutina.id_rutina);
       setEditorNombre(rutina.nombre);
@@ -290,7 +417,12 @@ function Rutinas({ usuario }: RutinasProps) {
         descripcion?: string | null;
         duracion_estimada?: number | null;
         id_carpeta?: number | null;
-        ejercicios?: Array<{ id_ejercicio?: number; repeticiones?: number; series?: number }>;
+        ejercicios?: Array<{
+          id_ejercicio?: number;
+          repeticiones?: number;
+          series?: number;
+          descanso?: number;
+        }>;
       };
 
       if (!payload.nombre?.trim()) {
@@ -330,7 +462,7 @@ function Rutinas({ usuario }: RutinasProps) {
               id_ejercicio: ejercicio.id_ejercicio,
               series: Math.max(1, ejercicio.series ?? 1),
               repeticiones: Math.max(1, ejercicio.repeticiones ?? 10),
-              descanso: 90,
+              descanso: Math.max(0, ejercicio.descanso ?? 90),
               orden: orden + 1,
             }),
           });
@@ -366,6 +498,8 @@ function Rutinas({ usuario }: RutinasProps) {
           nombre: ejercicio.nombre,
           grupo_muscular: ejercicio.grupo_muscular,
           tipo_disciplina: ejercicio.tipo_disciplina,
+          descansoMin: "1",
+          descansoSeg: "30",
           series: [nuevaSerie()],
         },
       ];
@@ -405,7 +539,7 @@ function Rutinas({ usuario }: RutinasProps) {
     );
   };
 
-  const updateSerie = (
+  const updateSerieEditor = (
     idEjercicio: number,
     serieId: string,
     field: "kg" | "reps",
@@ -428,6 +562,16 @@ function Rutinas({ usuario }: RutinasProps) {
           }),
         };
       }),
+    );
+  };
+
+  const updateDescansoEditor = (
+    idEjercicio: number,
+    field: "descansoMin" | "descansoSeg",
+    value: string,
+  ) => {
+    setEditorEjercicios((prev) =>
+      prev.map((item) => (item.id_ejercicio === idEjercicio ? { ...item, [field]: value } : item)),
     );
   };
 
@@ -497,11 +641,12 @@ function Rutinas({ usuario }: RutinasProps) {
         const repeticiones = Number(
           ejercicio.series.find((serie) => serie.reps.trim())?.reps ?? "10",
         );
+        const descanso = descansoDesdeInputs(ejercicio.descansoMin, ejercicio.descansoSeg);
 
         const payload = {
           series: Math.max(1, ejercicio.series.length),
           repeticiones: Number.isNaN(repeticiones) ? 10 : Math.max(1, repeticiones),
-          descanso: 90,
+          descanso,
           orden: orden + 1,
         };
 
@@ -540,6 +685,187 @@ function Rutinas({ usuario }: RutinasProps) {
       setMensaje("Rutina guardada");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error guardando rutina");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const registrarSerie = async (
+    ejercicio: EjecucionEjercicio,
+    serie: EjecucionSerie,
+    sesionId: number,
+  ) => {
+    const reps = Number(serie.reps || "0");
+    const kg = Number(serie.kg || "0");
+    const payload = {
+      repeticiones: Number.isNaN(reps) ? 1 : Math.max(1, reps),
+      peso: Number.isNaN(kg) || !serie.kg.trim() ? null : Math.max(0, kg),
+      descanso: ejercicio.descansoSegundos,
+      orden: serie.numero,
+      ejercicio_id: ejercicio.id_ejercicio,
+      sesion_id: sesionId,
+    };
+
+    const res = await fetch(`${API}/entrenamientos/serie`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      throw new Error(await parseError(res, "No se pudo registrar la serie"));
+    }
+  };
+
+  const iniciarRutina = async () => {
+    if (!rutinaSeleccionada) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+      setMensaje("");
+      setDescansoActivo(null);
+
+      const ejercicios = await cargarEjerciciosDeRutina(rutinaSeleccionada.id_rutina);
+      const startRes = await fetch(`${API}/entrenamientos/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          usuario_id: usuario.id,
+          rutina_id: rutinaSeleccionada.id_rutina,
+          descripcion: rutinaSeleccionada.nombre,
+        }),
+      });
+
+      if (!startRes.ok) {
+        throw new Error(await parseError(startRes, "No se pudo iniciar la rutina"));
+      }
+
+      const sesion = (await startRes.json()) as SesionEntrenamiento;
+      const ejecucion = ejercicios.map((item) => ({
+        id_ejercicio: item.id_ejercicio,
+        nombre: item.nombre,
+        grupo_muscular: item.grupo_muscular,
+        tipo_disciplina: item.tipo_disciplina,
+        descansoSegundos: Math.max(0, item.descanso ?? 0),
+        series: Array.from({ length: Math.max(1, item.series) }, (_, index) => ({
+          id: crypto.randomUUID(),
+          numero: index + 1,
+          kg: "",
+          reps: String(item.repeticiones || ""),
+          completada: false,
+          registrada: false,
+        })),
+      }));
+
+      setSesionActiva(sesion);
+      setRutinaEnEjecucion(rutinaSeleccionada);
+      setEjecucionEjercicios(ejecucion);
+      setVista("ejecucion");
+      setMensaje(`Rutina iniciada (Sesion #${sesion.id_sesion})`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error iniciando rutina");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateSerieEjecucion = (
+    idEjercicio: number,
+    serieId: string,
+    field: "kg" | "reps",
+    value: string,
+  ) => {
+    setEjecucionEjercicios((prev) =>
+      prev.map((ejercicio) =>
+        ejercicio.id_ejercicio === idEjercicio
+          ? {
+              ...ejercicio,
+              series: ejercicio.series.map((serie) =>
+                serie.id === serieId ? { ...serie, [field]: value } : serie,
+              ),
+            }
+          : ejercicio,
+      ),
+    );
+  };
+
+  const toggleSerieCompletada = (idEjercicio: number, serieId: string) => {
+    const ejercicio = ejecucionEjercicios.find((item) => item.id_ejercicio === idEjercicio);
+    const serie = ejercicio?.series.find((item) => item.id === serieId);
+    if (!ejercicio || !serie) {
+      return;
+    }
+
+    const nuevaCompletada = !serie.completada;
+
+    setEjecucionEjercicios((prev) =>
+      prev.map((item) =>
+        item.id_ejercicio === idEjercicio
+          ? {
+              ...item,
+              series: item.series.map((set) =>
+                set.id === serieId ? { ...set, completada: nuevaCompletada } : set,
+              ),
+            }
+          : item,
+      ),
+    );
+
+    if (nuevaCompletada && ejercicio.descansoSegundos > 0) {
+      setDescansoActivo({
+        restanteSegundos: ejercicio.descansoSegundos,
+        etiqueta: `${ejercicio.nombre} · Serie ${serie.numero}`,
+      });
+    }
+
+    if (nuevaCompletada && sesionActiva && !serie.registrada) {
+      void registrarSerie(ejercicio, serie, sesionActiva.id_sesion)
+        .then(() => {
+          setEjecucionEjercicios((prev) =>
+            prev.map((item) =>
+              item.id_ejercicio === idEjercicio
+                ? {
+                    ...item,
+                    series: item.series.map((set) =>
+                      set.id === serieId ? { ...set, registrada: true } : set,
+                    ),
+                  }
+                : item,
+            ),
+          );
+        })
+        .catch((err) => {
+          setError(err instanceof Error ? err.message : "No se pudo registrar la serie");
+        });
+    }
+  };
+
+  const finalizarRutina = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      if (sesionActiva) {
+        const res = await fetch(`${API}/entrenamientos/end`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sesion_id: sesionActiva.id_sesion }),
+        });
+        if (!res.ok) {
+          throw new Error(await parseError(res, "No se pudo finalizar la rutina"));
+        }
+      }
+
+      setSesionActiva(null);
+      setRutinaEnEjecucion(null);
+      setEjecucionEjercicios([]);
+      setDescansoActivo(null);
+      setVista("lista");
+      setMensaje("Rutina finalizada");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error finalizando rutina");
     } finally {
       setLoading(false);
     }
@@ -719,6 +1045,39 @@ function Rutinas({ usuario }: RutinasProps) {
                       </button>
                     </div>
 
+                    <div className="rest-grid">
+                      <span>Descanso</span>
+                      <input
+                        className="field compact"
+                        type="number"
+                        min="0"
+                        placeholder="Min"
+                        value={ejercicio.descansoMin}
+                        onChange={(event) =>
+                          updateDescansoEditor(
+                            ejercicio.id_ejercicio,
+                            "descansoMin",
+                            event.target.value,
+                          )
+                        }
+                      />
+                      <input
+                        className="field compact"
+                        type="number"
+                        min="0"
+                        max="59"
+                        placeholder="Seg"
+                        value={ejercicio.descansoSeg}
+                        onChange={(event) =>
+                          updateDescansoEditor(
+                            ejercicio.id_ejercicio,
+                            "descansoSeg",
+                            event.target.value,
+                          )
+                        }
+                      />
+                    </div>
+
                     <div className="set-table">
                       <div className="set-table-head">
                         <span>Set</span>
@@ -737,7 +1096,7 @@ function Rutinas({ usuario }: RutinasProps) {
                             placeholder="-"
                             value={serie.kg}
                             onChange={(event) =>
-                              updateSerie(
+                              updateSerieEditor(
                                 ejercicio.id_ejercicio,
                                 serie.id,
                                 "kg",
@@ -752,7 +1111,7 @@ function Rutinas({ usuario }: RutinasProps) {
                             placeholder="-"
                             value={serie.reps}
                             onChange={(event) =>
-                              updateSerie(
+                              updateSerieEditor(
                                 ejercicio.id_ejercicio,
                                 serie.id,
                                 "reps",
@@ -855,6 +1214,129 @@ function Rutinas({ usuario }: RutinasProps) {
     );
   }
 
+  if (vista === "ejecucion") {
+    return (
+      <main className="app">
+        <section className="hero editor-header">
+          <button type="button" className="btn secondary" onClick={() => setVista("lista")}>
+            ← Volver
+          </button>
+          <h1>{rutinaEnEjecucion?.nombre || "Ejecucion de rutina"}</h1>
+          <button type="button" className="btn danger" onClick={finalizarRutina} disabled={loading}>
+            Finalizar rutina
+          </button>
+        </section>
+
+        {error && <p className="status error">{error}</p>}
+        {mensaje && <p className="status ok">{mensaje}</p>}
+
+        <section className="panel two-cols">
+          <article className="box">
+            <h2>Progreso</h2>
+            <p className="helper-text">
+              Series completas: {seriesCompletadasEjecucion}/{totalSeriesEjecucion}
+            </p>
+            {descansoActivo ? (
+              <div className="status">
+                Descanso: <strong>{formatDuration(descansoActivo.restanteSegundos)}</strong> ·{" "}
+                {descansoActivo.etiqueta}
+              </div>
+            ) : (
+              <p className="helper-text">No hay descanso activo.</p>
+            )}
+          </article>
+          <article className="box">
+            <h2>Sesion</h2>
+            <p className="helper-text">
+              ID de sesion: <strong>{sesionActiva?.id_sesion ?? "-"}</strong>
+            </p>
+          </article>
+        </section>
+
+        <section className="panel">
+          <article className="box">
+            <div className="editor-selected">
+              {ejecucionEjercicios.length === 0 ? (
+                <div className="empty-state">
+                  <p>La rutina no tiene ejercicios</p>
+                  <small>Vuelve y agrega ejercicios a la rutina para ejecutarla.</small>
+                </div>
+              ) : (
+                ejecucionEjercicios.map((ejercicio) => (
+                  <article key={ejercicio.id_ejercicio} className="exercise-card">
+                    <div className="exercise-card-head">
+                      <div>
+                        <h3>{ejercicio.nombre}</h3>
+                        <small>
+                          {ejercicio.grupo_muscular} · Descanso {formatDuration(ejercicio.descansoSegundos)}
+                        </small>
+                      </div>
+                    </div>
+
+                    <div className="set-table">
+                      <div className="set-table-head">
+                        <span>Set</span>
+                        <span>KG</span>
+                        <span>Reps</span>
+                        <span>OK</span>
+                      </div>
+
+                      {ejercicio.series.map((serie) => (
+                        <div
+                          key={serie.id}
+                          className={`set-row ${serie.completada ? "completed" : ""}`}
+                        >
+                          <span className="set-number">{serie.numero}</span>
+                          <input
+                            className="field compact"
+                            type="number"
+                            min="0"
+                            placeholder="-"
+                            value={serie.kg}
+                            onChange={(event) =>
+                              updateSerieEjecucion(
+                                ejercicio.id_ejercicio,
+                                serie.id,
+                                "kg",
+                                event.target.value,
+                              )
+                            }
+                          />
+                          <input
+                            className="field compact"
+                            type="number"
+                            min="1"
+                            placeholder="-"
+                            value={serie.reps}
+                            onChange={(event) =>
+                              updateSerieEjecucion(
+                                ejercicio.id_ejercicio,
+                                serie.id,
+                                "reps",
+                                event.target.value,
+                              )
+                            }
+                          />
+                          <button
+                            type="button"
+                            className={`btn tiny ${serie.completada ? "success" : "secondary"}`}
+                            onClick={() => toggleSerieCompletada(ejercicio.id_ejercicio, serie.id)}
+                          >
+                            {serie.completada ? "✓" : "○"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </article>
+        </section>
+      </main>
+    );
+  }
+
   const carpetasRaiz = carpetasPorPadre.get(null) ?? [];
   const rutinasSueltas = rutinasPorCarpeta.get(null) ?? [];
 
@@ -935,6 +1417,20 @@ function Rutinas({ usuario }: RutinasProps) {
                 Duracion: {rutinaSeleccionada.duracion_estimada ?? "-"} min · ID{" "}
                 {rutinaSeleccionada.id_rutina}
               </small>
+
+              <h3 className="detail-subtitle">Ejercicios</h3>
+              {resumenLoading ? (
+                <p className="helper-text">Cargando ejercicios...</p>
+              ) : resumenEjercicios.length === 0 ? (
+                <p className="helper-text">Esta rutina no tiene ejercicios.</p>
+              ) : (
+                <ul className="mini-list">
+                  {resumenEjercicios.map((nombre, index) => (
+                    <li key={`${nombre}-${index}`}>{nombre}</li>
+                  ))}
+                </ul>
+              )}
+
               <div className="actions-row">
                 <button
                   type="button"
@@ -942,6 +1438,9 @@ function Rutinas({ usuario }: RutinasProps) {
                   onClick={() => void abrirEditorRutina(rutinaSeleccionada)}
                 >
                   Modificar
+                </button>
+                <button type="button" className="btn" onClick={iniciarRutina}>
+                  Comenzar rutina
                 </button>
                 <button type="button" className="btn danger" onClick={handleEliminarRutina}>
                   Eliminar
