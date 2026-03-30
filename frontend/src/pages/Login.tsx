@@ -1,4 +1,5 @@
-import { useState, type CSSProperties } from "react";
+import { useState, type FormEventHandler } from "react";
+import showcase from "../assets/login-showcase.png";
 import logo from "../assets/logo.png";
 import type { Usuario } from "../types";
 
@@ -10,9 +11,16 @@ type LoginProps = {
 function Login({ goToRegister, onLoginSuccess }: LoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      alert("Completa email y password");
+      return;
+    }
+
     try {
+      setLoading(true);
       const res = await fetch("http://localhost:3000/auth/login", {
         method: "POST",
         headers: {
@@ -36,92 +44,60 @@ function Login({ goToRegister, onLoginSuccess }: LoginProps) {
     } catch (error) {
       console.error(error);
       alert("Error conectando al backend");
+    } finally {
+      setLoading(false);
     }
   };
 
+  const submit: FormEventHandler<HTMLFormElement> = (event) => {
+    event.preventDefault();
+    void handleLogin();
+  };
+
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>GymMaxxing</h1>
-        <img src={logo} alt="logo" style={styles.logo} />
+    <main className="auth-shell">
+      <section className="auth-grid">
+        <article className="auth-showcase-panel">
+          <img src={showcase} alt="Vista de la app" className="auth-showcase-image" />
+        </article>
 
-        <input
-          style={styles.input}
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+        <article className="auth-panel auth-form-panel">
+          <div className="auth-brand-head">
+            <span className="brand-dot" />
+            <strong>GymMaxxing</strong>
+          </div>
+          <div className="auth-logo-wrap">
+            <img src={logo} alt="GymMaxxing logo" className="auth-logo" />
+          </div>
+          <h2>Iniciar sesion</h2>
+          <p className="auth-subtitle">Bienvenido de nuevo.</p>
 
-        <input
-          style={styles.input}
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+          <form onSubmit={submit} className="auth-form">
+            <input
+              className="field"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <input
+              className="field"
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <button className="btn auth-submit" type="submit" disabled={loading}>
+              {loading ? "Ingresando..." : "Iniciar sesion"}
+            </button>
+          </form>
 
-        <button style={styles.button} onClick={handleLogin}>
-          Iniciar sesion
-        </button>
-
-        <p style={styles.link} onClick={goToRegister}>
-          No tengo cuenta
-        </p>
-      </div>
-    </div>
+          <button className="auth-link-btn" type="button" onClick={goToRegister}>
+            No tengo cuenta
+          </button>
+        </article>
+      </section>
+    </main>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  container: {
-    height: "100vh",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    background: "linear-gradient(135deg, #ffffff, #020617)",
-    fontFamily: "sans-serif",
-  },
-  card: {
-    backgroundColor: "#111827",
-    padding: "40px",
-    borderRadius: "16px",
-    width: "320px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "15px",
-    boxShadow: "0px 10px 30px rgba(0,0,0,0.5)",
-  },
-  title: {
-    color: "white",
-    textAlign: "center",
-    marginBottom: "10px",
-  },
-  logo: {
-    width: "190px",
-    margin: "0 auto 10px auto",
-    display: "block",
-  },
-  input: {
-    padding: "12px",
-    borderRadius: "8px",
-    border: "none",
-    backgroundColor: "#1f2933",
-    color: "white",
-  },
-  button: {
-    padding: "12px",
-    borderRadius: "8px",
-    border: "none",
-    backgroundColor: "#22c55e",
-    color: "black",
-    fontWeight: "bold",
-    cursor: "pointer",
-  },
-  link: {
-    color: "#93c5fd",
-    textAlign: "center",
-    cursor: "pointer",
-  },
-};
 
 export default Login;

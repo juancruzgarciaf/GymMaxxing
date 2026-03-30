@@ -14,9 +14,43 @@ const CANDIDATE_PARENT_COLUMNS = [
   "parent_id",
 ] as const;
 
+const CANDIDATE_NAME_COLUMNS = ["nombre", "name", "titulo"] as const;
+
 const quoteIdent = (identifier: string) => `"${identifier.replace(/"/g, "\"\"")}"`;
 
-const resolveCarpetaTable = async () => {
+type CarpetaTableInfo = {
+  tableName: string;
+  idColumn: string;
+  nameColumn: string;
+  parentColumn: string | null;
+  hasUsuarioColumn: boolean;
+};
+
+const resolveCarpetaTableByFk = async () => {
+  const result = await pool.query<{ table_name: string; id_column: string }>(
+    `SELECT target_table.relname AS table_name,
+            target_col.attname AS id_column
+     FROM pg_constraint c
+     JOIN pg_class source_table ON source_table.oid = c.conrelid
+     JOIN pg_class target_table ON target_table.oid = c.confrelid
+     JOIN unnest(c.conkey) WITH ORDINALITY AS src(attnum, ord) ON true
+     JOIN unnest(c.confkey) WITH ORDINALITY AS tgt(attnum, ord) ON src.ord = tgt.ord
+     JOIN pg_attribute source_col
+       ON source_col.attrelid = source_table.oid
+      AND source_col.attnum = src.attnum
+     JOIN pg_attribute target_col
+       ON target_col.attrelid = target_table.oid
+      AND target_col.attnum = tgt.attnum
+     WHERE c.contype = 'f'
+       AND source_table.relname = 'rutina'
+       AND source_col.attname = 'id_carpeta'
+     LIMIT 1`
+  );
+
+  return result.rows[0] ?? null;
+};
+
+const resolveCarpetaTableByCandidates = async () => {
   const values = [...CANDIDATE_CARPETA_TABLES];
   const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
   const result = await pool.query<{ relname: string }>(
@@ -32,7 +66,7 @@ const resolveCarpetaTable = async () => {
   return result.rows[0]?.relname ?? null;
 };
 
-const resolveParentColumn = async (tableName: string) => {
+const getTableColumns = async (tableName: string) => {
   const result = await pool.query<{ column_name: string }>(
     `SELECT column_name
      FROM information_schema.columns
@@ -40,9 +74,46 @@ const resolveParentColumn = async (tableName: string) => {
        AND table_name = $1`,
     [tableName]
   );
+  return result.rows.map((row) => row.column_name);
+};
 
-  const availableColumns = new Set(result.rows.map((row) => row.column_name));
-  return CANDIDATE_PARENT_COLUMNS.find((column) => availableColumns.has(column)) ?? null;
+const resolveCarpetaTable = async (): Promise<CarpetaTableInfo | null> => {
+  const byFk = await resolveCarpetaTableByFk();
+  const tableName = byFk?.table_name ?? (await resolveCarpetaTableByCandidates());
+  if (!tableName) {
+    return null;
+  }
+
+  const columns = await getTableColumns(tableName);
+  if (columns.length === 0) {
+    return null;
+  }
+
+  const idColumn =
+    byFk?.id_column ??
+    columns.find((column) => column === "id_carpeta") ??
+    columns.find((column) => column.startsWith("id_")) ??
+    null;
+
+  const nameColumn =
+    CANDIDATE_NAME_COLUMNS.find((column) => columns.includes(column)) ?? null;
+
+  if (!idColumn || !nameColumn) {
+    return null;
+  }
+
+  const availableColumns = new Set(columns);
+  const parentColumn =
+    CANDIDATE_PARENT_COLUMNS.find((column) => availableColumns.has(column)) ?? null;
+  const hasUsuarioColumn = availableColumns.has("usuario_id");
+
+  return {
+    tableName,
+    idColumn,
+    nameColumn,
+    parentColumn,
+    hasUsuarioColumn,
+  };
 };
 
 // =========================
@@ -125,51 +196,144 @@ export const deleteRutina = async (id: string) => {
 };
 
 export const getCarpetasRutina = async () => {
-  const tableName = await resolveCarpetaTable();
-  if (!tableName) {
+  const tableInfo = await resolveCarpetaTable();
+  if (!tableInfo) {
     return [];
   }
 
-  const parentColumn = await resolveParentColumn(tableName);
-  const parentSelect = parentColumn
-    ? `${quoteIdent(parentColumn)} AS id_carpeta_padre`
+  const parentSelect = tableInfo.parentColumn
+    ? `${quoteIdent(tableInfo.parentColumn)} AS id_carpeta_padre`
     : "NULL::integer AS id_carpeta_padre";
 
   const result = await pool.query(
-    `SELECT id_carpeta, nombre, ${parentSelect}
-     FROM ${quoteIdent(tableName)}
-     ORDER BY nombre ASC`
+    `SELECT ${quoteIdent(tableInfo.idColumn)} AS id_carpeta,
+            ${quoteIdent(tableInfo.nameColumn)} AS nombre,
+            ${parentSelect}
+     FROM ${quoteIdent(tableInfo.tableName)}
+     ORDER BY ${quoteIdent(tableInfo.nameColumn)} ASC`
   );
 
   return result.rows;
 };
 
 export const crearCarpetaRutina = async (data: any) => {
-  const tableName = await resolveCarpetaTable();
-  if (!tableName) {
+  const tableInfo = await resolveCarpetaTable();
+  if (!tableInfo) {
     throw new Error("No existe tabla de carpetas de rutina en la base de datos");
   }
 
-  const { nombre, id_carpeta_padre } = data;
-  const parentColumn = await resolveParentColumn(tableName);
+  const { nombre, id_carpeta_padre, usuario_id } = data;
 
-  if (parentColumn) {
-    const result = await pool.query(
-      `INSERT INTO ${quoteIdent(tableName)} (nombre, ${quoteIdent(parentColumn)})
-       VALUES ($1, $2)
-       RETURNING id_carpeta, nombre, ${quoteIdent(parentColumn)} AS id_carpeta_padre`,
-      [nombre, id_carpeta_padre ?? null]
+  if (tableInfo.hasUsuarioColumn && (usuario_id == null || Number.isNaN(Number(usuario_id)))) {
+    throw new Error("usuario_id es obligatorio para crear carpeta");
+  }
+
+  const insertColumns: string[] = [quoteIdent(tableInfo.nameColumn)];
+  const insertValues: any[] = [nombre];
+
+  if (tableInfo.parentColumn) {
+    insertColumns.push(quoteIdent(tableInfo.parentColumn));
+    insertValues.push(id_carpeta_padre ?? null);
+  }
+
+  if (tableInfo.hasUsuarioColumn) {
+    insertColumns.push(quoteIdent("usuario_id"));
+    insertValues.push(Number(usuario_id));
+  }
+
+  const placeholders = insertValues.map((_, index) => `$${index + 1}`).join(", ");
+  const parentSelect = tableInfo.parentColumn
+    ? `${quoteIdent(tableInfo.parentColumn)} AS id_carpeta_padre`
+    : "NULL::integer AS id_carpeta_padre";
+
+  const result = await pool.query(
+    `INSERT INTO ${quoteIdent(tableInfo.tableName)} (${insertColumns.join(", ")})
+     VALUES (${placeholders})
+     RETURNING ${quoteIdent(tableInfo.idColumn)} AS id_carpeta,
+               ${quoteIdent(tableInfo.nameColumn)} AS nombre,
+               ${parentSelect}`,
+    insertValues
+  );
+
+  return result.rows[0];
+};
+
+export const updateCarpetaRutina = async (id: string, data: any) => {
+  const tableInfo = await resolveCarpetaTable();
+  if (!tableInfo) {
+    throw new Error("No existe tabla de carpetas de rutina en la base de datos");
+  }
+
+  const { nombre, usuario_id } = data;
+  if (!nombre || typeof nombre !== "string" || !nombre.trim()) {
+    throw new Error("nombre es obligatorio");
+  }
+
+  const whereClauses = [`${quoteIdent(tableInfo.idColumn)} = $2`];
+  const params: any[] = [nombre.trim(), Number(id)];
+
+  if (tableInfo.hasUsuarioColumn) {
+    if (usuario_id == null || Number.isNaN(Number(usuario_id))) {
+      throw new Error("usuario_id es obligatorio para actualizar carpeta");
+    }
+    whereClauses.push(`${quoteIdent("usuario_id")} = $3`);
+    params.push(Number(usuario_id));
+  }
+
+  const parentSelect = tableInfo.parentColumn
+    ? `${quoteIdent(tableInfo.parentColumn)} AS id_carpeta_padre`
+    : "NULL::integer AS id_carpeta_padre";
+
+  const result = await pool.query(
+    `UPDATE ${quoteIdent(tableInfo.tableName)}
+     SET ${quoteIdent(tableInfo.nameColumn)} = $1
+     WHERE ${whereClauses.join(" AND ")}
+     RETURNING ${quoteIdent(tableInfo.idColumn)} AS id_carpeta,
+               ${quoteIdent(tableInfo.nameColumn)} AS nombre,
+               ${parentSelect}`,
+    params
+  );
+
+  return result.rows[0] ?? null;
+};
+
+export const deleteCarpetaRutina = async (id: string, data: any) => {
+  const tableInfo = await resolveCarpetaTable();
+  if (!tableInfo) {
+    throw new Error("No existe tabla de carpetas de rutina en la base de datos");
+  }
+
+  const { usuario_id } = data;
+  const whereClauses = [`${quoteIdent(tableInfo.idColumn)} = $1`];
+  const params: any[] = [Number(id)];
+
+  if (tableInfo.hasUsuarioColumn) {
+    if (usuario_id == null || Number.isNaN(Number(usuario_id))) {
+      throw new Error("usuario_id es obligatorio para eliminar carpeta");
+    }
+    whereClauses.push(`${quoteIdent("usuario_id")} = $2`);
+    params.push(Number(usuario_id));
+  }
+
+  await pool.query(`UPDATE rutina SET id_carpeta = NULL WHERE id_carpeta = $1`, [Number(id)]);
+
+  if (tableInfo.parentColumn) {
+    await pool.query(
+      `UPDATE ${quoteIdent(tableInfo.tableName)}
+       SET ${quoteIdent(tableInfo.parentColumn)} = NULL
+       WHERE ${quoteIdent(tableInfo.parentColumn)} = $1`,
+      [Number(id)]
     );
-    return result.rows[0];
   }
 
   const result = await pool.query(
-    `INSERT INTO ${quoteIdent(tableName)} (nombre)
-     VALUES ($1)
-     RETURNING id_carpeta, nombre, NULL::integer AS id_carpeta_padre`,
-    [nombre]
+    `DELETE FROM ${quoteIdent(tableInfo.tableName)}
+     WHERE ${whereClauses.join(" AND ")}
+     RETURNING ${quoteIdent(tableInfo.idColumn)} AS id_carpeta`,
+    params
   );
-  return result.rows[0];
+
+  return result.rows[0] ?? null;
 };
 
 // =========================

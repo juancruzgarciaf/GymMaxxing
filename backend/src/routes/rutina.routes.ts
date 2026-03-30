@@ -7,6 +7,8 @@ import {
   deleteRutina,
   getCarpetasRutina,
   crearCarpetaRutina,
+  updateCarpetaRutina,
+  deleteCarpetaRutina,
   agregarEjercicioARutina,
   getEjerciciosDeRutina,
   updateEjercicioDeRutina,
@@ -20,6 +22,8 @@ router.post("/", crearRutina);
 router.get("/", getRutinas);
 router.get("/carpetas", getCarpetasRutina);
 router.post("/carpetas", crearCarpetaRutina);
+router.put("/carpetas/:id", updateCarpetaRutina);
+router.delete("/carpetas/:id", deleteCarpetaRutina);
 router.get("/:id", getRutinaPorId);
 router.put("/:id", updateRutina);
 router.delete("/:id", deleteRutina);

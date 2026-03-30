@@ -53,6 +53,11 @@ type EjercicioDraft = {
   series: SerieDraft[];
 };
 
+type ResumenEjercicio = {
+  nombre: string;
+  grupo_muscular: string;
+};
+
 type EjecucionSerie = {
   id: string;
   numero: number;
@@ -87,9 +92,20 @@ type VistaRutinas = "lista" | "editor" | "ejecucion";
 type DescansoActivo = {
   restanteSegundos: number;
   etiqueta: string;
+  finalizado: boolean;
+};
+
+type PersistedRutinaEjercicio = {
+  id_ejercicio: number;
+  descansoSegundos: number;
+  series: Array<{
+    kg: string;
+    reps: string;
+  }>;
 };
 
 const API = "http://localhost:3000";
+const RUTINA_PREFS_KEY = "gymmaxxing_rutina_series_v1";
 
 const nuevaSerie = (reps = ""): SerieDraft => ({
   id: crypto.randomUUID(),
@@ -132,6 +148,22 @@ const descansoToInputs = (descansoSegundos: number) => {
   };
 };
 
+const readRutinaPrefs = () => {
+  try {
+    const raw = localStorage.getItem(RUTINA_PREFS_KEY);
+    if (!raw) {
+      return {} as Record<string, PersistedRutinaEjercicio[]>;
+    }
+    return JSON.parse(raw) as Record<string, PersistedRutinaEjercicio[]>;
+  } catch {
+    return {} as Record<string, PersistedRutinaEjercicio[]>;
+  }
+};
+
+const writeRutinaPrefs = (next: Record<string, PersistedRutinaEjercicio[]>) => {
+  localStorage.setItem(RUTINA_PREFS_KEY, JSON.stringify(next));
+};
+
 function Rutinas({ usuario }: RutinasProps) {
   const [vista, setVista] = useState<VistaRutinas>("lista");
   const [loading, setLoading] = useState(false);
@@ -144,9 +176,19 @@ function Rutinas({ usuario }: RutinasProps) {
 
   const [selectedRutinaId, setSelectedRutinaId] = useState<number | null>(null);
   const [expandedCarpetas, setExpandedCarpetas] = useState<Record<number, boolean>>({});
+  const [openFolderMenuId, setOpenFolderMenuId] = useState<number | null>(null);
+  const [renameModal, setRenameModal] = useState<{
+    open: boolean;
+    id: number | null;
+    value: string;
+  }>({
+    open: false,
+    id: null,
+    value: "",
+  });
   const [busquedaRutina, setBusquedaRutina] = useState("");
   const [resumenLoading, setResumenLoading] = useState(false);
-  const [resumenEjercicios, setResumenEjercicios] = useState<string[]>([]);
+  const [resumenEjercicios, setResumenEjercicios] = useState<ResumenEjercicio[]>([]);
 
   const [editorRutinaId, setEditorRutinaId] = useState<number | null>(null);
   const [editorNombre, setEditorNombre] = useState("");
@@ -163,6 +205,7 @@ function Rutinas({ usuario }: RutinasProps) {
   const [sesionActiva, setSesionActiva] = useState<SesionEntrenamiento | null>(null);
   const [ejecucionEjercicios, setEjecucionEjercicios] = useState<EjecucionEjercicio[]>([]);
   const [descansoActivo, setDescansoActivo] = useState<DescansoActivo | null>(null);
+  const [elapsedSesionSegundos, setElapsedSesionSegundos] = useState(0);
 
   const rutinaSeleccionada =
     selectedRutinaId == null
@@ -232,6 +275,86 @@ function Rutinas({ usuario }: RutinasProps) {
     return (await res.json()) as RutinaEjercicio[];
   };
 
+  const getPersistedRutinaEjercicios = (idRutina: number) => {
+    const all = readRutinaPrefs();
+    return all[String(idRutina)] ?? [];
+  };
+
+  const savePersistedRutinaEjercicios = (
+    idRutina: number,
+    ejercicios: PersistedRutinaEjercicio[],
+  ) => {
+    const all = readRutinaPrefs();
+    all[String(idRutina)] = ejercicios;
+    writeRutinaPrefs(all);
+  };
+
+  const syncRutinaEjercicios = async (
+    rutinaId: number,
+    ejerciciosObjetivo: Array<{
+      id_ejercicio: number;
+      series: number;
+      repeticiones: number;
+      descanso: number;
+      orden: number;
+    }>,
+  ) => {
+    const ejerciciosActuales = await cargarEjerciciosDeRutina(rutinaId);
+    const actualesPorEjercicio = new Map(
+      ejerciciosActuales.map((ejercicio) => [ejercicio.id_ejercicio, ejercicio]),
+    );
+    const nuevosIds = new Set(ejerciciosObjetivo.map((ejercicio) => ejercicio.id_ejercicio));
+
+    for (const ejercicioActual of ejerciciosActuales) {
+      if (!nuevosIds.has(ejercicioActual.id_ejercicio)) {
+        const deleteRes = await fetch(
+          `${API}/rutinas/${rutinaId}/ejercicios/${ejercicioActual.id_ejercicio}`,
+          { method: "DELETE" },
+        );
+        if (!deleteRes.ok) {
+          throw new Error(await parseError(deleteRes, "No se pudo eliminar ejercicio de rutina"));
+        }
+      }
+    }
+
+    for (const ejercicio of ejerciciosObjetivo) {
+      const payload = {
+        series: ejercicio.series,
+        repeticiones: ejercicio.repeticiones,
+        descanso: ejercicio.descanso,
+        orden: ejercicio.orden,
+      };
+
+      const existing = actualesPorEjercicio.get(ejercicio.id_ejercicio);
+      if (existing) {
+        const updateRes = await fetch(
+          `${API}/rutinas/${rutinaId}/ejercicios/${ejercicio.id_ejercicio}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          },
+        );
+        if (!updateRes.ok) {
+          throw new Error(await parseError(updateRes, "No se pudo actualizar ejercicio"));
+        }
+      } else {
+        const addRes = await fetch(`${API}/rutinas/ejercicios`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id_rutina: rutinaId,
+            id_ejercicio: ejercicio.id_ejercicio,
+            ...payload,
+          }),
+        });
+        if (!addRes.ok) {
+          throw new Error(await parseError(addRes, "No se pudo agregar ejercicio"));
+        }
+      }
+    }
+  };
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -260,7 +383,12 @@ function Rutinas({ usuario }: RutinasProps) {
       try {
         setResumenLoading(true);
         const ejercicios = await cargarEjerciciosDeRutina(selectedRutinaId);
-        setResumenEjercicios(ejercicios.map((item) => item.nombre));
+        setResumenEjercicios(
+          ejercicios.map((item) => ({
+            nombre: item.nombre,
+            grupo_muscular: item.grupo_muscular,
+          })),
+        );
       } catch {
         setResumenEjercicios([]);
       } finally {
@@ -272,7 +400,7 @@ function Rutinas({ usuario }: RutinasProps) {
   }, [selectedRutinaId]);
 
   useEffect(() => {
-    if (!descansoActivo || descansoActivo.restanteSegundos <= 0) {
+    if (!descansoActivo || descansoActivo.finalizado) {
       return;
     }
 
@@ -282,7 +410,7 @@ function Rutinas({ usuario }: RutinasProps) {
           return null;
         }
         if (prev.restanteSegundos <= 1) {
-          return null;
+          return { ...prev, restanteSegundos: 0, finalizado: true };
         }
         return { ...prev, restanteSegundos: prev.restanteSegundos - 1 };
       });
@@ -290,6 +418,18 @@ function Rutinas({ usuario }: RutinasProps) {
 
     return () => window.clearInterval(timer);
   }, [descansoActivo]);
+
+  useEffect(() => {
+    if (vista !== "ejecucion" || !sesionActiva) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setElapsedSesionSegundos((prev) => prev + 1);
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [vista, sesionActiva]);
 
   const abrirEditorNuevaRutina = () => {
     setError("");
@@ -313,8 +453,13 @@ function Rutinas({ usuario }: RutinasProps) {
       setMensaje("");
 
       const ejercicios = await cargarEjerciciosDeRutina(rutina.id_rutina);
+      const persistedByExercise = new Map(
+        getPersistedRutinaEjercicios(rutina.id_rutina).map((item) => [item.id_ejercicio, item]),
+      );
       const draft = ejercicios.map((item) => {
-        const descanso = descansoToInputs(item.descanso ?? 0);
+        const persisted = persistedByExercise.get(item.id_ejercicio);
+        const descanso = descansoToInputs(persisted?.descansoSegundos ?? item.descanso ?? 0);
+        const persistedSeries = persisted?.series ?? [];
         return {
           id_ejercicio: item.id_ejercicio,
           nombre: item.nombre,
@@ -322,9 +467,13 @@ function Rutinas({ usuario }: RutinasProps) {
           tipo_disciplina: item.tipo_disciplina,
           descansoMin: descanso.min,
           descansoSeg: descanso.sec,
-          series: Array.from({ length: Math.max(1, item.series) }, () =>
-            nuevaSerie(String(item.repeticiones || "")),
-          ),
+          series: Array.from({ length: Math.max(1, item.series) }, (_, index) => {
+            const serie = nuevaSerie(String(item.repeticiones || ""));
+            const persistedSerie = persistedSeries[index];
+            return persistedSerie
+              ? { ...serie, kg: persistedSerie.kg ?? "", reps: persistedSerie.reps ?? serie.reps }
+              : serie;
+          }),
         };
       });
 
@@ -354,7 +503,10 @@ function Rutinas({ usuario }: RutinasProps) {
       const res = await fetch(`${API}/rutinas/carpetas`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre: nombre.trim() }),
+        body: JSON.stringify({
+          nombre: nombre.trim(),
+          usuario_id: usuario.id,
+        }),
       });
 
       if (!res.ok) {
@@ -483,6 +635,109 @@ function Rutinas({ usuario }: RutinasProps) {
 
   const handleBuscarRutinas = () => {
     setBusquedaRutina((prev) => prev.trim());
+  };
+
+  const abrirModalRenombrarCarpeta = (carpeta: CarpetaRutina) => {
+    setOpenFolderMenuId(null);
+    setRenameModal({
+      open: true,
+      id: carpeta.id_carpeta,
+      value: carpeta.nombre,
+    });
+  };
+
+  const cerrarModalRenombrarCarpeta = () => {
+    setRenameModal({
+      open: false,
+      id: null,
+      value: "",
+    });
+  };
+
+  const renombrarCarpeta = async () => {
+    if (!renameModal.id || !renameModal.value.trim()) {
+      return;
+    }
+
+    try {
+      setError("");
+      setMensaje("");
+      const res = await fetch(`${API}/rutinas/carpetas/${renameModal.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre: renameModal.value.trim(),
+          usuario_id: usuario.id,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(await parseError(res, "No se pudo renombrar carpeta"));
+      }
+
+      await cargarCarpetas();
+      cerrarModalRenombrarCarpeta();
+      setMensaje("Carpeta renombrada");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error renombrando carpeta");
+    }
+  };
+
+  const duplicarCarpeta = async (carpeta: CarpetaRutina) => {
+    try {
+      setOpenFolderMenuId(null);
+      setError("");
+      setMensaje("");
+      const res = await fetch(`${API}/rutinas/carpetas`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre: `${carpeta.nombre} (copia)`,
+          usuario_id: usuario.id,
+          id_carpeta_padre: carpeta.id_carpeta_padre,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(await parseError(res, "No se pudo duplicar carpeta"));
+      }
+
+      await cargarCarpetas();
+      setMensaje("Carpeta duplicada");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error duplicando carpeta");
+    }
+  };
+
+  const eliminarCarpeta = async (carpeta: CarpetaRutina) => {
+    const confirmar = window.confirm(
+      `Eliminar carpeta "${carpeta.nombre}"? Las rutinas quedaran en "Sin carpeta".`,
+    );
+    if (!confirmar) {
+      return;
+    }
+
+    try {
+      setOpenFolderMenuId(null);
+      setError("");
+      setMensaje("");
+      const res = await fetch(`${API}/rutinas/carpetas/${carpeta.id_carpeta}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          usuario_id: usuario.id,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(await parseError(res, "No se pudo eliminar carpeta"));
+      }
+
+      await Promise.all([cargarCarpetas(), cargarRutinas()]);
+      setMensaje("Carpeta eliminada");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error eliminando carpeta");
+    }
   };
 
   const agregarEjercicioAlEditor = (ejercicio: Ejercicio) => {
@@ -618,66 +873,28 @@ function Rutinas({ usuario }: RutinasProps) {
         }
       }
 
-      const ejerciciosActuales = await cargarEjerciciosDeRutina(rutinaId);
-      const actualesPorEjercicio = new Map(
-        ejerciciosActuales.map((ejercicio) => [ejercicio.id_ejercicio, ejercicio]),
-      );
-      const nuevosIds = new Set(editorEjercicios.map((ejercicio) => ejercicio.id_ejercicio));
-
-      for (const ejercicioActual of ejerciciosActuales) {
-        if (!nuevosIds.has(ejercicioActual.id_ejercicio)) {
-          const deleteRes = await fetch(
-            `${API}/rutinas/${rutinaId}/ejercicios/${ejercicioActual.id_ejercicio}`,
-            { method: "DELETE" },
-          );
-          if (!deleteRes.ok) {
-            throw new Error(await parseError(deleteRes, "No se pudo eliminar ejercicio de rutina"));
-          }
-        }
-      }
-
-      for (let orden = 0; orden < editorEjercicios.length; orden += 1) {
-        const ejercicio = editorEjercicios[orden];
+      const ejerciciosObjetivo = editorEjercicios.map((ejercicio, index) => {
         const repeticiones = Number(
           ejercicio.series.find((serie) => serie.reps.trim())?.reps ?? "10",
         );
-        const descanso = descansoDesdeInputs(ejercicio.descansoMin, ejercicio.descansoSeg);
-
-        const payload = {
+        return {
+          id_ejercicio: ejercicio.id_ejercicio,
           series: Math.max(1, ejercicio.series.length),
           repeticiones: Number.isNaN(repeticiones) ? 10 : Math.max(1, repeticiones),
-          descanso,
-          orden: orden + 1,
+          descanso: descansoDesdeInputs(ejercicio.descansoMin, ejercicio.descansoSeg),
+          orden: index + 1,
         };
+      });
 
-        const existing = actualesPorEjercicio.get(ejercicio.id_ejercicio);
-        if (existing) {
-          const updateRes = await fetch(
-            `${API}/rutinas/${rutinaId}/ejercicios/${ejercicio.id_ejercicio}`,
-            {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            },
-          );
-          if (!updateRes.ok) {
-            throw new Error(await parseError(updateRes, "No se pudo actualizar ejercicio"));
-          }
-        } else {
-          const addRes = await fetch(`${API}/rutinas/ejercicios`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              id_rutina: rutinaId,
-              id_ejercicio: ejercicio.id_ejercicio,
-              ...payload,
-            }),
-          });
-          if (!addRes.ok) {
-            throw new Error(await parseError(addRes, "No se pudo agregar ejercicio"));
-          }
-        }
-      }
+      await syncRutinaEjercicios(rutinaId, ejerciciosObjetivo);
+      savePersistedRutinaEjercicios(
+        rutinaId,
+        editorEjercicios.map((ejercicio) => ({
+          id_ejercicio: ejercicio.id_ejercicio,
+          descansoSegundos: descansoDesdeInputs(ejercicio.descansoMin, ejercicio.descansoSeg),
+          series: ejercicio.series.map((serie) => ({ kg: serie.kg, reps: serie.reps })),
+        })),
+      );
 
       await Promise.all([cargarRutinas(), cargarCarpetas()]);
       setSelectedRutinaId(rutinaId);
@@ -727,8 +944,12 @@ function Rutinas({ usuario }: RutinasProps) {
       setError("");
       setMensaje("");
       setDescansoActivo(null);
+      setElapsedSesionSegundos(0);
 
       const ejercicios = await cargarEjerciciosDeRutina(rutinaSeleccionada.id_rutina);
+      const persistedByExercise = new Map(
+        getPersistedRutinaEjercicios(rutinaSeleccionada.id_rutina).map((item) => [item.id_ejercicio, item]),
+      );
       const startRes = await fetch(`${API}/entrenamientos/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -744,21 +965,25 @@ function Rutinas({ usuario }: RutinasProps) {
       }
 
       const sesion = (await startRes.json()) as SesionEntrenamiento;
-      const ejecucion = ejercicios.map((item) => ({
-        id_ejercicio: item.id_ejercicio,
-        nombre: item.nombre,
-        grupo_muscular: item.grupo_muscular,
-        tipo_disciplina: item.tipo_disciplina,
-        descansoSegundos: Math.max(0, item.descanso ?? 0),
-        series: Array.from({ length: Math.max(1, item.series) }, (_, index) => ({
-          id: crypto.randomUUID(),
-          numero: index + 1,
-          kg: "",
-          reps: String(item.repeticiones || ""),
-          completada: false,
-          registrada: false,
-        })),
-      }));
+      const ejecucion = ejercicios.map((item) => {
+        const persisted = persistedByExercise.get(item.id_ejercicio);
+        const persistedSeries = persisted?.series ?? [];
+        return {
+          id_ejercicio: item.id_ejercicio,
+          nombre: item.nombre,
+          grupo_muscular: item.grupo_muscular,
+          tipo_disciplina: item.tipo_disciplina,
+          descansoSegundos: Math.max(0, persisted?.descansoSegundos ?? item.descanso ?? 0),
+          series: Array.from({ length: Math.max(1, item.series) }, (_, index) => ({
+            id: crypto.randomUUID(),
+            numero: index + 1,
+            kg: persistedSeries[index]?.kg ?? "",
+            reps: persistedSeries[index]?.reps ?? String(item.repeticiones || ""),
+            completada: false,
+            registrada: false,
+          })),
+        };
+      });
 
       setSesionActiva(sesion);
       setRutinaEnEjecucion(rutinaSeleccionada);
@@ -792,6 +1017,67 @@ function Rutinas({ usuario }: RutinasProps) {
     );
   };
 
+  const updateDescansoEjecucion = (
+    idEjercicio: number,
+    field: "min" | "seg",
+    value: string,
+  ) => {
+    setEjecucionEjercicios((prev) =>
+      prev.map((ejercicio) => {
+        if (ejercicio.id_ejercicio !== idEjercicio) {
+          return ejercicio;
+        }
+        const current = descansoToInputs(ejercicio.descansoSegundos);
+        const minRaw = field === "min" ? value : current.min;
+        const segRaw = field === "seg" ? value : current.sec;
+        return {
+          ...ejercicio,
+          descansoSegundos: descansoDesdeInputs(minRaw, segRaw),
+        };
+      }),
+    );
+  };
+
+  const agregarSerieEjecucion = (idEjercicio: number) => {
+    setEjecucionEjercicios((prev) =>
+      prev.map((ejercicio) => {
+        if (ejercicio.id_ejercicio !== idEjercicio) {
+          return ejercicio;
+        }
+        const nextNumber = ejercicio.series.length + 1;
+        return {
+          ...ejercicio,
+          series: [
+            ...ejercicio.series,
+            {
+              id: crypto.randomUUID(),
+              numero: nextNumber,
+              kg: "",
+              reps: "",
+              completada: false,
+              registrada: false,
+            },
+          ],
+        };
+      }),
+    );
+  };
+
+  const eliminarSerieEjecucion = (idEjercicio: number, serieId: string) => {
+    setEjecucionEjercicios((prev) =>
+      prev.map((ejercicio) => {
+        if (ejercicio.id_ejercicio !== idEjercicio || ejercicio.series.length <= 1) {
+          return ejercicio;
+        }
+        const filtered = ejercicio.series.filter((serie) => serie.id !== serieId);
+        return {
+          ...ejercicio,
+          series: filtered.map((serie, index) => ({ ...serie, numero: index + 1 })),
+        };
+      }),
+    );
+  };
+
   const toggleSerieCompletada = (idEjercicio: number, serieId: string) => {
     const ejercicio = ejecucionEjercicios.find((item) => item.id_ejercicio === idEjercicio);
     const serie = ejercicio?.series.find((item) => item.id === serieId);
@@ -818,6 +1104,7 @@ function Rutinas({ usuario }: RutinasProps) {
       setDescansoActivo({
         restanteSegundos: ejercicio.descansoSegundos,
         etiqueta: `${ejercicio.nombre} · Serie ${serie.numero}`,
+        finalizado: false,
       });
     }
 
@@ -847,6 +1134,9 @@ function Rutinas({ usuario }: RutinasProps) {
     try {
       setLoading(true);
       setError("");
+      const shouldOverwrite =
+        rutinaEnEjecucion != null &&
+        window.confirm("Quieres sobre escribir la rutina actual con los cambios de esta sesion?");
       if (sesionActiva) {
         const res = await fetch(`${API}/entrenamientos/end`, {
           method: "POST",
@@ -858,12 +1148,40 @@ function Rutinas({ usuario }: RutinasProps) {
         }
       }
 
+      if (shouldOverwrite && rutinaEnEjecucion) {
+        const ejerciciosObjetivo = ejecucionEjercicios.map((ejercicio, index) => {
+          const repeticiones = Number(
+            ejercicio.series.find((serie) => serie.reps.trim())?.reps ?? "10",
+          );
+          return {
+            id_ejercicio: ejercicio.id_ejercicio,
+            series: Math.max(1, ejercicio.series.length),
+            repeticiones: Number.isNaN(repeticiones) ? 10 : Math.max(1, repeticiones),
+            descanso: Math.max(0, ejercicio.descansoSegundos),
+            orden: index + 1,
+          };
+        });
+
+        await syncRutinaEjercicios(rutinaEnEjecucion.id_rutina, ejerciciosObjetivo);
+        savePersistedRutinaEjercicios(
+          rutinaEnEjecucion.id_rutina,
+          ejecucionEjercicios.map((ejercicio) => ({
+            id_ejercicio: ejercicio.id_ejercicio,
+            descansoSegundos: Math.max(0, ejercicio.descansoSegundos),
+            series: ejercicio.series.map((serie) => ({ kg: serie.kg, reps: serie.reps })),
+          })),
+        );
+        await cargarRutinas();
+        setSelectedRutinaId(rutinaEnEjecucion.id_rutina);
+      }
+
       setSesionActiva(null);
       setRutinaEnEjecucion(null);
       setEjecucionEjercicios([]);
       setDescansoActivo(null);
+      setElapsedSesionSegundos(0);
       setVista("lista");
-      setMensaje("Rutina finalizada");
+      setMensaje(shouldOverwrite ? "Rutina finalizada y sobre escrita" : "Rutina finalizada");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error finalizando rutina");
     } finally {
@@ -918,6 +1236,40 @@ function Rutinas({ usuario }: RutinasProps) {
     return matchEquipo && matchMusculo && matchSearch;
   });
 
+  const gruposMuscularesResumen = Array.from(
+    new Set(
+      resumenEjercicios
+        .map((ejercicio) => ejercicio.grupo_muscular)
+        .filter((grupo) => Boolean(grupo?.trim())),
+    ),
+  );
+
+  const ajustarDescansoActivo = (delta: number) => {
+    setDescansoActivo((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const next = Math.max(0, prev.restanteSegundos + delta);
+      return {
+        ...prev,
+        restanteSegundos: next,
+        finalizado: next === 0,
+      };
+    });
+  };
+
+  const omitirDescansoActivo = () => {
+    setDescansoActivo((prev) =>
+      prev
+        ? {
+            ...prev,
+            restanteSegundos: 0,
+            finalizado: true,
+          }
+        : prev,
+    );
+  };
+
   const renderRutinaItem = (rutina: Rutina) => (
     <button
       key={rutina.id_rutina}
@@ -926,7 +1278,7 @@ function Rutinas({ usuario }: RutinasProps) {
       onClick={() => setSelectedRutinaId(rutina.id_rutina)}
     >
       <span>
-        #{rutina.id_rutina} {rutina.nombre}
+        {rutina.nombre}
       </span>
       <small>{rutina.descripcion || "Sin descripcion"}</small>
     </button>
@@ -939,20 +1291,45 @@ function Rutinas({ usuario }: RutinasProps) {
 
     return (
       <div key={carpeta.id_carpeta} className="folder-node" style={{ marginLeft: `${nivel * 16}px` }}>
-        <button
-          type="button"
-          className="folder-toggle"
-          onClick={() =>
-            setExpandedCarpetas((prev) => ({
-              ...prev,
-              [carpeta.id_carpeta]: !(prev[carpeta.id_carpeta] ?? true),
-            }))
-          }
-        >
-          <span>{isExpanded ? "▾" : "▸"}</span>
-          <strong>{carpeta.nombre}</strong>
-          <small>{rutinasDeCarpeta.length}</small>
-        </button>
+        <div className="folder-row">
+          <button
+            type="button"
+            className="folder-toggle"
+            onClick={() =>
+              setExpandedCarpetas((prev) => ({
+                ...prev,
+                [carpeta.id_carpeta]: !(prev[carpeta.id_carpeta] ?? true),
+              }))
+            }
+          >
+            <span>{isExpanded ? "▾" : "▸"}</span>
+            <strong>{carpeta.nombre}</strong>
+            <small>{rutinasDeCarpeta.length}</small>
+          </button>
+          <button
+            type="button"
+            className="folder-menu-trigger"
+            onClick={() =>
+              setOpenFolderMenuId((prev) => (prev === carpeta.id_carpeta ? null : carpeta.id_carpeta))
+            }
+            aria-label="Opciones de carpeta"
+          >
+            ⋯
+          </button>
+          {openFolderMenuId === carpeta.id_carpeta && (
+            <div className="folder-menu">
+              <button type="button" onClick={() => abrirModalRenombrarCarpeta(carpeta)}>
+                Editar carpeta
+              </button>
+              <button type="button" onClick={() => duplicarCarpeta(carpeta)}>
+                Duplicar carpeta
+              </button>
+              <button type="button" className="danger" onClick={() => eliminarCarpeta(carpeta)}>
+                Eliminar carpeta
+              </button>
+            </div>
+          )}
+        </div>
 
         {isExpanded && (
           <div className="folder-children">
@@ -1217,6 +1594,30 @@ function Rutinas({ usuario }: RutinasProps) {
   if (vista === "ejecucion") {
     return (
       <main className="app">
+        {descansoActivo && (
+          <section
+            className={`rest-banner ${descansoActivo.finalizado ? "done" : ""}`}
+            aria-live="polite"
+          >
+            <div className="rest-banner-main">
+              <small>Descanso activo</small>
+              <strong>{descansoActivo.etiqueta}</strong>
+            </div>
+            <div className="rest-banner-controls">
+              <button type="button" className="btn secondary" onClick={() => ajustarDescansoActivo(-10)}>
+                -10
+              </button>
+              <div className="rest-pill">{formatDuration(descansoActivo.restanteSegundos)}</div>
+              <button type="button" className="btn secondary" onClick={() => ajustarDescansoActivo(10)}>
+                +10
+              </button>
+              <button type="button" className="btn secondary" onClick={omitirDescansoActivo}>
+                Omitir
+              </button>
+            </div>
+          </section>
+        )}
+
         <section className="hero editor-header">
           <button type="button" className="btn secondary" onClick={() => setVista("lista")}>
             ← Volver
@@ -1236,6 +1637,7 @@ function Rutinas({ usuario }: RutinasProps) {
             <p className="helper-text">
               Series completas: {seriesCompletadasEjecucion}/{totalSeriesEjecucion}
             </p>
+            <p className="helper-text">Tiempo entrenando: {formatDuration(elapsedSesionSegundos)}</p>
             {descansoActivo ? (
               <div className="status">
                 Descanso: <strong>{formatDuration(descansoActivo.restanteSegundos)}</strong> ·{" "}
@@ -1273,11 +1675,37 @@ function Rutinas({ usuario }: RutinasProps) {
                       </div>
                     </div>
 
-                    <div className="set-table">
+                    <div className="rest-grid">
+                      <span>Descanso</span>
+                      <input
+                        className="field compact"
+                        type="number"
+                        min="0"
+                        placeholder="Min"
+                        value={descansoToInputs(ejercicio.descansoSegundos).min}
+                        onChange={(event) =>
+                          updateDescansoEjecucion(ejercicio.id_ejercicio, "min", event.target.value)
+                        }
+                      />
+                      <input
+                        className="field compact"
+                        type="number"
+                        min="0"
+                        max="59"
+                        placeholder="Seg"
+                        value={descansoToInputs(ejercicio.descansoSegundos).sec}
+                        onChange={(event) =>
+                          updateDescansoEjecucion(ejercicio.id_ejercicio, "seg", event.target.value)
+                        }
+                      />
+                    </div>
+
+                    <div className="set-table execution-mode">
                       <div className="set-table-head">
                         <span>Set</span>
                         <span>KG</span>
                         <span>Reps</span>
+                        <span />
                         <span>OK</span>
                       </div>
 
@@ -1319,6 +1747,14 @@ function Rutinas({ usuario }: RutinasProps) {
                           />
                           <button
                             type="button"
+                            className="btn tiny secondary"
+                            disabled={ejercicio.series.length <= 1}
+                            onClick={() => eliminarSerieEjecucion(ejercicio.id_ejercicio, serie.id)}
+                          >
+                            x
+                          </button>
+                          <button
+                            type="button"
                             className={`btn tiny ${serie.completada ? "success" : "secondary"}`}
                             onClick={() => toggleSerieCompletada(ejercicio.id_ejercicio, serie.id)}
                           >
@@ -1327,6 +1763,14 @@ function Rutinas({ usuario }: RutinasProps) {
                         </div>
                       ))}
                     </div>
+
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      onClick={() => agregarSerieEjecucion(ejercicio.id_ejercicio)}
+                    >
+                      + Add serie
+                    </button>
                   </article>
                 ))
               )}
@@ -1345,14 +1789,13 @@ function Rutinas({ usuario }: RutinasProps) {
       <section className="hero">
         <p className="eyebrow">Rutinas</p>
         <h1>Tus rutinas</h1>
-        <p className="subtitle">Una vista simple para buscar, organizar y editar.</p>
       </section>
 
       {loading && <p className="status">Cargando datos...</p>}
       {error && <p className="status error">{error}</p>}
       {mensaje && <p className="status ok">{mensaje}</p>}
 
-      <section className="panel two-cols">
+      <section className="panel two-cols rutinas-main-panels">
         <article className="box">
           <div className="actions-row">
             <input
@@ -1410,25 +1853,43 @@ function Rutinas({ usuario }: RutinasProps) {
         <article className="box">
           <h2>Detalle</h2>
           {rutinaSeleccionada ? (
-            <div className="routine-detail">
-              <h3>{rutinaSeleccionada.nombre}</h3>
+            <div className="routine-detail detail-rich">
+              <h3 className="routine-title-xl">{rutinaSeleccionada.nombre}</h3>
               <p>{rutinaSeleccionada.descripcion || "Sin descripcion"}</p>
-              <small>
-                Duracion: {rutinaSeleccionada.duracion_estimada ?? "-"} min · ID{" "}
-                {rutinaSeleccionada.id_rutina}
-              </small>
+              <div className="detail-meta">
+                <span>Duracion: {rutinaSeleccionada.duracion_estimada ?? "-"} min</span>
+                <span>ID {rutinaSeleccionada.id_rutina}</span>
+              </div>
 
-              <h3 className="detail-subtitle">Ejercicios</h3>
+              <h3 className="detail-subtitle">Grupos musculares</h3>
+              {resumenLoading ? (
+                <p className="helper-text">Cargando grupos musculares...</p>
+              ) : gruposMuscularesResumen.length === 0 ? (
+                <p className="helper-text">Sin grupos musculares identificados.</p>
+              ) : (
+                <div className="muscle-chips">
+                  {gruposMuscularesResumen.map((grupo) => (
+                    <span key={grupo} className="muscle-chip">
+                      {grupo}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <h3 className="detail-subtitle">Ejercicios ({resumenEjercicios.length})</h3>
               {resumenLoading ? (
                 <p className="helper-text">Cargando ejercicios...</p>
               ) : resumenEjercicios.length === 0 ? (
                 <p className="helper-text">Esta rutina no tiene ejercicios.</p>
               ) : (
-                <ul className="mini-list">
-                  {resumenEjercicios.map((nombre, index) => (
-                    <li key={`${nombre}-${index}`}>{nombre}</li>
+                <div className="exercise-summary-grid">
+                  {resumenEjercicios.map((ejercicio, index) => (
+                    <div key={`${ejercicio.nombre}-${index}`} className="exercise-summary-item">
+                      <strong>{ejercicio.nombre}</strong>
+                      <small>{ejercicio.grupo_muscular}</small>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
 
               <div className="actions-row">
@@ -1452,6 +1913,49 @@ function Rutinas({ usuario }: RutinasProps) {
           )}
         </article>
       </section>
+
+      {renameModal.open && (
+        <div className="modal-backdrop" role="presentation" onClick={cerrarModalRenombrarCarpeta}>
+          <div
+            className="modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Renombrar carpeta"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>Rename Folder</h2>
+              <button type="button" className="modal-close" onClick={cerrarModalRenombrarCarpeta}>
+                ×
+              </button>
+            </div>
+            <input
+              className="field"
+              placeholder="Nombre de carpeta"
+              value={renameModal.value}
+              onChange={(event) =>
+                setRenameModal((prev) => ({
+                  ...prev,
+                  value: event.target.value,
+                }))
+              }
+            />
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" onClick={cerrarModalRenombrarCarpeta}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={renombrarCarpeta}
+                disabled={!renameModal.value.trim()}
+              >
+                Rename Folder
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

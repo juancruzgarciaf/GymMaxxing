@@ -103,14 +103,19 @@ export const getCarpetasRutina = async (_req: Request, res: Response) => {
 
 export const crearCarpetaRutina = async (req: Request, res: Response) => {
   try {
-    const { nombre } = req.body;
+    const { nombre, usuario_id } = req.body;
 
     if (!nombre || typeof nombre !== "string" || !nombre.trim()) {
       return res.status(400).json({ error: "nombre es obligatorio" });
     }
 
+    if (usuario_id == null || Number.isNaN(Number(usuario_id))) {
+      return res.status(400).json({ error: "usuario_id es obligatorio" });
+    }
+
     const carpeta = await rutinaService.crearCarpetaRutina({
       nombre: nombre.trim(),
+      usuario_id: Number(usuario_id),
       id_carpeta_padre: req.body.id_carpeta_padre ?? null,
     });
 
@@ -118,6 +123,67 @@ export const crearCarpetaRutina = async (req: Request, res: Response) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Error creando carpeta de rutina" });
+  }
+};
+
+export const updateCarpetaRutina = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { nombre, usuario_id } = req.body;
+
+    if (!id || Array.isArray(id)) {
+      return res.status(400).json({ error: "id inválido" });
+    }
+
+    if (!nombre || typeof nombre !== "string" || !nombre.trim()) {
+      return res.status(400).json({ error: "nombre es obligatorio" });
+    }
+
+    if (usuario_id == null || Number.isNaN(Number(usuario_id))) {
+      return res.status(400).json({ error: "usuario_id es obligatorio" });
+    }
+
+    const carpeta = await rutinaService.updateCarpetaRutina(id, {
+      nombre: nombre.trim(),
+      usuario_id: Number(usuario_id),
+    });
+
+    if (!carpeta) {
+      return res.status(404).json({ error: "Carpeta no encontrada" });
+    }
+
+    return res.json(carpeta);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Error actualizando carpeta de rutina" });
+  }
+};
+
+export const deleteCarpetaRutina = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { usuario_id } = req.body;
+
+    if (!id || Array.isArray(id)) {
+      return res.status(400).json({ error: "id inválido" });
+    }
+
+    if (usuario_id == null || Number.isNaN(Number(usuario_id))) {
+      return res.status(400).json({ error: "usuario_id es obligatorio" });
+    }
+
+    const carpeta = await rutinaService.deleteCarpetaRutina(id, {
+      usuario_id: Number(usuario_id),
+    });
+
+    if (!carpeta) {
+      return res.status(404).json({ error: "Carpeta no encontrada" });
+    }
+
+    return res.json({ mensaje: "Carpeta eliminada" });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Error eliminando carpeta de rutina" });
   }
 };
 
