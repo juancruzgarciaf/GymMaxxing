@@ -1,12 +1,6 @@
 import { useState, type CSSProperties } from "react";
 import logo from "../assets/logo.png";
-
-type Usuario = {
-  id: number;
-  username: string;
-  email: string;
-  tipo_usuario: string;
-};
+import type { Usuario } from "../types";
 
 type LoginProps = {
   goToRegister: () => void;

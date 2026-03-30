@@ -4,13 +4,7 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Rutinas from "./pages/Rutinas";
-
-type Usuario = {
-  id: number;
-  username: string;
-  email: string;
-  tipo_usuario: string;
-};
+import type { Usuario } from "./types";
 
 type AuthScreen = "login" | "register";
 type MainScreen = "home" | "rutinas";
@@ -76,7 +70,7 @@ function App() {
       </header>
 
       <div className="content">
-        {mainScreen === "home" ? <Home /> : <Rutinas />}
+        {mainScreen === "home" ? <Home usuario={usuario} /> : <Rutinas usuario={usuario} />}
       </div>
     </div>
   );
