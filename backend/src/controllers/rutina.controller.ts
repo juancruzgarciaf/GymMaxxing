@@ -91,6 +91,36 @@ export const deleteRutina = async (req: Request, res: Response) => {
   }
 };
 
+export const getCarpetasRutina = async (_req: Request, res: Response) => {
+  try {
+    const carpetas = await rutinaService.getCarpetasRutina();
+    return res.json(carpetas);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Error obteniendo carpetas de rutina" });
+  }
+};
+
+export const crearCarpetaRutina = async (req: Request, res: Response) => {
+  try {
+    const { nombre } = req.body;
+
+    if (!nombre || typeof nombre !== "string" || !nombre.trim()) {
+      return res.status(400).json({ error: "nombre es obligatorio" });
+    }
+
+    const carpeta = await rutinaService.crearCarpetaRutina({
+      nombre: nombre.trim(),
+      id_carpeta_padre: req.body.id_carpeta_padre ?? null,
+    });
+
+    return res.status(201).json(carpeta);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Error creando carpeta de rutina" });
+  }
+};
+
 // =========================
 // RUTINA_EJERCICIO
 // =========================

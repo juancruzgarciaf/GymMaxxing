@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Usuario } from "../types";
 
 type Rutina = {
@@ -7,6 +7,13 @@ type Rutina = {
   descripcion: string | null;
   duracion_estimada: number | null;
   creador_id: number;
+  id_carpeta: number | null;
+};
+
+type CarpetaRutina = {
+  id_carpeta: number;
+  nombre: string;
+  id_carpeta_padre: number | null;
 };
 
 type Ejercicio = {
@@ -30,113 +37,118 @@ type RutinaEjercicio = {
   tipo_disciplina: string;
 };
 
-type SesionEntrenamiento = {
-  id_sesion: number;
-  usuario_id: number;
-  rutina_id: number;
-  descripcion: string | null;
+type SerieDraft = {
+  id: string;
+  kg: string;
+  reps: string;
 };
 
-type Serie = {
-  id_serie?: number;
-  repeticiones: number;
-  peso: number | null;
-  descanso: number | null;
-  orden: number;
-  ejercicio_id: number;
-  sesion_id: number;
-  nombre?: string;
+type EjercicioDraft = {
+  id_ejercicio: number;
+  nombre: string;
+  grupo_muscular: string;
+  tipo_disciplina: string;
+  series: SerieDraft[];
 };
 
 type RutinasProps = {
   usuario: Usuario;
 };
 
+type VistaRutinas = "lista" | "editor";
+
 const API = "http://localhost:3000";
 
+const nuevaSerie = (reps = ""): SerieDraft => ({
+  id: crypto.randomUUID(),
+  kg: "",
+  reps,
+});
+
+const parseError = async (res: Response, fallback: string) => {
+  try {
+    const data = (await res.json()) as { error?: string };
+    return data.error || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 function Rutinas({ usuario }: RutinasProps) {
-  const [rutinas, setRutinas] = useState<Rutina[]>([]);
-  const [selectedRutinaId, setSelectedRutinaId] = useState<number | null>(null);
-
-  const [rutinaForm, setRutinaForm] = useState({
-    nombre: "",
-    descripcion: "",
-    duracion_estimada: "",
-  });
-
-  const [buscarRutinaId, setBuscarRutinaId] = useState("");
-  const [rutinaBuscada, setRutinaBuscada] = useState<Rutina | null>(null);
-
-  const [catalogoEjercicios, setCatalogoEjercicios] = useState<Ejercicio[]>([]);
-  const [rutinaEjercicios, setRutinaEjercicios] = useState<RutinaEjercicio[]>([]);
-
-  const [agregarEjercicioForm, setAgregarEjercicioForm] = useState({
-    id_ejercicio: "",
-    series: "4",
-    repeticiones: "10",
-    descanso: "90",
-    orden: "1",
-  });
-
-  const [editingEjercicioId, setEditingEjercicioId] = useState<number | null>(null);
-  const [editEjercicioForm, setEditEjercicioForm] = useState({
-    series: "",
-    repeticiones: "",
-    descanso: "",
-    orden: "",
-  });
-
-  const [sesionActiva, setSesionActiva] = useState<SesionEntrenamiento | null>(null);
-  const [seriesSesion, setSeriesSesion] = useState<Serie[]>([]);
-  const [serieForm, setSerieForm] = useState({
-    ejercicio_id: "",
-    repeticiones: "",
-    peso: "",
-    descanso: "",
-    orden: "1",
-  });
-
+  const [vista, setVista] = useState<VistaRutinas>("lista");
   const [loading, setLoading] = useState(false);
-  const [mensaje, setMensaje] = useState<string>("");
-  const [error, setError] = useState<string>("");
+  const [mensaje, setMensaje] = useState("");
+  const [error, setError] = useState("");
 
-  const rutinaSeleccionada = useMemo(
-    () => rutinas.find((r) => r.id_rutina === selectedRutinaId) ?? null,
-    [rutinas, selectedRutinaId],
-  );
+  const [rutinas, setRutinas] = useState<Rutina[]>([]);
+  const [carpetas, setCarpetas] = useState<CarpetaRutina[]>([]);
+  const [catalogoEjercicios, setCatalogoEjercicios] = useState<Ejercicio[]>([]);
+
+  const [selectedRutinaId, setSelectedRutinaId] = useState<number | null>(null);
+  const [expandedCarpetas, setExpandedCarpetas] = useState<Record<number, boolean>>({});
+  const [busquedaRutina, setBusquedaRutina] = useState("");
+
+  const [editorRutinaId, setEditorRutinaId] = useState<number | null>(null);
+  const [editorNombre, setEditorNombre] = useState("");
+  const [editorDescripcion, setEditorDescripcion] = useState("");
+  const [editorDuracion, setEditorDuracion] = useState("");
+  const [editorCarpetaId, setEditorCarpetaId] = useState<string>("");
+  const [editorEjercicios, setEditorEjercicios] = useState<EjercicioDraft[]>([]);
+
+  const [filtroEquipo, setFiltroEquipo] = useState("");
+  const [filtroMusculo, setFiltroMusculo] = useState("");
+  const [busquedaEjercicio, setBusquedaEjercicio] = useState("");
+
+  const rutinaSeleccionada =
+    selectedRutinaId == null
+      ? null
+      : rutinas.find((rutina) => rutina.id_rutina === selectedRutinaId) ?? null;
 
   const cargarRutinas = async () => {
     const res = await fetch(`${API}/rutinas`);
+    if (!res.ok) {
+      throw new Error(await parseError(res, "No se pudieron obtener las rutinas"));
+    }
+
     const data = (await res.json()) as Rutina[];
-    if (!res.ok) throw new Error("No se pudieron obtener las rutinas");
     setRutinas(data);
+  };
+
+  const cargarCarpetas = async () => {
+    const res = await fetch(`${API}/rutinas/carpetas`);
+    if (!res.ok) {
+      setCarpetas([]);
+      return;
+    }
+
+    const data = (await res.json()) as CarpetaRutina[];
+    setCarpetas(data);
+    setExpandedCarpetas((prev) => {
+      const next = { ...prev };
+      data.forEach((carpeta) => {
+        if (next[carpeta.id_carpeta] == null) {
+          next[carpeta.id_carpeta] = true;
+        }
+      });
+      return next;
+    });
   };
 
   const cargarCatalogoEjercicios = async () => {
     const res = await fetch(`${API}/ejercicios`);
+    if (!res.ok) {
+      throw new Error(await parseError(res, "No se pudo obtener el catalogo de ejercicios"));
+    }
     const data = (await res.json()) as Ejercicio[];
-    if (!res.ok) throw new Error("No se pudo obtener el catalogo de ejercicios");
     setCatalogoEjercicios(data);
   };
 
   const cargarEjerciciosDeRutina = async (idRutina: number) => {
     const res = await fetch(`${API}/rutinas/${idRutina}/ejercicios`);
-    const data = (await res.json()) as RutinaEjercicio[];
-    if (!res.ok) throw new Error("No se pudieron obtener los ejercicios de la rutina");
-    setRutinaEjercicios(data);
-
-    setAgregarEjercicioForm((prev) => ({
-      ...prev,
-      orden: String((data.at(-1)?.orden ?? 0) + 1),
-    }));
-  };
-
-  const cargarSeriesSesion = async (idSesion: number) => {
-    const res = await fetch(`${API}/entrenamientos/sesion/${idSesion}/series`);
-    const data = (await res.json()) as Serie[];
-    if (!res.ok) throw new Error("No se pudieron obtener las series de la sesion");
-    setSeriesSesion(data);
-    setSerieForm((prev) => ({ ...prev, orden: String(data.length + 1) }));
+    if (!res.ok) {
+      throw new Error(await parseError(res, "No se pudieron obtener los ejercicios de la rutina"));
+    }
+    return (await res.json()) as RutinaEjercicio[];
   };
 
   useEffect(() => {
@@ -144,7 +156,8 @@ function Rutinas({ usuario }: RutinasProps) {
       try {
         setLoading(true);
         setError("");
-        await Promise.all([cargarRutinas(), cargarCatalogoEjercicios()]);
+        setMensaje("");
+        await Promise.all([cargarRutinas(), cargarCatalogoEjercicios(), cargarCarpetas()]);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error cargando datos iniciales");
       } finally {
@@ -152,777 +165,791 @@ function Rutinas({ usuario }: RutinasProps) {
       }
     };
 
-    init();
+    void init();
   }, []);
 
-  useEffect(() => {
-    if (!selectedRutinaId) {
-      setRutinaEjercicios([]);
-      return;
-    }
+  const abrirEditorNuevaRutina = () => {
+    setError("");
+    setMensaje("");
+    setEditorRutinaId(null);
+    setEditorNombre("");
+    setEditorDescripcion("");
+    setEditorDuracion("");
+    setEditorCarpetaId("");
+    setEditorEjercicios([]);
+    setFiltroEquipo("");
+    setFiltroMusculo("");
+    setBusquedaEjercicio("");
+    setVista("editor");
+  };
 
-    const load = async () => {
-      try {
-        setError("");
-        await cargarEjerciciosDeRutina(selectedRutinaId);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error cargando ejercicios de rutina");
-      }
-    };
-
-    load();
-  }, [selectedRutinaId]);
-
-  const handleCrearRutina = async () => {
+  const abrirEditorRutina = async (rutina: Rutina) => {
     try {
-      if (!rutinaForm.nombre.trim()) {
-        alert("El nombre es obligatorio");
-        return;
-      }
-
+      setLoading(true);
       setError("");
-      const res = await fetch(`${API}/rutinas`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nombre: rutinaForm.nombre,
-          descripcion: rutinaForm.descripcion || null,
-          duracion_estimada: rutinaForm.duracion_estimada
-            ? Number(rutinaForm.duracion_estimada)
-            : null,
-          creador_id: usuario.id,
-        }),
-      });
+      setMensaje("");
 
-      const data = (await res.json()) as Rutina | { error?: string };
-      if (!res.ok) {
-        throw new Error("error" in data && data.error ? data.error : "No se pudo crear la rutina");
-      }
+      const ejercicios = await cargarEjerciciosDeRutina(rutina.id_rutina);
+      const draft = ejercicios.map((item) => ({
+        id_ejercicio: item.id_ejercicio,
+        nombre: item.nombre,
+        grupo_muscular: item.grupo_muscular,
+        tipo_disciplina: item.tipo_disciplina,
+        series: Array.from(
+          { length: Math.max(1, item.series) },
+          () => nuevaSerie(String(item.repeticiones || "")),
+        ),
+      }));
 
-      const nuevaRutina = data as Rutina;
-      await cargarRutinas();
-      setSelectedRutinaId(nuevaRutina.id_rutina);
-      setMensaje("Rutina creada correctamente");
-      setRutinaForm({ nombre: "", descripcion: "", duracion_estimada: "" });
+      setEditorRutinaId(rutina.id_rutina);
+      setEditorNombre(rutina.nombre);
+      setEditorDescripcion(rutina.descripcion ?? "");
+      setEditorDuracion(rutina.duracion_estimada ? String(rutina.duracion_estimada) : "");
+      setEditorCarpetaId(rutina.id_carpeta ? String(rutina.id_carpeta) : "");
+      setEditorEjercicios(draft);
+      setVista("editor");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error creando rutina");
+      setError(err instanceof Error ? err.message : "No se pudo abrir la rutina");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleActualizarRutina = async () => {
-    if (!rutinaSeleccionada) return;
+  const handleCrearCarpeta = async () => {
+    const nombre = window.prompt("Nombre de la carpeta");
+    if (!nombre || !nombre.trim()) {
+      return;
+    }
 
     try {
       setError("");
-      const res = await fetch(`${API}/rutinas/${rutinaSeleccionada.id_rutina}`, {
-        method: "PUT",
+      setMensaje("");
+      const res = await fetch(`${API}/rutinas/carpetas`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nombre: rutinaForm.nombre || rutinaSeleccionada.nombre,
-          descripcion: rutinaForm.descripcion || rutinaSeleccionada.descripcion,
-          duracion_estimada: rutinaForm.duracion_estimada
-            ? Number(rutinaForm.duracion_estimada)
-            : rutinaSeleccionada.duracion_estimada,
-          creador_id: usuario.id,
-          id_carpeta: null,
-        }),
+        body: JSON.stringify({ nombre: nombre.trim() }),
       });
 
-      const data = (await res.json()) as Rutina | { error?: string };
       if (!res.ok) {
-        throw new Error("error" in data && data.error ? data.error : "No se pudo actualizar la rutina");
+        throw new Error(await parseError(res, "No se pudo crear la carpeta"));
       }
 
-      const actualizada = data as Rutina;
-      await cargarRutinas();
-      setSelectedRutinaId(actualizada.id_rutina);
-      setMensaje("Rutina actualizada");
+      await cargarCarpetas();
+      setMensaje("Carpeta creada");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error actualizando rutina");
+      setError(err instanceof Error ? err.message : "Error creando carpeta");
     }
   };
 
   const handleEliminarRutina = async () => {
-    if (!rutinaSeleccionada) return;
+    if (!rutinaSeleccionada) {
+      return;
+    }
 
-    const ok = window.confirm(`Eliminar la rutina "${rutinaSeleccionada.nombre}"?`);
-    if (!ok) return;
+    const confirmar = window.confirm(`Eliminar la rutina "${rutinaSeleccionada.nombre}"?`);
+    if (!confirmar) {
+      return;
+    }
 
     try {
       setError("");
+      setMensaje("");
       const res = await fetch(`${API}/rutinas/${rutinaSeleccionada.id_rutina}`, {
         method: "DELETE",
       });
 
       if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        throw new Error(data.error || "No se pudo eliminar la rutina");
+        throw new Error(await parseError(res, "No se pudo eliminar la rutina"));
       }
 
       await cargarRutinas();
       setSelectedRutinaId(null);
-      setRutinaBuscada(null);
       setMensaje("Rutina eliminada");
-      setSesionActiva(null);
-      setSeriesSesion([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error eliminando rutina");
     }
   };
 
-  const handleObtenerRutinaPorId = async () => {
-    if (!buscarRutinaId.trim()) return;
-
-    try {
-      setError("");
-      const res = await fetch(`${API}/rutinas/${buscarRutinaId}`);
-      const data = (await res.json()) as Rutina | { error?: string };
-
-      if (!res.ok) {
-        throw new Error("error" in data && data.error ? data.error : "No se encontro la rutina");
-      }
-
-      const rutina = data as Rutina;
-      setRutinaBuscada(rutina);
-      setSelectedRutinaId(rutina.id_rutina);
-      setRutinaForm({
-        nombre: rutina.nombre ?? "",
-        descripcion: rutina.descripcion ?? "",
-        duracion_estimada: rutina.duracion_estimada ? String(rutina.duracion_estimada) : "",
-      });
-      setMensaje("Rutina cargada por ID");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error buscando rutina");
-    }
-  };
-
-  const handleAgregarEjercicio = async () => {
-    if (!selectedRutinaId) return;
-    if (!agregarEjercicioForm.id_ejercicio) {
-      alert("Selecciona un ejercicio");
+  const handlePegarRutina = async () => {
+    if (!navigator.clipboard) {
+      setError("Tu navegador no soporta portapapeles en esta pagina");
       return;
     }
 
     try {
       setError("");
-      const res = await fetch(`${API}/rutinas/ejercicios`, {
+      setMensaje("");
+
+      const clipboardText = await navigator.clipboard.readText();
+      if (!clipboardText.trim()) {
+        throw new Error("El portapapeles esta vacio");
+      }
+
+      const payload = JSON.parse(clipboardText) as {
+        nombre?: string;
+        descripcion?: string | null;
+        duracion_estimada?: number | null;
+        id_carpeta?: number | null;
+        ejercicios?: Array<{ id_ejercicio?: number; repeticiones?: number; series?: number }>;
+      };
+
+      if (!payload.nombre?.trim()) {
+        throw new Error("JSON invalido: falta 'nombre' para crear la rutina");
+      }
+
+      const createRes = await fetch(`${API}/rutinas`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id_rutina: selectedRutinaId,
-          id_ejercicio: Number(agregarEjercicioForm.id_ejercicio),
-          series: Number(agregarEjercicioForm.series),
-          repeticiones: Number(agregarEjercicioForm.repeticiones),
-          descanso: Number(agregarEjercicioForm.descanso),
-          orden: Number(agregarEjercicioForm.orden),
+          nombre: payload.nombre.trim(),
+          descripcion: payload.descripcion ?? null,
+          duracion_estimada: payload.duracion_estimada ?? null,
+          creador_id: usuario.id,
+          id_carpeta: payload.id_carpeta ?? null,
         }),
       });
 
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) {
-        throw new Error(data.error || "No se pudo agregar el ejercicio a la rutina");
+      if (!createRes.ok) {
+        throw new Error(await parseError(createRes, "No se pudo pegar la rutina"));
       }
 
-      await cargarEjerciciosDeRutina(selectedRutinaId);
-      setMensaje("Ejercicio agregado a la rutina");
-      setAgregarEjercicioForm((prev) => ({
-        ...prev,
-        id_ejercicio: "",
-      }));
+      const nuevaRutina = (await createRes.json()) as Rutina;
+
+      if (Array.isArray(payload.ejercicios)) {
+        for (let orden = 0; orden < payload.ejercicios.length; orden += 1) {
+          const ejercicio = payload.ejercicios[orden];
+          if (!ejercicio.id_ejercicio) {
+            continue;
+          }
+
+          await fetch(`${API}/rutinas/ejercicios`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id_rutina: nuevaRutina.id_rutina,
+              id_ejercicio: ejercicio.id_ejercicio,
+              series: Math.max(1, ejercicio.series ?? 1),
+              repeticiones: Math.max(1, ejercicio.repeticiones ?? 10),
+              descanso: 90,
+              orden: orden + 1,
+            }),
+          });
+        }
+      }
+
+      await cargarRutinas();
+      setSelectedRutinaId(nuevaRutina.id_rutina);
+      setMensaje("Rutina pegada desde portapapeles");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error agregando ejercicio");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo pegar rutina. Usa JSON valido en el portapapeles.",
+      );
     }
   };
 
-  const startEditEjercicio = (item: RutinaEjercicio) => {
-    setEditingEjercicioId(item.id_ejercicio);
-    setEditEjercicioForm({
-      series: String(item.series),
-      repeticiones: String(item.repeticiones),
-      descanso: String(item.descanso),
-      orden: String(item.orden),
+  const handleBuscarRutinas = () => {
+    setBusquedaRutina((prev) => prev.trim());
+  };
+
+  const agregarEjercicioAlEditor = (ejercicio: Ejercicio) => {
+    setEditorEjercicios((prev) => {
+      if (prev.some((item) => item.id_ejercicio === ejercicio.id_ejercicio)) {
+        return prev;
+      }
+
+      return [
+        ...prev,
+        {
+          id_ejercicio: ejercicio.id_ejercicio,
+          nombre: ejercicio.nombre,
+          grupo_muscular: ejercicio.grupo_muscular,
+          tipo_disciplina: ejercicio.tipo_disciplina,
+          series: [nuevaSerie()],
+        },
+      ];
     });
   };
 
-  const handleActualizarEjercicio = async (idEjercicio: number) => {
-    if (!selectedRutinaId) return;
-
-    try {
-      setError("");
-      const res = await fetch(`${API}/rutinas/${selectedRutinaId}/ejercicios/${idEjercicio}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          series: Number(editEjercicioForm.series),
-          repeticiones: Number(editEjercicioForm.repeticiones),
-          descanso: Number(editEjercicioForm.descanso),
-          orden: Number(editEjercicioForm.orden),
-        }),
-      });
-
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) {
-        throw new Error(data.error || "No se pudo actualizar el ejercicio");
-      }
-
-      await cargarEjerciciosDeRutina(selectedRutinaId);
-      setEditingEjercicioId(null);
-      setMensaje("Ejercicio actualizado");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error actualizando ejercicio");
-    }
+  const removerEjercicioDelEditor = (idEjercicio: number) => {
+    setEditorEjercicios((prev) => prev.filter((item) => item.id_ejercicio !== idEjercicio));
   };
 
-  const handleEliminarEjercicio = async (idEjercicio: number) => {
-    if (!selectedRutinaId) return;
-
-    try {
-      setError("");
-      const res = await fetch(`${API}/rutinas/${selectedRutinaId}/ejercicios/${idEjercicio}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        throw new Error(data.error || "No se pudo eliminar el ejercicio");
-      }
-
-      await cargarEjerciciosDeRutina(selectedRutinaId);
-      setMensaje("Ejercicio eliminado de rutina");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error eliminando ejercicio");
-    }
+  const agregarSerieAEjercicio = (idEjercicio: number) => {
+    setEditorEjercicios((prev) =>
+      prev.map((item) =>
+        item.id_ejercicio === idEjercicio
+          ? { ...item, series: [...item.series, nuevaSerie()] }
+          : item,
+      ),
+    );
   };
 
-  const handleIniciarRutina = async () => {
-    if (!selectedRutinaId) {
-      alert("Selecciona una rutina primero");
+  const borrarSerieDeEjercicio = (idEjercicio: number, serieId: string) => {
+    setEditorEjercicios((prev) =>
+      prev.map((item) => {
+        if (item.id_ejercicio !== idEjercicio) {
+          return item;
+        }
+
+        if (item.series.length <= 1) {
+          return item;
+        }
+
+        return {
+          ...item,
+          series: item.series.filter((serie) => serie.id !== serieId),
+        };
+      }),
+    );
+  };
+
+  const updateSerie = (
+    idEjercicio: number,
+    serieId: string,
+    field: "kg" | "reps",
+    value: string,
+  ) => {
+    setEditorEjercicios((prev) =>
+      prev.map((item) => {
+        if (item.id_ejercicio !== idEjercicio) {
+          return item;
+        }
+
+        return {
+          ...item,
+          series: item.series.map((serie) => {
+            if (serie.id !== serieId) {
+              return serie;
+            }
+
+            return { ...serie, [field]: value };
+          }),
+        };
+      }),
+    );
+  };
+
+  const guardarRutina = async () => {
+    if (!editorNombre.trim()) {
+      alert("El nombre de la rutina es obligatorio");
       return;
     }
 
     try {
+      setLoading(true);
       setError("");
-      const res = await fetch(`${API}/entrenamientos/start`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          usuario_id: usuario.id,
-          rutina_id: selectedRutinaId,
-          descripcion: rutinaSeleccionada?.nombre || null,
-        }),
-      });
+      setMensaje("");
 
-      const data = (await res.json()) as SesionEntrenamiento | { error?: string };
-      if (!res.ok) {
-        throw new Error("error" in data && data.error ? data.error : "No se pudo iniciar la sesion");
+      const body = {
+        nombre: editorNombre.trim(),
+        descripcion: editorDescripcion.trim() || null,
+        duracion_estimada: editorDuracion ? Number(editorDuracion) : null,
+        creador_id: usuario.id,
+        id_carpeta: editorCarpetaId ? Number(editorCarpetaId) : null,
+      };
+
+      let rutinaId = editorRutinaId;
+
+      if (rutinaId == null) {
+        const createRes = await fetch(`${API}/rutinas`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!createRes.ok) {
+          throw new Error(await parseError(createRes, "No se pudo crear la rutina"));
+        }
+        const nueva = (await createRes.json()) as Rutina;
+        rutinaId = nueva.id_rutina;
+      } else {
+        const updateRes = await fetch(`${API}/rutinas/${rutinaId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!updateRes.ok) {
+          throw new Error(await parseError(updateRes, "No se pudo actualizar la rutina"));
+        }
       }
 
-      const sesion = data as SesionEntrenamiento;
-      setSesionActiva(sesion);
-      setSeriesSesion([]);
-      setSerieForm((prev) => ({ ...prev, orden: "1" }));
-      setMensaje(`Sesion iniciada (ID ${sesion.id_sesion})`);
+      const ejerciciosActuales = await cargarEjerciciosDeRutina(rutinaId);
+      const actualesPorEjercicio = new Map(
+        ejerciciosActuales.map((ejercicio) => [ejercicio.id_ejercicio, ejercicio]),
+      );
+      const nuevosIds = new Set(editorEjercicios.map((ejercicio) => ejercicio.id_ejercicio));
+
+      for (const ejercicioActual of ejerciciosActuales) {
+        if (!nuevosIds.has(ejercicioActual.id_ejercicio)) {
+          const deleteRes = await fetch(
+            `${API}/rutinas/${rutinaId}/ejercicios/${ejercicioActual.id_ejercicio}`,
+            { method: "DELETE" },
+          );
+          if (!deleteRes.ok) {
+            throw new Error(await parseError(deleteRes, "No se pudo eliminar ejercicio de rutina"));
+          }
+        }
+      }
+
+      for (let orden = 0; orden < editorEjercicios.length; orden += 1) {
+        const ejercicio = editorEjercicios[orden];
+        const repeticiones = Number(
+          ejercicio.series.find((serie) => serie.reps.trim())?.reps ?? "10",
+        );
+
+        const payload = {
+          series: Math.max(1, ejercicio.series.length),
+          repeticiones: Number.isNaN(repeticiones) ? 10 : Math.max(1, repeticiones),
+          descanso: 90,
+          orden: orden + 1,
+        };
+
+        const existing = actualesPorEjercicio.get(ejercicio.id_ejercicio);
+        if (existing) {
+          const updateRes = await fetch(
+            `${API}/rutinas/${rutinaId}/ejercicios/${ejercicio.id_ejercicio}`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            },
+          );
+          if (!updateRes.ok) {
+            throw new Error(await parseError(updateRes, "No se pudo actualizar ejercicio"));
+          }
+        } else {
+          const addRes = await fetch(`${API}/rutinas/ejercicios`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id_rutina: rutinaId,
+              id_ejercicio: ejercicio.id_ejercicio,
+              ...payload,
+            }),
+          });
+          if (!addRes.ok) {
+            throw new Error(await parseError(addRes, "No se pudo agregar ejercicio"));
+          }
+        }
+      }
+
+      await Promise.all([cargarRutinas(), cargarCarpetas()]);
+      setSelectedRutinaId(rutinaId);
+      setVista("lista");
+      setMensaje("Rutina guardada");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error iniciando sesion");
+      setError(err instanceof Error ? err.message : "Error guardando rutina");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleRegistrarSerie = async () => {
-    if (!sesionActiva) return;
-    if (!serieForm.ejercicio_id || !serieForm.repeticiones) {
-      alert("Completa ejercicio y repeticiones");
-      return;
+  const rutinasFiltradas = rutinas.filter((rutina) => {
+    const search = busquedaRutina.trim().toLowerCase();
+    if (!search) {
+      return true;
     }
 
-    try {
-      setError("");
-      const res = await fetch(`${API}/entrenamientos/serie`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          repeticiones: Number(serieForm.repeticiones),
-          peso: serieForm.peso ? Number(serieForm.peso) : null,
-          descanso: serieForm.descanso ? Number(serieForm.descanso) : null,
-          orden: Number(serieForm.orden),
-          ejercicio_id: Number(serieForm.ejercicio_id),
-          sesion_id: sesionActiva.id_sesion,
-        }),
-      });
+    return (
+      rutina.nombre.toLowerCase().includes(search) ||
+      (rutina.descripcion ?? "").toLowerCase().includes(search) ||
+      String(rutina.id_rutina).includes(search)
+    );
+  });
 
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) {
-        throw new Error(data.error || "No se pudo registrar la serie");
-      }
+  const rutinasPorCarpeta = new Map<number | null, Rutina[]>();
+  rutinasFiltradas.forEach((rutina) => {
+    const key = rutina.id_carpeta ?? null;
+    const current = rutinasPorCarpeta.get(key) ?? [];
+    current.push(rutina);
+    rutinasPorCarpeta.set(key, current);
+  });
 
-      await cargarSeriesSesion(sesionActiva.id_sesion);
-      setSerieForm((prev) => ({
-        ...prev,
-        repeticiones: "",
-        peso: "",
-        descanso: "",
-        orden: String(seriesSesion.length + 2),
-      }));
-      setMensaje("Serie registrada");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error registrando serie");
-    }
+  const carpetasPorPadre = new Map<number | null, CarpetaRutina[]>();
+  carpetas.forEach((carpeta) => {
+    const key = carpeta.id_carpeta_padre ?? null;
+    const current = carpetasPorPadre.get(key) ?? [];
+    current.push(carpeta);
+    carpetasPorPadre.set(key, current);
+  });
+
+  const equipos = Array.from(
+    new Set(catalogoEjercicios.map((ejercicio) => ejercicio.tipo_disciplina).filter(Boolean)),
+  );
+  const musculos = Array.from(
+    new Set(catalogoEjercicios.map((ejercicio) => ejercicio.grupo_muscular).filter(Boolean)),
+  );
+
+  const catalogoFiltrado = catalogoEjercicios.filter((ejercicio) => {
+    const matchEquipo = !filtroEquipo || ejercicio.tipo_disciplina === filtroEquipo;
+    const matchMusculo = !filtroMusculo || ejercicio.grupo_muscular === filtroMusculo;
+    const search = busquedaEjercicio.trim().toLowerCase();
+    const matchSearch =
+      !search ||
+      ejercicio.nombre.toLowerCase().includes(search) ||
+      ejercicio.grupo_muscular.toLowerCase().includes(search);
+    return matchEquipo && matchMusculo && matchSearch;
+  });
+
+  const renderRutinaItem = (rutina: Rutina) => (
+    <button
+      key={rutina.id_rutina}
+      type="button"
+      className={`list-item ${selectedRutinaId === rutina.id_rutina ? "active" : ""}`}
+      onClick={() => setSelectedRutinaId(rutina.id_rutina)}
+    >
+      <span>
+        #{rutina.id_rutina} {rutina.nombre}
+      </span>
+      <small>{rutina.descripcion || "Sin descripcion"}</small>
+    </button>
+  );
+
+  const renderCarpeta = (carpeta: CarpetaRutina, nivel: number) => {
+    const isExpanded = expandedCarpetas[carpeta.id_carpeta] ?? true;
+    const rutinasDeCarpeta = rutinasPorCarpeta.get(carpeta.id_carpeta) ?? [];
+    const subcarpetas = carpetasPorPadre.get(carpeta.id_carpeta) ?? [];
+
+    return (
+      <div key={carpeta.id_carpeta} className="folder-node" style={{ marginLeft: `${nivel * 16}px` }}>
+        <button
+          type="button"
+          className="folder-toggle"
+          onClick={() =>
+            setExpandedCarpetas((prev) => ({
+              ...prev,
+              [carpeta.id_carpeta]: !(prev[carpeta.id_carpeta] ?? true),
+            }))
+          }
+        >
+          <span>{isExpanded ? "▾" : "▸"}</span>
+          <strong>{carpeta.nombre}</strong>
+          <small>{rutinasDeCarpeta.length}</small>
+        </button>
+
+        {isExpanded && (
+          <div className="folder-children">
+            {rutinasDeCarpeta.map((rutina) => renderRutinaItem(rutina))}
+            {subcarpetas.map((subcarpeta) => renderCarpeta(subcarpeta, nivel + 1))}
+          </div>
+        )}
+      </div>
+    );
   };
 
-  const handleFinalizarSesion = async () => {
-    if (!sesionActiva) return;
+  if (vista === "editor") {
+    return (
+      <main className="app">
+        <section className="hero editor-header">
+          <button type="button" className="btn secondary" onClick={() => setVista("lista")}>
+            ← Volver
+          </button>
+          <h1>{editorRutinaId ? "Editar rutina" : "Crear rutina"}</h1>
+          <button type="button" className="btn" onClick={guardarRutina} disabled={loading}>
+            Guardar rutina
+          </button>
+        </section>
 
-    try {
-      setError("");
-      const res = await fetch(`${API}/entrenamientos/end`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sesion_id: sesionActiva.id_sesion }),
-      });
+        {loading && <p className="status">Guardando...</p>}
+        {error && <p className="status error">{error}</p>}
+        {mensaje && <p className="status ok">{mensaje}</p>}
 
-      const data = (await res.json()) as { estado?: string; error?: string };
-      if (!res.ok) {
-        throw new Error(data.error || "No se pudo finalizar la sesion");
-      }
+        <section className="panel routine-editor-layout">
+          <article className="box">
+            <div className="form-grid">
+              <input
+                className="field"
+                placeholder="Nombre de rutina"
+                value={editorNombre}
+                onChange={(event) => setEditorNombre(event.target.value)}
+              />
+              <input
+                className="field"
+                placeholder="Descripcion"
+                value={editorDescripcion}
+                onChange={(event) => setEditorDescripcion(event.target.value)}
+              />
+              <div className="form-grid two-inline">
+                <input
+                  className="field"
+                  type="number"
+                  min="1"
+                  placeholder="Duracion (min)"
+                  value={editorDuracion}
+                  onChange={(event) => setEditorDuracion(event.target.value)}
+                />
+                <select
+                  className="field"
+                  value={editorCarpetaId}
+                  onChange={(event) => setEditorCarpetaId(event.target.value)}
+                >
+                  <option value="">Sin carpeta</option>
+                  {carpetas.map((carpeta) => (
+                    <option key={carpeta.id_carpeta} value={carpeta.id_carpeta}>
+                      {carpeta.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
-      setMensaje(`Sesion ${sesionActiva.id_sesion} finalizada`);
-      setSesionActiva(null);
-      setSeriesSesion([]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error finalizando sesion");
-    }
-  };
+            <div className="editor-selected">
+              {editorEjercicios.length === 0 ? (
+                <div className="empty-state">
+                  <p>No hay ejercicios</p>
+                  <small>Agrega ejercicios desde la libreria de la derecha.</small>
+                </div>
+              ) : (
+                editorEjercicios.map((ejercicio) => (
+                  <article key={ejercicio.id_ejercicio} className="exercise-card">
+                    <div className="exercise-card-head">
+                      <div>
+                        <h3>{ejercicio.nombre}</h3>
+                        <small>
+                          {ejercicio.grupo_muscular} · {ejercicio.tipo_disciplina}
+                        </small>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn tiny danger"
+                        onClick={() => removerEjercicioDelEditor(ejercicio.id_ejercicio)}
+                      >
+                        Quitar
+                      </button>
+                    </div>
+
+                    <div className="set-table">
+                      <div className="set-table-head">
+                        <span>Set</span>
+                        <span>KG</span>
+                        <span>Reps</span>
+                        <span />
+                      </div>
+
+                      {ejercicio.series.map((serie, index) => (
+                        <div key={serie.id} className="set-row">
+                          <span className="set-number">{index + 1}</span>
+                          <input
+                            className="field compact"
+                            type="number"
+                            min="0"
+                            placeholder="-"
+                            value={serie.kg}
+                            onChange={(event) =>
+                              updateSerie(
+                                ejercicio.id_ejercicio,
+                                serie.id,
+                                "kg",
+                                event.target.value,
+                              )
+                            }
+                          />
+                          <input
+                            className="field compact"
+                            type="number"
+                            min="1"
+                            placeholder="-"
+                            value={serie.reps}
+                            onChange={(event) =>
+                              updateSerie(
+                                ejercicio.id_ejercicio,
+                                serie.id,
+                                "reps",
+                                event.target.value,
+                              )
+                            }
+                          />
+                          <button
+                            type="button"
+                            className="btn tiny secondary"
+                            disabled={ejercicio.series.length <= 1}
+                            onClick={() => borrarSerieDeEjercicio(ejercicio.id_ejercicio, serie.id)}
+                          >
+                            x
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      onClick={() => agregarSerieAEjercicio(ejercicio.id_ejercicio)}
+                    >
+                      + Add serie
+                    </button>
+                  </article>
+                ))
+              )}
+            </div>
+          </article>
+
+          <aside className="box">
+            <h2>Suggested exercises</h2>
+            <div className="form-grid">
+              <select
+                className="field"
+                value={filtroEquipo}
+                onChange={(event) => setFiltroEquipo(event.target.value)}
+              >
+                <option value="">Todo equipamiento</option>
+                {equipos.map((equipo) => (
+                  <option key={equipo} value={equipo}>
+                    {equipo}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                className="field"
+                value={filtroMusculo}
+                onChange={(event) => setFiltroMusculo(event.target.value)}
+              >
+                <option value="">Todos musculos</option>
+                {musculos.map((musculo) => (
+                  <option key={musculo} value={musculo}>
+                    {musculo}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                className="field"
+                placeholder="Buscar ejercicios"
+                value={busquedaEjercicio}
+                onChange={(event) => setBusquedaEjercicio(event.target.value)}
+              />
+            </div>
+
+            <div className="library-list">
+              {catalogoFiltrado.map((ejercicio) => {
+                const yaAgregado = editorEjercicios.some(
+                  (item) => item.id_ejercicio === ejercicio.id_ejercicio,
+                );
+
+                return (
+                  <div key={ejercicio.id_ejercicio} className="library-item">
+                    <div>
+                      <strong>{ejercicio.nombre}</strong>
+                      <small>{ejercicio.grupo_muscular}</small>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn tiny"
+                      disabled={yaAgregado}
+                      onClick={() => agregarEjercicioAlEditor(ejercicio)}
+                    >
+                      {yaAgregado ? "Agregado" : "+"}
+                    </button>
+                  </div>
+                );
+              })}
+              {catalogoFiltrado.length === 0 && (
+                <p className="helper-text">No hay ejercicios para ese filtro.</p>
+              )}
+            </div>
+          </aside>
+        </section>
+      </main>
+    );
+  }
+
+  const carpetasRaiz = carpetasPorPadre.get(null) ?? [];
+  const rutinasSueltas = rutinasPorCarpeta.get(null) ?? [];
 
   return (
     <main className="app">
       <section className="hero">
-        <p className="eyebrow">Rutinas y entrenamiento</p>
-        <h1>Gestion de rutinas</h1>
-        <p className="subtitle">
-          Crea, edita y elimina rutinas. Tambien puedes administrar ejercicios,
-          iniciar una sesion y registrar series por ejercicio.
-        </p>
+        <p className="eyebrow">Rutinas</p>
+        <h1>Tus rutinas</h1>
+        <p className="subtitle">Una vista simple para buscar, organizar y editar.</p>
       </section>
 
-      {loading && <p className="status">Cargando datos iniciales...</p>}
+      {loading && <p className="status">Cargando datos...</p>}
       {error && <p className="status error">{error}</p>}
       {mensaje && <p className="status ok">{mensaje}</p>}
 
       <section className="panel two-cols">
         <article className="box">
-          <h2>ABM de rutina</h2>
-          <div className="form-grid">
-            <input
-              className="field"
-              placeholder="Nombre"
-              value={rutinaForm.nombre}
-              onChange={(e) => setRutinaForm((prev) => ({ ...prev, nombre: e.target.value }))}
-            />
-            <input
-              className="field"
-              placeholder="Descripcion"
-              value={rutinaForm.descripcion}
-              onChange={(e) =>
-                setRutinaForm((prev) => ({ ...prev, descripcion: e.target.value }))
-              }
-            />
-            <input
-              className="field"
-              type="number"
-              min="1"
-              placeholder="Duracion estimada (min)"
-              value={rutinaForm.duracion_estimada}
-              onChange={(e) =>
-                setRutinaForm((prev) => ({ ...prev, duracion_estimada: e.target.value }))
-              }
-            />
-          </div>
-
           <div className="actions-row">
-            <button className="btn" type="button" onClick={handleCrearRutina}>
+            <input
+              className="field"
+              placeholder="Buscar rutinas"
+              value={busquedaRutina}
+              onChange={(event) => setBusquedaRutina(event.target.value)}
+            />
+            <button className="btn" type="button" onClick={abrirEditorNuevaRutina}>
               Crear rutina
             </button>
             <button
               className="btn secondary"
               type="button"
-              onClick={handleActualizarRutina}
               disabled={!rutinaSeleccionada}
+              onClick={() => {
+                if (rutinaSeleccionada) {
+                  void abrirEditorRutina(rutinaSeleccionada);
+                }
+              }}
             >
-              Actualizar rutina
+              Modificar rutina
             </button>
-            <button
-              className="btn danger"
-              type="button"
-              onClick={handleEliminarRutina}
-              disabled={!rutinaSeleccionada}
-            >
-              Borrar rutina
+            <button className="btn secondary" type="button" onClick={handlePegarRutina}>
+              Pegar rutina
             </button>
-          </div>
-
-          <div className="lookup-row">
-            <input
-              className="field"
-              type="number"
-              min="1"
-              placeholder="Obtener rutina por ID"
-              value={buscarRutinaId}
-              onChange={(e) => setBuscarRutinaId(e.target.value)}
-            />
-            <button className="btn secondary" type="button" onClick={handleObtenerRutinaPorId}>
+            <button className="btn secondary" type="button" onClick={handleBuscarRutinas}>
               Buscar
             </button>
-          </div>
-
-          {rutinaBuscada && (
-            <p className="helper-text">
-              Rutina encontrada: <strong>{rutinaBuscada.nombre}</strong> (ID {rutinaBuscada.id_rutina})
-            </p>
-          )}
-        </article>
-
-        <article className="box">
-          <h2>Rutinas existentes</h2>
-          <div className="list">
-            {rutinas.length === 0 && <p className="helper-text">No hay rutinas cargadas.</p>}
-            {rutinas.map((rutina) => (
-              <button
-                key={rutina.id_rutina}
-                type="button"
-                className={`list-item ${selectedRutinaId === rutina.id_rutina ? "active" : ""}`}
-                onClick={() => {
-                  setSelectedRutinaId(rutina.id_rutina);
-                  setRutinaForm({
-                    nombre: rutina.nombre,
-                    descripcion: rutina.descripcion ?? "",
-                    duracion_estimada: rutina.duracion_estimada
-                      ? String(rutina.duracion_estimada)
-                      : "",
-                  });
-                }}
-              >
-                <span>
-                  #{rutina.id_rutina} {rutina.nombre}
-                </span>
-                <small>{rutina.descripcion || "Sin descripcion"}</small>
-              </button>
-            ))}
-          </div>
-        </article>
-      </section>
-
-      <section className="panel two-cols">
-        <article className="box">
-          <h2>Ejercicios de la rutina</h2>
-          {!selectedRutinaId ? (
-            <p className="helper-text">Selecciona una rutina para administrar ejercicios.</p>
-          ) : (
-            <>
-              <div className="form-grid form-grid-5">
-                <select
-                  className="field"
-                  value={agregarEjercicioForm.id_ejercicio}
-                  onChange={(e) =>
-                    setAgregarEjercicioForm((prev) => ({ ...prev, id_ejercicio: e.target.value }))
-                  }
-                >
-                  <option value="">Ejercicio</option>
-                  {catalogoEjercicios.map((ej) => (
-                    <option key={ej.id_ejercicio} value={ej.id_ejercicio}>
-                      {ej.nombre}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  className="field"
-                  type="number"
-                  min="1"
-                  placeholder="Series"
-                  value={agregarEjercicioForm.series}
-                  onChange={(e) =>
-                    setAgregarEjercicioForm((prev) => ({ ...prev, series: e.target.value }))
-                  }
-                />
-                <input
-                  className="field"
-                  type="number"
-                  min="1"
-                  placeholder="Repeticiones"
-                  value={agregarEjercicioForm.repeticiones}
-                  onChange={(e) =>
-                    setAgregarEjercicioForm((prev) => ({ ...prev, repeticiones: e.target.value }))
-                  }
-                />
-                <input
-                  className="field"
-                  type="number"
-                  min="0"
-                  placeholder="Descanso (seg)"
-                  value={agregarEjercicioForm.descanso}
-                  onChange={(e) =>
-                    setAgregarEjercicioForm((prev) => ({ ...prev, descanso: e.target.value }))
-                  }
-                />
-                <input
-                  className="field"
-                  type="number"
-                  min="1"
-                  placeholder="Orden"
-                  value={agregarEjercicioForm.orden}
-                  onChange={(e) =>
-                    setAgregarEjercicioForm((prev) => ({ ...prev, orden: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div className="actions-row">
-                <button className="btn" type="button" onClick={handleAgregarEjercicio}>
-                  Agregar ejercicio
-                </button>
-              </div>
-
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Orden</th>
-                      <th>Ejercicio</th>
-                      <th>Series</th>
-                      <th>Reps</th>
-                      <th>Descanso</th>
-                      <th>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rutinaEjercicios.length === 0 && (
-                      <tr>
-                        <td colSpan={6}>No hay ejercicios en esta rutina.</td>
-                      </tr>
-                    )}
-                    {rutinaEjercicios.map((item) => {
-                      const isEditing = editingEjercicioId === item.id_ejercicio;
-
-                      return (
-                        <tr key={`${item.id_rutina}-${item.id_ejercicio}`}>
-                          <td>
-                            {isEditing ? (
-                              <input
-                                className="field compact"
-                                type="number"
-                                value={editEjercicioForm.orden}
-                                onChange={(e) =>
-                                  setEditEjercicioForm((prev) => ({ ...prev, orden: e.target.value }))
-                                }
-                              />
-                            ) : (
-                              item.orden
-                            )}
-                          </td>
-                          <td>{item.nombre}</td>
-                          <td>
-                            {isEditing ? (
-                              <input
-                                className="field compact"
-                                type="number"
-                                value={editEjercicioForm.series}
-                                onChange={(e) =>
-                                  setEditEjercicioForm((prev) => ({ ...prev, series: e.target.value }))
-                                }
-                              />
-                            ) : (
-                              item.series
-                            )}
-                          </td>
-                          <td>
-                            {isEditing ? (
-                              <input
-                                className="field compact"
-                                type="number"
-                                value={editEjercicioForm.repeticiones}
-                                onChange={(e) =>
-                                  setEditEjercicioForm((prev) => ({ ...prev, repeticiones: e.target.value }))
-                                }
-                              />
-                            ) : (
-                              item.repeticiones
-                            )}
-                          </td>
-                          <td>
-                            {isEditing ? (
-                              <input
-                                className="field compact"
-                                type="number"
-                                value={editEjercicioForm.descanso}
-                                onChange={(e) =>
-                                  setEditEjercicioForm((prev) => ({ ...prev, descanso: e.target.value }))
-                                }
-                              />
-                            ) : (
-                              `${item.descanso}s`
-                            )}
-                          </td>
-                          <td>
-                            {!isEditing ? (
-                              <div className="inline-actions">
-                                <button
-                                  className="btn tiny secondary"
-                                  type="button"
-                                  onClick={() => startEditEjercicio(item)}
-                                >
-                                  Editar
-                                </button>
-                                <button
-                                  className="btn tiny danger"
-                                  type="button"
-                                  onClick={() => handleEliminarEjercicio(item.id_ejercicio)}
-                                >
-                                  Borrar
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="inline-actions">
-                                <button
-                                  className="btn tiny"
-                                  type="button"
-                                  onClick={() => handleActualizarEjercicio(item.id_ejercicio)}
-                                >
-                                  Guardar
-                                </button>
-                                <button
-                                  className="btn tiny secondary"
-                                  type="button"
-                                  onClick={() => setEditingEjercicioId(null)}
-                                >
-                                  Cancelar
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </article>
-
-        <article className="box">
-          <h2>Sesion de entrenamiento</h2>
-          <div className="actions-row">
-            <button
-              className="btn"
-              type="button"
-              onClick={handleIniciarRutina}
-              disabled={!selectedRutinaId || Boolean(sesionActiva)}
-            >
-              Iniciar rutina
-            </button>
-            <button
-              className="btn danger"
-              type="button"
-              onClick={handleFinalizarSesion}
-              disabled={!sesionActiva}
-            >
-              Finalizar sesion
+            <button className="btn secondary" type="button" onClick={handleCrearCarpeta}>
+              Nueva carpeta
             </button>
           </div>
 
-          {sesionActiva ? (
-            <>
-              <p className="helper-text">
-                Sesion activa: <strong>#{sesionActiva.id_sesion}</strong>
-              </p>
-
-              <div className="form-grid form-grid-5">
-                <select
-                  className="field"
-                  value={serieForm.ejercicio_id}
-                  onChange={(e) =>
-                    setSerieForm((prev) => ({ ...prev, ejercicio_id: e.target.value }))
-                  }
-                >
-                  <option value="">Ejercicio</option>
-                  {rutinaEjercicios.map((ej) => (
-                    <option key={`sesion-ej-${ej.id_ejercicio}`} value={ej.id_ejercicio}>
-                      {ej.nombre}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  className="field"
-                  type="number"
-                  min="1"
-                  placeholder="Repeticiones"
-                  value={serieForm.repeticiones}
-                  onChange={(e) =>
-                    setSerieForm((prev) => ({ ...prev, repeticiones: e.target.value }))
-                  }
-                />
-                <input
-                  className="field"
-                  type="number"
-                  min="0"
-                  placeholder="Peso"
-                  value={serieForm.peso}
-                  onChange={(e) => setSerieForm((prev) => ({ ...prev, peso: e.target.value }))}
-                />
-                <input
-                  className="field"
-                  type="number"
-                  min="0"
-                  placeholder="Descanso"
-                  value={serieForm.descanso}
-                  onChange={(e) =>
-                    setSerieForm((prev) => ({ ...prev, descanso: e.target.value }))
-                  }
-                />
-                <input
-                  className="field"
-                  type="number"
-                  min="1"
-                  placeholder="Orden"
-                  value={serieForm.orden}
-                  onChange={(e) => setSerieForm((prev) => ({ ...prev, orden: e.target.value }))}
-                />
-              </div>
-
-              <div className="actions-row">
-                <button className="btn" type="button" onClick={handleRegistrarSerie}>
-                  Registrar serie
+          <div className="folder-tree">
+            {carpetasRaiz.map((carpeta) => renderCarpeta(carpeta, 0))}
+            {rutinasSueltas.length > 0 && (
+              <div className="folder-node">
+                <button type="button" className="folder-toggle static">
+                  <strong>Sin carpeta</strong>
+                  <small>{rutinasSueltas.length}</small>
                 </button>
+                <div className="folder-children">{rutinasSueltas.map((rutina) => renderRutinaItem(rutina))}</div>
+              </div>
+            )}
+            {rutinasFiltradas.length === 0 && (
+              <div className="empty-state">
+                <p>No hay rutinas</p>
+                <small>Crea tu primera rutina para empezar.</small>
+              </div>
+            )}
+          </div>
+        </article>
+
+        <article className="box">
+          <h2>Detalle</h2>
+          {rutinaSeleccionada ? (
+            <div className="routine-detail">
+              <h3>{rutinaSeleccionada.nombre}</h3>
+              <p>{rutinaSeleccionada.descripcion || "Sin descripcion"}</p>
+              <small>
+                Duracion: {rutinaSeleccionada.duracion_estimada ?? "-"} min · ID{" "}
+                {rutinaSeleccionada.id_rutina}
+              </small>
+              <div className="actions-row">
                 <button
-                  className="btn secondary"
                   type="button"
-                  onClick={() => cargarSeriesSesion(sesionActiva.id_sesion)}
+                  className="btn"
+                  onClick={() => void abrirEditorRutina(rutinaSeleccionada)}
                 >
-                  Refrescar series
+                  Modificar
+                </button>
+                <button type="button" className="btn danger" onClick={handleEliminarRutina}>
+                  Eliminar
                 </button>
               </div>
-
-              <div className="list">
-                {seriesSesion.length === 0 && (
-                  <p className="helper-text">Aun no hay series registradas en la sesion.</p>
-                )}
-                {seriesSesion.map((serie) => (
-                  <div
-                    key={`serie-${serie.sesion_id}-${serie.ejercicio_id}-${serie.orden}`}
-                    className="list-item static"
-                  >
-                    <span>
-                      Serie #{serie.orden} - Ejercicio {serie.nombre || serie.ejercicio_id}
-                    </span>
-                    <small>
-                      Reps: {serie.repeticiones} | Peso: {serie.peso ?? "-"} | Descanso: {serie.descanso ?? "-"}
-                    </small>
-                  </div>
-                ))}
-              </div>
-            </>
+            </div>
           ) : (
-            <p className="helper-text">
-              No hay sesion activa. Selecciona una rutina y presiona "Iniciar rutina".
-            </p>
+            <p className="helper-text">Selecciona una rutina para ver sus detalles.</p>
           )}
         </article>
       </section>

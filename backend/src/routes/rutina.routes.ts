@@ -5,6 +5,8 @@ import {
   getRutinaPorId,
   updateRutina,
   deleteRutina,
+  getCarpetasRutina,
+  crearCarpetaRutina,
   agregarEjercicioARutina,
   getEjerciciosDeRutina,
   updateEjercicioDeRutina,
@@ -16,6 +18,8 @@ const router = Router();
 // ABM de rutina
 router.post("/", crearRutina);
 router.get("/", getRutinas);
+router.get("/carpetas", getCarpetasRutina);
+router.post("/carpetas", crearCarpetaRutina);
 router.get("/:id", getRutinaPorId);
 router.put("/:id", updateRutina);
 router.delete("/:id", deleteRutina);
