@@ -1,11 +1,30 @@
 import { Request, Response } from "express";
 import * as rutinaService from "../services/rutina.service";
 
+/*
+  Este controller junta todo lo relacionado con rutinas.
+  Tiene varias responsabilidades:
+  crear y editar rutinas,
+  manejar carpetas donde se agrupan,
+  y administrar la relación entre rutina y ejercicio.
+
+  La lógica general se repite bastante:
+  valida lo mínimo para no pasar basura,
+  llama al service que hace el laburo más de negocio,
+  y responde según si encontró datos, si creó algo o si falló.
+*/
+
 // =========================
 // RUTINA
 // =========================
 
 export const crearRutina = async (req: Request, res: Response) => {
+  /*
+    Para crear una rutina necesita al menos nombre y creador.
+    Si eso no viene, no tiene sentido seguir porque la rutina quedaría incompleta.
+    Cuando pasa la validación, manda todo el body al service,
+    así la parte más importante de creación queda centralizada ahí.
+  */
   try {
     const { nombre, creador_id } = req.body;
 
@@ -24,6 +43,11 @@ export const crearRutina = async (req: Request, res: Response) => {
 };
 
 export const getRutinas = async (_req: Request, res: Response) => {
+  /*
+    Lista todas las rutinas.
+    No mete filtros ni transforma nada raro:
+    solo le pide al service el listado y lo devuelve tal cual.
+  */
   try {
     const rutinas = await rutinaService.getRutinas();
     return res.json(rutinas);
@@ -34,6 +58,12 @@ export const getRutinas = async (_req: Request, res: Response) => {
 };
 
 export const getRutinaPorId = async (req: Request, res: Response) => {
+  /*
+    Busca una rutina específica.
+    Primero chequea que el id exista y tenga un formato razonable.
+    Después consulta al service.
+    Si no aparece nada, devuelve 404 para diferenciar "no existe" de "explotó todo".
+  */
   try {
     const { id } = req.params;
 
@@ -55,6 +85,14 @@ export const getRutinaPorId = async (req: Request, res: Response) => {
 };
 
 export const updateRutina = async (req: Request, res: Response) => {
+  /*
+    Actualiza una rutina ya existente.
+    La secuencia es:
+    1. validar el id,
+    2. pasar el id y los cambios al service,
+    3. si el service no devuelve nada, asumir que esa rutina no existía,
+    4. si devuelve algo, mandar la versión actualizada.
+  */
   try {
     const { id } = req.params;
 
@@ -76,6 +114,11 @@ export const updateRutina = async (req: Request, res: Response) => {
 };
 
 export const deleteRutina = async (req: Request, res: Response) => {
+  /*
+    Borra una rutina por id.
+    Acá el controller valida el id antes de delegar.
+    Si el service no tira error, se responde con un mensaje simple de confirmación.
+  */
   try {
     const { id } = req.params;
 
@@ -92,6 +135,10 @@ export const deleteRutina = async (req: Request, res: Response) => {
 };
 
 export const getCarpetasRutina = async (_req: Request, res: Response) => {
+  /*
+    Devuelve todas las carpetas donde se pueden organizar rutinas.
+    Es un endpoint de consulta nomás, sin validaciones de entrada.
+  */
   try {
     const carpetas = await rutinaService.getCarpetasRutina();
     return res.json(carpetas);
@@ -102,6 +149,16 @@ export const getCarpetasRutina = async (_req: Request, res: Response) => {
 };
 
 export const crearCarpetaRutina = async (req: Request, res: Response) => {
+  /*
+    Acá se crea una carpeta para ordenar rutinas.
+    Se valida que el nombre no venga vacío y que exista un usuario dueño de esa carpeta.
+    Después se normaliza un poco el dato:
+    - nombre con trim para sacar espacios al pedo,
+    - usuario_id convertido a número,
+    - carpeta padre opcional si viene.
+
+    Recién ahí se lo pasa al service para crearla.
+  */
   try {
     const { nombre, usuario_id } = req.body;
 
@@ -127,6 +184,13 @@ export const crearCarpetaRutina = async (req: Request, res: Response) => {
 };
 
 export const updateCarpetaRutina = async (req: Request, res: Response) => {
+  /*
+    Edita una carpeta existente.
+    La lógica es parecida a crear:
+    valida id, valida nombre, valida usuario,
+    limpia el nombre y manda todo al service.
+    Si no vuelve carpeta, se interpreta que no existía.
+  */
   try {
     const { id } = req.params;
     const { nombre, usuario_id } = req.body;
@@ -160,6 +224,12 @@ export const updateCarpetaRutina = async (req: Request, res: Response) => {
 };
 
 export const deleteCarpetaRutina = async (req: Request, res: Response) => {
+  /*
+    Para borrar una carpeta no alcanza solo con el id de la carpeta:
+    también pide usuario_id.
+    Eso sirve para que el service tenga claro quién está intentando borrarla
+    y pueda aplicar las reglas que correspondan.
+  */
   try {
     const { id } = req.params;
     const { usuario_id } = req.body;
@@ -195,6 +265,15 @@ export const agregarEjercicioARutina = async (
   req: Request,
   res: Response
 ) => {
+  /*
+    Esta parte arma la relación entre una rutina y un ejercicio.
+    No solo necesita saber qué rutina y qué ejercicio son,
+    sino también cómo queda configurado adentro de la rutina:
+    series, repeticiones, descanso y orden.
+
+    Si falta cualquiera de esos datos, la relación quedaría a medias,
+    así que el endpoint corta antes de llegar al service.
+  */
   try {
     const {
       id_rutina,
@@ -230,6 +309,11 @@ export const agregarEjercicioARutina = async (
 };
 
 export const getEjerciciosDeRutina = async (req: Request, res: Response) => {
+  /*
+    Trae todos los ejercicios que tiene una rutina concreta.
+    Valida el id de la rutina y después delega al service,
+    que es quien sabe cómo armar esa lista.
+  */
   try {
     const { id } = req.params;
 
@@ -251,6 +335,14 @@ export const updateEjercicioDeRutina = async (
   req: Request,
   res: Response
 ) => {
+  /*
+    Acá no se actualiza una rutina entera, sino una fila puntual dentro de la rutina:
+    la relación de un ejercicio específico con esa rutina.
+    Por eso necesita dos ids:
+    el de la rutina y el del ejercicio.
+
+    Con esos dos datos encuentra exactamente qué relación tocar.
+  */
   try {
     const { id_rutina, id_ejercicio } = req.params;
 
@@ -290,6 +382,11 @@ export const deleteEjercicioDeRutina = async (
   req: Request,
   res: Response
 ) => {
+  /*
+    Misma lógica que el update de arriba, pero para borrar la relación.
+    Los dos ids juntos identifican qué ejercicio sacar de qué rutina.
+    Si todo sale bien, responde con un mensaje de confirmación.
+  */
   try {
     const { id_rutina, id_ejercicio } = req.params;
 

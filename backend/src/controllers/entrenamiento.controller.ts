@@ -1,6 +1,12 @@
 import { Request, Response } from "express";
 import * as entrenamientoService from "../services/entrenamiento.service";
 
+/*
+  Este controller maneja lo que pasa mientras una persona entrena:
+  arrancar una sesión, guardar series, consultar lo que ya hizo y cerrarla al final.
+  El controller valida lo básico y delega la lógica más pesada al service.
+*/
+
 // =========================
 // SESION_ENTRENAMIENTO
 // =========================
@@ -9,6 +15,16 @@ export const iniciarSesionEntrenamiento = async (
   req: Request,
   res: Response
 ) => {
+  /*
+    Cuando alguien arranca a entrenar:
+    1. Revisa que venga el usuario y la rutina.
+    2. Si falta alguno, no sigue.
+    3. Si está todo bien, le pasa el body al service.
+    4. El service se encarga de crear la sesión como corresponde.
+    5. Después devuelve esa sesión creada.
+
+    O sea, este endpoint prende la "sesión activa" con el contexto mínimo.
+  */
   try {
     const { usuario_id, rutina_id } = req.body;
 
@@ -32,6 +48,12 @@ export const iniciarSesionEntrenamiento = async (
 };
 
 export const getSesionPorId = async (req: Request, res: Response) => {
+  /*
+    Este endpoint sirve para recuperar una sesión puntual.
+    Primero valida que el id de la URL tenga sentido,
+    después le pide al service esa sesión,
+    y si no existe responde 404 para dejar claro que no hay nada con ese id.
+  */
   try {
     const { id } = req.params;
 
@@ -63,6 +85,14 @@ export const getSesionPorId = async (req: Request, res: Response) => {
 // =========================
 
 export const registrarSerie = async (req: Request, res: Response) => {
+  /*
+    Acá se guarda una serie hecha dentro de una sesión.
+    La idea es asegurarse de que vengan los datos mínimos para identificar:
+    qué ejercicio fue, en qué sesión cayó, qué número de serie es
+    y cuántas repeticiones se hicieron.
+
+    Si eso está, el service la registra y devuelve el resultado.
+  */
   try {
     const { repeticiones, orden, ejercicio_id, sesion_id } = req.body;
 
@@ -89,6 +119,11 @@ export const registrarSerie = async (req: Request, res: Response) => {
 };
 
 export const getSeriesDeSesion = async (req: Request, res: Response) => {
+  /*
+    Trae todas las series asociadas a una sesión.
+    Es útil para reconstruir el entrenamiento que la persona fue cargando.
+    Valida el id de la sesión y después delega la búsqueda al service.
+  */
   try {
     const { id } = req.params;
 
@@ -109,6 +144,12 @@ export const getSeriesDeSesion = async (req: Request, res: Response) => {
 };
 
 export const finalizarSesion = async (req: Request, res: Response) => {
+  /*
+    Este endpoint cierra la sesión de entrenamiento.
+    Pide el id de la sesión,
+    y con eso el service se encarga de marcarla como finalizada
+    o hacer el cierre que corresponda.
+  */
   try {
     const { sesion_id } = req.body;
 
