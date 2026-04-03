@@ -145,9 +145,15 @@ export const crearRutina = async (data: any) => {
   return result.rows[0];
 };
 
-export const getRutinas = async () => {
+export const getRutinas = async (creadorId?: number) => {
   const result = await pool.query(
-    `SELECT * FROM rutina ORDER BY fecha_creacion DESC`
+    creadorId == null
+      ? `SELECT * FROM rutina ORDER BY fecha_creacion DESC`
+      : `SELECT *
+         FROM rutina
+         WHERE creador_id = $1
+         ORDER BY fecha_creacion DESC`,
+    creadorId == null ? [] : [creadorId]
   );
   return result.rows;
 };
@@ -177,12 +183,13 @@ export const updateRutina = async (id: string, data: any) => {
          creador_id = $4,
          id_carpeta = $5
      WHERE id_rutina = $6
+       AND ($4::int IS NULL OR creador_id = $4)
      RETURNING *`,
     [
       nombre,
       descripcion ?? null,
       duracion_estimada ?? null,
-      creador_id,
+      creador_id ?? null,
       id_carpeta ?? null,
       id,
     ]
@@ -191,11 +198,23 @@ export const updateRutina = async (id: string, data: any) => {
   return result.rows[0];
 };
 
-export const deleteRutina = async (id: string) => {
-  await pool.query(`DELETE FROM rutina WHERE id_rutina = $1`, [id]);
+export const deleteRutina = async (id: string, creadorId?: number) => {
+  const result = await pool.query(
+    creadorId == null
+      ? `DELETE FROM rutina
+         WHERE id_rutina = $1
+         RETURNING *`
+      : `DELETE FROM rutina
+         WHERE id_rutina = $1
+           AND creador_id = $2
+         RETURNING *`,
+    creadorId == null ? [id] : [id, creadorId]
+  );
+
+  return result.rows[0] ?? null;
 };
 
-export const getCarpetasRutina = async () => {
+export const getCarpetasRutina = async (usuarioId?: number) => {
   const tableInfo = await resolveCarpetaTable();
   if (!tableInfo) {
     return [];
@@ -205,12 +224,23 @@ export const getCarpetasRutina = async () => {
     ? `${quoteIdent(tableInfo.parentColumn)} AS id_carpeta_padre`
     : "NULL::integer AS id_carpeta_padre";
 
+  const params: number[] = [];
+  const whereSql =
+    usuarioId != null && tableInfo.hasUsuarioColumn
+      ? (() => {
+          params.push(usuarioId);
+          return `WHERE ${quoteIdent("usuario_id")} = $1`;
+        })()
+      : "";
+
   const result = await pool.query(
     `SELECT ${quoteIdent(tableInfo.idColumn)} AS id_carpeta,
             ${quoteIdent(tableInfo.nameColumn)} AS nombre,
             ${parentSelect}
      FROM ${quoteIdent(tableInfo.tableName)}
-     ORDER BY ${quoteIdent(tableInfo.nameColumn)} ASC`
+     ${whereSql}
+     ORDER BY ${quoteIdent(tableInfo.nameColumn)} ASC`,
+    params
   );
 
   return result.rows;

@@ -1,5 +1,20 @@
 import { pool } from "../db";
 
+type SesionEntrenamientoRow = {
+  id_sesion: number;
+  fecha: string | null;
+  fecha_inicio: string | null;
+  fecha_fin: string | null;
+  descripcion: string | null;
+  gimnasio_id: number | null;
+  usuario_id: number;
+  rutina_id: number | null;
+  estado: string;
+  duracion_segundos: number | null;
+  volumen_total: number | null;
+  nombre_rutina_snapshot: string | null;
+};
+
 // =========================
 // SESION_ENTRENAMIENTO
 // =========================
@@ -7,16 +22,33 @@ import { pool } from "../db";
 export const iniciarSesionEntrenamiento = async (data: any) => {
   const { descripcion, gimnasio_id, usuario_id, rutina_id } = data;
 
-  const result = await pool.query(
+  const rutinaResult = await pool.query<{ nombre: string }>(
+    `SELECT nombre
+     FROM rutina
+     WHERE id_rutina = $1`,
+    [rutina_id]
+  );
+
+  const result = await pool.query<SesionEntrenamientoRow>(
     `INSERT INTO sesionentrenamiento
-     (fecha, descripcion, gimnasio_id, usuario_id, rutina_id)
-     VALUES (NOW(), $1, $2, $3, $4)
+     (
+       fecha,
+       fecha_inicio,
+       descripcion,
+       gimnasio_id,
+       usuario_id,
+       rutina_id,
+       estado,
+       nombre_rutina_snapshot
+     )
+     VALUES (NOW(), NOW(), $1, $2, $3, $4, 'en_curso', $5)
      RETURNING *`,
     [
       descripcion ?? null,
       gimnasio_id ?? null,
       usuario_id,
       rutina_id,
+      rutinaResult.rows[0]?.nombre ?? null,
     ]
   );
 
@@ -24,7 +56,7 @@ export const iniciarSesionEntrenamiento = async (data: any) => {
 };
 
 export const getSesionPorId = async (id_sesion: string) => {
-  const result = await pool.query(
+  const result = await pool.query<SesionEntrenamientoRow>(
     `SELECT * FROM sesionentrenamiento WHERE id_sesion = $1`,
     [id_sesion]
   );
@@ -66,11 +98,20 @@ export const registrarSerie = async (data: any) => {
 
 export const getSeriesDeSesion = async (sesion_id: string) => {
   const result = await pool.query(
-    `SELECT s.*, e.nombre, e.descripcion, e.grupo_muscular, e.tipo_disciplina
+    `SELECT s.*,
+            e.nombre,
+            e.descripcion,
+            e.grupo_muscular,
+            e.tipo_disciplina,
+            COALESCE(re.orden, 9999) AS orden_ejercicio
      FROM serie s
      JOIN ejercicio e ON e.id_ejercicio = s.ejercicio_id
+     JOIN sesionentrenamiento se ON se.id_sesion = s.sesion_id
+     LEFT JOIN rutinaejercicio re
+       ON re.id_rutina = se.rutina_id
+      AND re.id_ejercicio = s.ejercicio_id
      WHERE s.sesion_id = $1
-     ORDER BY s.orden ASC`,
+     ORDER BY COALESCE(re.orden, 9999) ASC, s.orden ASC, e.nombre ASC`,
     [sesion_id]
   );
 
@@ -81,11 +122,40 @@ export const getSeriesDeSesion = async (sesion_id: string) => {
 // podemos dejarlo como cierre lógico devolviendo la sesión y sus series.
 export const finalizarSesion = async (sesion_id: string) => {
   const sesion = await getSesionPorId(sesion_id);
+  if (!sesion) {
+    return null;
+  }
+
+  const volumenResult = await pool.query<{ volumen_total: number }>(
+    `SELECT COALESCE(SUM(COALESCE(peso, 0) * COALESCE(repeticiones, 0)), 0)::float AS volumen_total
+     FROM serie
+     WHERE sesion_id = $1`,
+    [sesion_id]
+  );
+
+  const sesionActualizada = await pool.query<SesionEntrenamientoRow>(
+    `UPDATE sesionentrenamiento
+     SET fecha_fin = NOW(),
+         estado = 'finalizada',
+         duracion_segundos = COALESCE(
+           duracion_segundos,
+           CASE
+             WHEN fecha_inicio IS NOT NULL
+               THEN GREATEST(EXTRACT(EPOCH FROM (NOW() - fecha_inicio))::int, 0)
+             ELSE 0
+           END
+         ),
+         volumen_total = $2
+     WHERE id_sesion = $1
+     RETURNING *`,
+    [sesion_id, volumenResult.rows[0]?.volumen_total ?? 0]
+  );
+
   const series = await getSeriesDeSesion(sesion_id);
 
   return {
-    sesion,
+    sesion: sesionActualizada.rows[0] ?? sesion,
     series,
-    estado: "finalizada",
+    estado: "finalizada" as const,
   };
 };

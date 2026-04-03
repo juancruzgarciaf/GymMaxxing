@@ -240,17 +240,20 @@ function Rutinas({ usuario }: RutinasProps) {
   );
 
   const cargarRutinas = async () => {
-    const res = await fetch(`${API}/rutinas`);
+    const res = await fetch(`${API}/rutinas?creador_id=${usuario.id}`);
     if (!res.ok) {
       throw new Error(await parseError(res, "No se pudieron obtener las rutinas"));
     }
 
     const data = (await res.json()) as Rutina[];
     setRutinas(data);
+    setSelectedRutinaId((prev) =>
+      prev != null && !data.some((rutina) => rutina.id_rutina === prev) ? null : prev,
+    );
   };
 
   const cargarCarpetas = async () => {
-    const res = await fetch(`${API}/rutinas/carpetas`);
+    const res = await fetch(`${API}/rutinas/carpetas?usuario_id=${usuario.id}`);
     if (!res.ok) {
       setCarpetas([]);
       return;
@@ -383,7 +386,7 @@ function Rutinas({ usuario }: RutinasProps) {
     };
 
     void init();
-  }, []);
+  }, [usuario.id]);
 
   useEffect(() => {
     if (selectedRutinaId == null) {
@@ -573,6 +576,10 @@ function Rutinas({ usuario }: RutinasProps) {
       setMensaje("");
       const res = await fetch(`${API}/rutinas/${rutinaSeleccionada.id_rutina}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          creador_id: usuario.id,
+        }),
       });
 
       if (!res.ok) {
@@ -1208,10 +1215,9 @@ function Rutinas({ usuario }: RutinasProps) {
         rutinaEnEjecucion != null &&
         window.confirm("Quieres sobre escribir la rutina actual con los cambios de esta sesion?");
       if (sesionActiva) {
-        const res = await fetch(`${API}/entrenamientos/end`, {
+        const res = await fetch(`${API}/entrenamientos/${sesionActiva.id_sesion}/finalizar`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sesion_id: sesionActiva.id_sesion }),
         });
         if (!res.ok) {
           throw new Error(await parseError(res, "No se pudo finalizar la rutina"));

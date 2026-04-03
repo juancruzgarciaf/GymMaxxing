@@ -42,14 +42,24 @@ export const crearRutina = async (req: Request, res: Response) => {
   }
 };
 
-export const getRutinas = async (_req: Request, res: Response) => {
+export const getRutinas = async (req: Request, res: Response) => {
   /*
     Lista todas las rutinas.
     No mete filtros ni transforma nada raro:
     solo le pide al service el listado y lo devuelve tal cual.
   */
   try {
-    const rutinas = await rutinaService.getRutinas();
+    const creadorIdRaw = req.query.creador_id;
+    const creadorId =
+      typeof creadorIdRaw === "string" && creadorIdRaw.trim()
+        ? Number(creadorIdRaw)
+        : undefined;
+
+    if (creadorIdRaw != null && (creadorId == null || Number.isNaN(creadorId))) {
+      return res.status(400).json({ error: "creador_id inválido" });
+    }
+
+    const rutinas = await rutinaService.getRutinas(creadorId);
     return res.json(rutinas);
   } catch (error) {
     console.error(error);
@@ -121,12 +131,27 @@ export const deleteRutina = async (req: Request, res: Response) => {
   */
   try {
     const { id } = req.params;
+    const creadorIdRaw = req.body.creador_id;
 
     if (!id || Array.isArray(id)) {
       return res.status(400).json({ error: "id inválido" });
     }
 
-    await rutinaService.deleteRutina(id);
+    const creadorId =
+      creadorIdRaw == null || creadorIdRaw === ""
+        ? undefined
+        : Number(creadorIdRaw);
+
+    if (creadorIdRaw != null && creadorId !== undefined && Number.isNaN(creadorId)) {
+      return res.status(400).json({ error: "creador_id inválido" });
+    }
+
+    const rutina = await rutinaService.deleteRutina(id, creadorId);
+
+    if (!rutina) {
+      return res.status(404).json({ error: "Rutina no encontrada" });
+    }
+
     return res.json({ mensaje: "Rutina eliminada" });
   } catch (error) {
     console.error(error);
@@ -134,13 +159,23 @@ export const deleteRutina = async (req: Request, res: Response) => {
   }
 };
 
-export const getCarpetasRutina = async (_req: Request, res: Response) => {
+export const getCarpetasRutina = async (req: Request, res: Response) => {
   /*
     Devuelve todas las carpetas donde se pueden organizar rutinas.
     Es un endpoint de consulta nomás, sin validaciones de entrada.
   */
   try {
-    const carpetas = await rutinaService.getCarpetasRutina();
+    const usuarioIdRaw = req.query.usuario_id;
+    const usuarioId =
+      typeof usuarioIdRaw === "string" && usuarioIdRaw.trim()
+        ? Number(usuarioIdRaw)
+        : undefined;
+
+    if (usuarioIdRaw != null && (usuarioId == null || Number.isNaN(usuarioId))) {
+      return res.status(400).json({ error: "usuario_id inválido" });
+    }
+
+    const carpetas = await rutinaService.getCarpetasRutina(usuarioId);
     return res.json(carpetas);
   } catch (error) {
     console.error(error);

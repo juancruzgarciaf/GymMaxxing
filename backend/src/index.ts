@@ -22,6 +22,7 @@ app.use("/auth", authRoutes);
 app.use("/users", userRoutes);
 app.use("/rutinas", rutinaRoutes);
 app.use("/entrenamientos", entrenamientoRoutes);
+app.use("/ejercicios", ejercicioRoutes);
 
 // test DB
 pool.query("SELECT NOW()")
@@ -30,7 +31,4 @@ pool.query("SELECT NOW()")
 
 app.listen(3000, () => {
   console.log("Servidor corriendo en http://localhost:3000");
-
-
-app.use("/ejercicios", ejercicioRoutes);
 });

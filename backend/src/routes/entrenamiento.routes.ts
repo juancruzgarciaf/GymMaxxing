@@ -13,6 +13,7 @@ const router = Router();
 router.post("/start", iniciarSesionEntrenamiento);
 router.get("/sesion/:id", getSesionPorId);
 router.post("/end", finalizarSesion);
+router.post("/:id/finalizar", finalizarSesion);
 
 // series
 router.post("/serie", registrarSerie);

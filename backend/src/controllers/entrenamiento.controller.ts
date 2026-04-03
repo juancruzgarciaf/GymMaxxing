@@ -151,7 +151,15 @@ export const finalizarSesion = async (req: Request, res: Response) => {
     o hacer el cierre que corresponda.
   */
   try {
-    const { sesion_id } = req.body;
+    const sesionIdFromParams =
+      typeof req.params.id === "string" && req.params.id.trim()
+        ? req.params.id
+        : null;
+    const sesionIdFromBody =
+      typeof req.body.sesion_id === "string" || typeof req.body.sesion_id === "number"
+        ? String(req.body.sesion_id)
+        : null;
+    const sesion_id = sesionIdFromParams ?? sesionIdFromBody;
 
     if (!sesion_id) {
       return res.status(400).json({
@@ -160,6 +168,13 @@ export const finalizarSesion = async (req: Request, res: Response) => {
     }
 
     const resultado = await entrenamientoService.finalizarSesion(sesion_id);
+
+    if (!resultado) {
+      return res.status(404).json({
+        error: "Sesión no encontrada",
+      });
+    }
+
     return res.json(resultado);
   } catch (error) {
     console.error(error);
