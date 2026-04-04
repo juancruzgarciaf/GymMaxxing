@@ -53,6 +53,19 @@
   cursor: pointer;
 }
 
+.nav-btn.icon-only {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.nav-icon {
+  width: 18px;
+  height: 18px;
+}
+
 .nav-btn.active {
   background: #7ed6a1;
   color: #10221a;

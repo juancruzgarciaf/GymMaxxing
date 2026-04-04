@@ -74,6 +74,27 @@ function App() {
         <nav className="topnav">
           <button
             type="button"
+            className={`nav-btn icon-only ${mainScreen === "buscar" ? "active" : ""}`}
+            onClick={() => setMainScreen("buscar")}
+            aria-label="Buscar"
+            title="Buscar"
+          >
+            <svg
+              className="nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <line x1="16.65" y1="16.65" x2="21" y2="21" />
+            </svg>
+          </button>
+          <button
+            type="button"
             className={`nav-btn ${mainScreen === "home" ? "active" : ""}`}
             onClick={() => setMainScreen("home")}
           >
@@ -85,13 +106,6 @@ function App() {
             onClick={() => setMainScreen("rutinas")}
           >
             Rutinas
-          </button>
-          <button
-            type="button"
-            className={`nav-btn ${mainScreen === "buscar" ? "active" : ""}`}
-            onClick={() => setMainScreen("buscar")}
-          >
-            Buscar
           </button>
           <button
             type="button"

@@ -4,7 +4,7 @@ Aplicación web para el registro, seguimiento y compartición de entrenamientos 
 
 ---
 
-## 🧠 Descripción
+## 🧠 Descripción de la app
 
 GymMaxxing permite a los usuarios registrar sus rutinas de entrenamiento, hacer seguimiento de su progreso y visualizar entrenamientos propios y de otros usuarios.
 
