@@ -583,6 +583,15 @@ h2 {
   margin-top: 6px;
 }
 
+.training-empty-figure {
+  width: min(96px, 28vw);
+  height: auto;
+  display: block;
+  margin: 14px auto 10px;
+  opacity: 0.45;
+  filter: invert(1) brightness(0.95);
+}
+
 .exercise-card {
   border: 1px solid #324351;
   border-radius: 14px;

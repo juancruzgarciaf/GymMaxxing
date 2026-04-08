@@ -6,11 +6,19 @@ type HomeProps = {
   usuario: Usuario;
   onOpenProfile: (userId: number) => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
+  onCopyToTraining: (training: EntrenamientoResumen) => void;
+  onSaveAsRoutine: (training: EntrenamientoResumen) => void;
 };
 
 const API = "http://localhost:3000";
 
-function Home({ usuario, onOpenProfile, onOpenTraining }: HomeProps) {
+function Home({
+  usuario,
+  onOpenProfile,
+  onOpenTraining,
+  onCopyToTraining,
+  onSaveAsRoutine,
+}: HomeProps) {
   const [feed, setFeed] = useState<EntrenamientoResumen[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -77,6 +85,8 @@ function Home({ usuario, onOpenProfile, onOpenTraining }: HomeProps) {
             item={item}
             onOpenProfile={onOpenProfile}
             onOpenTraining={onOpenTraining}
+            onCopyToTraining={onCopyToTraining}
+            onSaveAsRoutine={onSaveAsRoutine}
           />
         ))}
       </section>

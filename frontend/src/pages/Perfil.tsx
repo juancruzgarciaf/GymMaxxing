@@ -7,11 +7,20 @@ type PerfilProps = {
   profileUserId: number;
   onOpenProfile: (userId: number) => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
+  onCopyToTraining: (training: EntrenamientoResumen) => void;
+  onSaveAsRoutine: (training: EntrenamientoResumen) => void;
 };
 
 const API = "http://localhost:3000";
 
-function Perfil({ usuario, profileUserId, onOpenProfile, onOpenTraining }: PerfilProps) {
+function Perfil({
+  usuario,
+  profileUserId,
+  onOpenProfile,
+  onOpenTraining,
+  onCopyToTraining,
+  onSaveAsRoutine,
+}: PerfilProps) {
   const [perfil, setPerfil] = useState<PerfilUsuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -135,6 +144,8 @@ function Perfil({ usuario, profileUserId, onOpenProfile, onOpenTraining }: Perfi
                   item={item}
                   onOpenProfile={onOpenProfile}
                   onOpenTraining={onOpenTraining}
+                  onCopyToTraining={onCopyToTraining}
+                  onSaveAsRoutine={onSaveAsRoutine}
                 />
               ))}
             </section>

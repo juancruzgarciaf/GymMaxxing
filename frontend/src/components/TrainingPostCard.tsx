@@ -4,6 +4,8 @@ type TrainingPostCardProps = {
   item: EntrenamientoResumen;
   onOpenProfile?: (userId: number) => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
+  onCopyToTraining?: (training: EntrenamientoResumen) => void;
+  onSaveAsRoutine?: (training: EntrenamientoResumen) => void;
 };
 
 const formatDate = (value: string | null) => {
@@ -39,7 +41,13 @@ const formatVolume = (value: number | null) => {
   return `${Math.round(value).toLocaleString()} kg`;
 };
 
-function TrainingPostCard({ item, onOpenProfile, onOpenTraining }: TrainingPostCardProps) {
+function TrainingPostCard({
+  item,
+  onOpenProfile,
+  onOpenTraining,
+  onCopyToTraining,
+  onSaveAsRoutine,
+}: TrainingPostCardProps) {
   const remainingExercises = Math.max(0, item.total_ejercicios - item.ejercicios_preview.length);
 
   return (
@@ -105,6 +113,16 @@ function TrainingPostCard({ item, onOpenProfile, onOpenTraining }: TrainingPostC
         <button type="button" className="btn secondary" onClick={() => onOpenTraining(item)}>
           Ver entrenamiento completo
         </button>
+        {onCopyToTraining ? (
+          <button type="button" className="btn secondary" onClick={() => onCopyToTraining(item)}>
+            Copiar a entrenamiento
+          </button>
+        ) : null}
+        {onSaveAsRoutine ? (
+          <button type="button" className="btn" onClick={() => onSaveAsRoutine(item)}>
+            Guardar como mi rutina
+          </button>
+        ) : null}
       </div>
     </article>
   );

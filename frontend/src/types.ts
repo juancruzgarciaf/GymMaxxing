@@ -47,6 +47,54 @@ export type SerieSesionDetalle = {
   tipo_disciplina: string | null;
 };
 
+export type RoutineSummary = {
+  id_rutina: number;
+  nombre: string;
+  descripcion: string | null;
+  duracion_estimada: number | null;
+  creador_id: number;
+  id_carpeta: number | null;
+};
+
+export type RoutineExerciseDetailed = {
+  id_rutina: number;
+  id_ejercicio: number;
+  series: number;
+  repeticiones: number;
+  descanso: number;
+  orden: number;
+  nombre: string;
+  descripcion: string;
+  grupo_muscular: string;
+  tipo_disciplina: string;
+};
+
+export type TrainingSetType = "warmup" | "serie" | "dropset" | "failure";
+
+export type TrainingSeedSerie = {
+  kg: string;
+  reps: string;
+  tipo: TrainingSetType;
+};
+
+export type TrainingSeedExercise = {
+  id_ejercicio: number;
+  nombre: string;
+  grupo_muscular: string;
+  tipo_disciplina: string;
+  descansoSegundos: number;
+  series: TrainingSeedSerie[];
+};
+
+export type TrainingSeed = {
+  origin: "rutina" | "sesion";
+  sourceId: number;
+  title: string;
+  description: string | null;
+  durationMinutes: number | null;
+  exercises: TrainingSeedExercise[];
+};
+
 export type SearchUser = Usuario & {
   followers_count: number;
   following_count: number;

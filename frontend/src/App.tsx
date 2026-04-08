@@ -1,7 +1,11 @@
 import { useState } from "react";
 import "./App.css";
 import logo from "./assets/logo.png";
-import type { EntrenamientoResumen, Usuario } from "./types";
+import {
+  fetchSessionSeed,
+  saveTrainingSeedAsRoutine,
+} from "./lib/trainingTransfer";
+import type { EntrenamientoResumen, TrainingSeed, Usuario } from "./types";
 import Entrenamiento from "./pages/Entrenamiento";
 import Home from "./pages/Home";
 import Buscar from "./pages/Buscar";
@@ -9,26 +13,60 @@ import EntrenamientoDetalle from "./pages/EntrenamientoDetalle";
 import Login from "./pages/Login";
 import Perfil from "./pages/Perfil";
 import Register from "./pages/Register";
+import RutinaCompartida from "./pages/RutinaCompartida";
 import Rutinas from "./pages/Rutinas";
 
 type AuthScreen = "login" | "register";
 type MainScreen =
   | "home"
   | "rutinas"
+  | "rutinaCompartida"
   | "buscar"
   | "perfil"
   | "entrenamientoLibre"
   | "entrenamiento";
 
+const getSharedRoutineIdFromUrl = () => {
+  const raw = new URLSearchParams(window.location.search).get("sharedRoutineId");
+  if (!raw) {
+    return null;
+  }
+
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
 function App() {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [authScreen, setAuthScreen] = useState<AuthScreen>("login");
   const [mainScreen, setMainScreen] = useState<MainScreen>("home");
+  const [sharedRoutineId, setSharedRoutineId] = useState<number | null>(getSharedRoutineIdFromUrl);
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
   const [selectedTraining, setSelectedTraining] = useState<EntrenamientoResumen | null>(null);
   const [trainingReturnScreen, setTrainingReturnScreen] = useState<Exclude<MainScreen, "entrenamiento">>("home");
+  const [trainingSeed, setTrainingSeed] = useState<TrainingSeed | null>(null);
+  const [trainingSeedKey, setTrainingSeedKey] = useState(0);
+
+  const dismissSharedRoutine = () => {
+    if (sharedRoutineId == null) {
+      return;
+    }
+
+    setSharedRoutineId(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("sharedRoutineId");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  };
+
+  const navigateTo = (screen: Exclude<MainScreen, "entrenamiento">) => {
+    if (screen !== "rutinaCompartida") {
+      dismissSharedRoutine();
+    }
+    setMainScreen(screen);
+  };
 
   const openProfile = (userId: number) => {
+    dismissSharedRoutine();
     setSelectedProfileId(userId);
     setMainScreen("perfil");
   };
@@ -37,9 +75,42 @@ function App() {
     training: EntrenamientoResumen,
     source: Exclude<MainScreen, "entrenamiento">
   ) => {
+    dismissSharedRoutine();
     setSelectedTraining(training);
     setTrainingReturnScreen(source);
     setMainScreen("entrenamiento");
+  };
+
+  const openTrainingFromSeed = (seed: TrainingSeed) => {
+    setTrainingSeed(seed);
+    setTrainingSeedKey((prev) => prev + 1);
+    setMainScreen("entrenamientoLibre");
+  };
+
+  const handleCopyTrainingToWorkout = async (training: EntrenamientoResumen) => {
+    try {
+      const seed = await fetchSessionSeed(training);
+      openTrainingFromSeed(seed);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "No se pudo copiar al entrenamiento");
+    }
+  };
+
+  const handleSaveTrainingAsRoutine = async (training: EntrenamientoResumen) => {
+    if (!usuario) {
+      return;
+    }
+
+    try {
+      const seed = await fetchSessionSeed(training);
+      await saveTrainingSeedAsRoutine(seed, usuario.id, {
+        name: training.titulo,
+        description: training.descripcion,
+      });
+      window.alert("Rutina guardada en tus rutinas");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "No se pudo guardar la rutina");
+    }
   };
 
   const goBackFromTraining = () => {
@@ -49,9 +120,11 @@ function App() {
   const handleLogout = () => {
     setUsuario(null);
     setAuthScreen("login");
+    dismissSharedRoutine();
     setMainScreen("home");
     setSelectedProfileId(null);
     setSelectedTraining(null);
+    setTrainingSeed(null);
   };
 
   if (!usuario) {
@@ -64,7 +137,7 @@ function App() {
         goToRegister={() => setAuthScreen("register")}
         onLoginSuccess={(loggedUser) => {
           setUsuario(loggedUser);
-          setMainScreen("home");
+          setMainScreen(sharedRoutineId != null ? "rutinaCompartida" : "home");
           setSelectedProfileId(loggedUser.id);
         }}
       />
@@ -83,7 +156,7 @@ function App() {
           <button
             type="button"
             className={`nav-btn icon-only ${mainScreen === "buscar" ? "active" : ""}`}
-            onClick={() => setMainScreen("buscar")}
+            onClick={() => navigateTo("buscar")}
             aria-label="Buscar"
             title="Buscar"
           >
@@ -104,21 +177,21 @@ function App() {
           <button
             type="button"
             className={`nav-btn ${mainScreen === "home" ? "active" : ""}`}
-            onClick={() => setMainScreen("home")}
+            onClick={() => navigateTo("home")}
           >
             Feed
           </button>
           <button
             type="button"
             className={`nav-btn ${mainScreen === "entrenamientoLibre" ? "active" : ""}`}
-            onClick={() => setMainScreen("entrenamientoLibre")}
+            onClick={() => navigateTo("entrenamientoLibre")}
           >
             Entrenamiento
           </button>
           <button
             type="button"
             className={`nav-btn ${mainScreen === "rutinas" ? "active" : ""}`}
-            onClick={() => setMainScreen("rutinas")}
+            onClick={() => navigateTo("rutinas")}
           >
             Rutinas
           </button>
@@ -145,10 +218,30 @@ function App() {
             usuario={usuario}
             onOpenProfile={openProfile}
             onOpenTraining={(training) => openTraining(training, "home")}
+            onCopyToTraining={handleCopyTrainingToWorkout}
+            onSaveAsRoutine={handleSaveTrainingAsRoutine}
           />
         ) : null}
-        {mainScreen === "entrenamientoLibre" ? <Entrenamiento usuario={usuario} /> : null}
+        {mainScreen === "entrenamientoLibre" ? (
+          <Entrenamiento
+            usuario={usuario}
+            seed={trainingSeed}
+            seedKey={trainingSeedKey}
+            onSeedConsumed={() => setTrainingSeed(null)}
+          />
+        ) : null}
         {mainScreen === "rutinas" ? <Rutinas usuario={usuario} /> : null}
+        {mainScreen === "rutinaCompartida" && sharedRoutineId != null ? (
+          <RutinaCompartida
+            usuario={usuario}
+            routineId={sharedRoutineId}
+            onClose={() => {
+              dismissSharedRoutine();
+              setMainScreen("rutinas");
+            }}
+            onCopyToTraining={openTrainingFromSeed}
+          />
+        ) : null}
         {mainScreen === "buscar" ? <Buscar usuario={usuario} onOpenProfile={openProfile} /> : null}
         {mainScreen === "perfil" ? (
           <Perfil
@@ -156,6 +249,8 @@ function App() {
             profileUserId={selectedProfileId ?? usuario.id}
             onOpenProfile={openProfile}
             onOpenTraining={(training) => openTraining(training, "perfil")}
+            onCopyToTraining={handleCopyTrainingToWorkout}
+            onSaveAsRoutine={handleSaveTrainingAsRoutine}
           />
         ) : null}
         {mainScreen === "entrenamiento" && selectedTraining ? (

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Usuario } from "../types";
+import siluetaStrongman from "../assets/siluetastrongman.png";
+import { saveTrainingSeedAsRoutine } from "../lib/trainingTransfer";
+import type { TrainingSeed, TrainingSetType, Usuario } from "../types";
 
 type Ejercicio = {
   id_ejercicio: number;
@@ -15,14 +17,12 @@ type CarpetaRutina = {
   id_carpeta_padre: number | null;
 };
 
-type SetTipo = "warmup" | "serie" | "dropset" | "failure";
-
 type EjecucionSerie = {
   id: string;
   numero: number;
   kg: string;
   reps: string;
-  tipo: SetTipo;
+  tipo: TrainingSetType;
   completada: boolean;
   registrada: boolean;
 };
@@ -52,13 +52,16 @@ type DescansoActivo = {
 
 type EntrenamientoProps = {
   usuario: Usuario;
+  seed?: TrainingSeed | null;
+  seedKey?: number;
+  onSeedConsumed?: () => void;
 };
 
 type VistaEntrenamiento = "inicio" | "ejecucion" | "guardar";
 
 const API = "http://localhost:3000";
 
-const SET_TIPO_OPTIONS: Array<{ value: SetTipo; label: string }> = [
+const SET_TIPO_OPTIONS: Array<{ value: TrainingSetType; label: string }> = [
   { value: "warmup", label: "WarmUp" },
   { value: "serie", label: "Serie" },
   { value: "dropset", label: "DropSet" },
@@ -109,7 +112,7 @@ const crearSerieEjecucion = (): EjecucionSerie => ({
   registrada: false,
 });
 
-function Entrenamiento({ usuario }: EntrenamientoProps) {
+function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: EntrenamientoProps) {
   const [vista, setVista] = useState<VistaEntrenamiento>("inicio");
   const [loading, setLoading] = useState(false);
   const [mensaje, setMensaje] = useState("");
@@ -370,51 +373,46 @@ function Entrenamiento({ usuario }: EntrenamientoProps) {
     }
   };
 
-  const createRoutineFromCurrentExecution = async (nombre: string, descripcion: string | null) => {
-    const createRes = await fetch(`${API}/rutinas`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        nombre,
-        descripcion,
-        duracion_estimada: Math.max(1, Math.round(elapsedSesionSegundos / 60) || 1),
-        creador_id: usuario.id,
-        id_carpeta: guardarCarpetaId ? Number(guardarCarpetaId) : null,
-      }),
-    });
+  const buildCurrentTrainingSeed = (): TrainingSeed => ({
+    origin: "sesion",
+    sourceId: sesionActiva?.id_sesion ?? 0,
+    title: guardarNombre.trim() || "Entrenamiento",
+    description: guardarDescripcion.trim() || null,
+    durationMinutes: Math.max(1, Math.round(elapsedSesionSegundos / 60) || 1),
+    exercises: ejecucionEjercicios.map((ejercicio) => ({
+      id_ejercicio: ejercicio.id_ejercicio,
+      nombre: ejercicio.nombre,
+      grupo_muscular: ejercicio.grupo_muscular,
+      tipo_disciplina: ejercicio.tipo_disciplina,
+      descansoSegundos: ejercicio.descansoSegundos,
+      series: ejercicio.series.map((serie) => ({
+        kg: serie.kg,
+        reps: serie.reps,
+        tipo: serie.tipo,
+      })),
+    })),
+  });
 
-    if (!createRes.ok) {
-      throw new Error(await parseError(createRes, "No se pudo crear la rutina"));
-    }
-
-    const nuevaRutina = (await createRes.json()) as { id_rutina: number };
-
-    for (let index = 0; index < ejecucionEjercicios.length; index += 1) {
-      const ejercicio = ejecucionEjercicios[index];
-      const repeticiones = Number(
-        ejercicio.series.find((serie) => serie.reps.trim())?.reps ?? "10",
-      );
-
-      const addRes = await fetch(`${API}/rutinas/ejercicios`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id_rutina: nuevaRutina.id_rutina,
-          id_ejercicio: ejercicio.id_ejercicio,
-          series: Math.max(1, ejercicio.series.length),
-          repeticiones: Number.isNaN(repeticiones) ? 10 : Math.max(1, repeticiones),
-          descanso: Math.max(0, ejercicio.descansoSegundos),
-          orden: index + 1,
-        }),
-      });
-
-      if (!addRes.ok) {
-        throw new Error(await parseError(addRes, "No se pudo agregar ejercicio a la rutina"));
-      }
-    }
+  const seedToExecution = (nextSeed: TrainingSeed) => {
+    return nextSeed.exercises.map((exercise) => ({
+      id_ejercicio: exercise.id_ejercicio,
+      nombre: exercise.nombre,
+      grupo_muscular: exercise.grupo_muscular,
+      tipo_disciplina: exercise.tipo_disciplina,
+      descansoSegundos: Math.max(0, exercise.descansoSegundos),
+      series: exercise.series.map((serie, index) => ({
+        id: crypto.randomUUID(),
+        numero: index + 1,
+        kg: serie.kg,
+        reps: serie.reps,
+        tipo: serie.tipo,
+        completada: false,
+        registrada: false,
+      })),
+    }));
   };
 
-  const comenzarEntrenamiento = async () => {
+  const comenzarEntrenamiento = async (nextSeed?: TrainingSeed) => {
     try {
       setLoading(true);
       setError("");
@@ -441,9 +439,15 @@ function Entrenamiento({ usuario }: EntrenamientoProps) {
 
       const sesion = (await startRes.json()) as SesionEntrenamiento;
       setSesionActiva(sesion);
-      setEjecucionEjercicios([]);
+      setEjecucionEjercicios(nextSeed ? seedToExecution(nextSeed) : []);
+      setGuardarNombre(nextSeed?.title ?? "");
+      setGuardarDescripcion(nextSeed?.description ?? "");
       setVista("ejecucion");
-      setMensaje(`Entrenamiento iniciado (Sesion #${sesion.id_sesion})`);
+      setMensaje(
+        nextSeed
+          ? `Entrenamiento iniciado desde ${nextSeed.origin === "rutina" ? "rutina" : "sesion"}`
+          : `Entrenamiento iniciado (Sesion #${sesion.id_sesion})`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error iniciando entrenamiento");
     } finally {
@@ -491,7 +495,7 @@ function Entrenamiento({ usuario }: EntrenamientoProps) {
                   return serie;
                 }
                 if (field === "tipo") {
-                  return { ...serie, tipo: value as SetTipo };
+                  return { ...serie, tipo: value as TrainingSetType };
                 }
                 return { ...serie, [field]: value };
               }),
@@ -703,10 +707,12 @@ function Entrenamiento({ usuario }: EntrenamientoProps) {
       );
 
       if (guardarComoRutina) {
-        await createRoutineFromCurrentExecution(
-          nombre || `Entrenamiento ${sesionActiva.id_sesion}`,
-          descripcion,
-        );
+        const currentSeed = buildCurrentTrainingSeed();
+        await saveTrainingSeedAsRoutine(currentSeed, usuario.id, {
+          name: nombre || `Entrenamiento ${sesionActiva.id_sesion}`,
+          description: descripcion,
+          folderId: guardarCarpetaId ? Number(guardarCarpetaId) : null,
+        });
       }
 
       resetEntrenamiento();
@@ -721,6 +727,16 @@ function Entrenamiento({ usuario }: EntrenamientoProps) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!seed || seedKey == null) {
+      return;
+    }
+
+    void comenzarEntrenamiento(seed).finally(() => {
+      onSeedConsumed?.();
+    });
+  }, [seed, seedKey]);
 
   if (vista === "guardar") {
     return (
@@ -864,14 +880,7 @@ function Entrenamiento({ usuario }: EntrenamientoProps) {
               Series completas: {seriesCompletadasEjecucion}/{totalSeriesEjecucion}
             </p>
             <p className="helper-text">Tiempo entrenando: {formatDuration(elapsedSesionSegundos)}</p>
-            {descansoActivo ? (
-              <div className="status">
-                Descanso: <strong>{formatDuration(descansoActivo.restanteSegundos)}</strong> ·{" "}
-                {descansoActivo.etiqueta}
-              </div>
-            ) : (
-              <p className="helper-text">No hay descanso activo.</p>
-            )}
+            {!descansoActivo ? <p className="helper-text">No hay descanso activo.</p> : null}
           </article>
           <article className="box">
             <h2>Sesion</h2>
@@ -888,6 +897,12 @@ function Entrenamiento({ usuario }: EntrenamientoProps) {
               {ejecucionEjercicios.length === 0 ? (
                 <div className="empty-state">
                   <p>No hay ejercicios en este entrenamiento</p>
+                  <img
+                    src={siluetaStrongman}
+                    alt=""
+                    aria-hidden="true"
+                    className="training-empty-figure"
+                  />
                   <small>Agrega ejercicios desde la libreria de la derecha.</small>
                 </div>
               ) : (
@@ -1130,7 +1145,12 @@ function Entrenamiento({ usuario }: EntrenamientoProps) {
             mientras entrenas.
           </p>
           <div className="actions-row">
-            <button type="button" className="btn" onClick={comenzarEntrenamiento} disabled={loading}>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => void comenzarEntrenamiento()}
+              disabled={loading}
+            >
               Comenzar entrenamiento vacio
             </button>
           </div>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createRoutineShareUrl } from "../lib/trainingTransfer";
 import type { Usuario } from "../types";
 
 type Rutina = {
@@ -680,6 +681,26 @@ function Rutinas({ usuario }: RutinasProps) {
 
   const handleBuscarRutinas = () => {
     setBusquedaRutina((prev) => prev.trim());
+  };
+
+  const compartirRutina = async () => {
+    if (!rutinaSeleccionada) {
+      return;
+    }
+
+    const url = createRoutineShareUrl(rutinaSeleccionada.id_rutina);
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        setMensaje("Link de rutina copiado");
+        return;
+      }
+    } catch {
+      // fallback abajo
+    }
+
+    window.prompt("Copiá este link para compartir la rutina", url);
   };
 
   const abrirModalRenombrarCarpeta = (carpeta: CarpetaRutina) => {
@@ -2043,6 +2064,9 @@ function Rutinas({ usuario }: RutinasProps) {
                   onClick={() => void abrirEditorRutina(rutinaSeleccionada)}
                 >
                   Modificar
+                </button>
+                <button type="button" className="btn secondary" onClick={() => void compartirRutina()}>
+                  Compartir link
                 </button>
                 <button type="button" className="btn" onClick={iniciarRutina}>
                   Comenzar rutina
