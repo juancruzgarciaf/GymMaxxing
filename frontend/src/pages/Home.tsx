@@ -64,7 +64,8 @@ function Home({ usuario, onOpenProfile, onOpenTraining }: HomeProps) {
         <section className="empty-state">
           <h2>Tu feed todavía está vacío</h2>
           <p>
-            Finalizá una rutina o seguí a otros usuarios desde Buscar para empezar a ver publicaciones acá.
+            Finalizá una rutina, completá un entrenamiento libre o seguí a otros usuarios desde
+            Buscar para empezar a ver publicaciones acá.
           </p>
         </section>
       ) : null}

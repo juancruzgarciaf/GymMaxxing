@@ -26,11 +26,11 @@ export const iniciarSesionEntrenamiento = async (
     O sea, este endpoint prende la "sesión activa" con el contexto mínimo.
   */
   try {
-    const { usuario_id, rutina_id } = req.body;
+    const { usuario_id } = req.body;
 
-    if (!usuario_id || !rutina_id) {
+    if (!usuario_id) {
       return res.status(400).json({
-        error: "usuario_id y rutina_id son obligatorios",
+        error: "usuario_id es obligatorio",
       });
     }
 
@@ -43,6 +43,33 @@ export const iniciarSesionEntrenamiento = async (
     console.error(error);
     return res.status(500).json({
       error: "Error iniciando sesión de entrenamiento",
+    });
+  }
+};
+
+export const updateSesionEntrenamiento = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (!id || Array.isArray(id)) {
+      return res.status(400).json({
+        error: "id inválido",
+      });
+    }
+
+    const sesion = await entrenamientoService.updateSesionEntrenamiento(id, req.body);
+
+    if (!sesion) {
+      return res.status(404).json({
+        error: "Sesión no encontrada",
+      });
+    }
+
+    return res.json(sesion);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error actualizando sesión",
     });
   }
 };
@@ -143,6 +170,41 @@ export const getSeriesDeSesion = async (req: Request, res: Response) => {
   }
 };
 
+export const replaceSeriesDeSesion = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { series } = req.body;
+
+    if (!id || Array.isArray(id)) {
+      return res.status(400).json({
+        error: "id inválido",
+      });
+    }
+
+    if (!Array.isArray(series)) {
+      return res.status(400).json({
+        error: "series debe ser un array",
+      });
+    }
+
+    const nextSeries = series.filter(
+      (serie) =>
+        serie &&
+        serie.repeticiones != null &&
+        serie.orden != null &&
+        serie.ejercicio_id != null
+    );
+
+    const resultado = await entrenamientoService.replaceSeriesDeSesion(id, nextSeries);
+    return res.json(resultado);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error reemplazando series de la sesión",
+    });
+  }
+};
+
 export const finalizarSesion = async (req: Request, res: Response) => {
   /*
     Este endpoint cierra la sesión de entrenamiento.
@@ -180,6 +242,36 @@ export const finalizarSesion = async (req: Request, res: Response) => {
     console.error(error);
     return res.status(500).json({
       error: "Error finalizando sesión",
+    });
+  }
+};
+
+export const deleteSesionEntrenamiento = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (!id || Array.isArray(id)) {
+      return res.status(400).json({
+        error: "id inválido",
+      });
+    }
+
+    const sesion = await entrenamientoService.deleteSesionEntrenamiento(id);
+
+    if (!sesion) {
+      return res.status(404).json({
+        error: "Sesión no encontrada",
+      });
+    }
+
+    return res.json({
+      mensaje: "Sesión eliminada",
+      sesion,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error eliminando sesión",
     });
   }
 };

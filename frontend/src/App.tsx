@@ -2,6 +2,7 @@ import { useState } from "react";
 import "./App.css";
 import logo from "./assets/logo.png";
 import type { EntrenamientoResumen, Usuario } from "./types";
+import Entrenamiento from "./pages/Entrenamiento";
 import Home from "./pages/Home";
 import Buscar from "./pages/Buscar";
 import EntrenamientoDetalle from "./pages/EntrenamientoDetalle";
@@ -11,7 +12,13 @@ import Register from "./pages/Register";
 import Rutinas from "./pages/Rutinas";
 
 type AuthScreen = "login" | "register";
-type MainScreen = "home" | "rutinas" | "buscar" | "perfil" | "entrenamiento";
+type MainScreen =
+  | "home"
+  | "rutinas"
+  | "buscar"
+  | "perfil"
+  | "entrenamientoLibre"
+  | "entrenamiento";
 
 function App() {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
@@ -103,6 +110,13 @@ function App() {
           </button>
           <button
             type="button"
+            className={`nav-btn ${mainScreen === "entrenamientoLibre" ? "active" : ""}`}
+            onClick={() => setMainScreen("entrenamientoLibre")}
+          >
+            Entrenamiento
+          </button>
+          <button
+            type="button"
             className={`nav-btn ${mainScreen === "rutinas" ? "active" : ""}`}
             onClick={() => setMainScreen("rutinas")}
           >
@@ -133,6 +147,7 @@ function App() {
             onOpenTraining={(training) => openTraining(training, "home")}
           />
         ) : null}
+        {mainScreen === "entrenamientoLibre" ? <Entrenamiento usuario={usuario} /> : null}
         {mainScreen === "rutinas" ? <Rutinas usuario={usuario} /> : null}
         {mainScreen === "buscar" ? <Buscar usuario={usuario} onOpenProfile={openProfile} /> : null}
         {mainScreen === "perfil" ? (

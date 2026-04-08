@@ -22,12 +22,14 @@ type SesionEntrenamientoRow = {
 export const iniciarSesionEntrenamiento = async (data: any) => {
   const { descripcion, gimnasio_id, usuario_id, rutina_id } = data;
 
-  const rutinaResult = await pool.query<{ nombre: string }>(
-    `SELECT nombre
-     FROM rutina
-     WHERE id_rutina = $1`,
-    [rutina_id]
-  );
+  const rutinaResult = rutina_id
+    ? await pool.query<{ nombre: string }>(
+        `SELECT nombre
+         FROM rutina
+         WHERE id_rutina = $1`,
+        [rutina_id]
+      )
+    : { rows: [] as Array<{ nombre: string }> };
 
   const result = await pool.query<SesionEntrenamientoRow>(
     `INSERT INTO sesionentrenamiento
@@ -62,6 +64,30 @@ export const getSesionPorId = async (id_sesion: string) => {
   );
 
   return result.rows[0];
+};
+
+export const updateSesionEntrenamiento = async (
+  id_sesion: string,
+  data: {
+    descripcion?: string | null;
+    nombre?: string | null;
+    nombre_rutina_snapshot?: string | null;
+  }
+) => {
+  const result = await pool.query<SesionEntrenamientoRow>(
+    `UPDATE sesionentrenamiento
+     SET descripcion = $2,
+         nombre_rutina_snapshot = $3
+     WHERE id_sesion = $1
+     RETURNING *`,
+    [
+      id_sesion,
+      data.descripcion ?? null,
+      data.nombre_rutina_snapshot ?? data.nombre ?? null,
+    ]
+  );
+
+  return result.rows[0] ?? null;
 };
 
 // =========================
@@ -118,6 +144,49 @@ export const getSeriesDeSesion = async (sesion_id: string) => {
   return result.rows;
 };
 
+export const replaceSeriesDeSesion = async (
+  sesion_id: string,
+  series: Array<{
+    repeticiones: number;
+    peso?: number | null;
+    descanso?: number | null;
+    orden: number;
+    ejercicio_id: number;
+  }>
+) => {
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+    await client.query(`DELETE FROM serie WHERE sesion_id = $1`, [sesion_id]);
+
+    for (const serie of series) {
+      await client.query(
+        `INSERT INTO serie
+         (repeticiones, peso, descanso, orden, ejercicio_id, sesion_id)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          serie.repeticiones,
+          serie.peso ?? null,
+          serie.descanso ?? null,
+          serie.orden,
+          serie.ejercicio_id,
+          sesion_id,
+        ]
+      );
+    }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  return getSeriesDeSesion(sesion_id);
+};
+
 // esto simula “finalizar” aunque tu DER no tenga fecha_fin.
 // podemos dejarlo como cierre lógico devolviendo la sesión y sus series.
 export const finalizarSesion = async (sesion_id: string) => {
@@ -158,4 +227,26 @@ export const finalizarSesion = async (sesion_id: string) => {
     series,
     estado: "finalizada" as const,
   };
+};
+
+export const deleteSesionEntrenamiento = async (sesion_id: string) => {
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+    await client.query(`DELETE FROM serie WHERE sesion_id = $1`, [sesion_id]);
+    const result = await client.query<SesionEntrenamientoRow>(
+      `DELETE FROM sesionentrenamiento
+       WHERE id_sesion = $1
+       RETURNING *`,
+      [sesion_id]
+    );
+    await client.query("COMMIT");
+    return result.rows[0] ?? null;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 };

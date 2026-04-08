@@ -721,6 +721,15 @@ h2 {
   color: #9eb2c0;
 }
 
+.training-launch-card {
+  align-content: start;
+}
+
+.training-save-actions {
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
 .folder-tree {
   margin-top: 12px;
   display: grid;
