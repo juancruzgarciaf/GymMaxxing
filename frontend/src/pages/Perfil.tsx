@@ -84,7 +84,6 @@ function Perfil({ usuario, profileUserId, onOpenProfile, onOpenTraining }: Perfi
             <div className="profile-avatar">{perfil.usuario.username.slice(0, 1).toUpperCase()}</div>
 
             <div className="profile-main">
-              <p className="eyebrow">Perfil</p>
               <h1>{perfil.usuario.username}</h1>
               <p className="subtitle">{perfil.usuario.email}</p>
 
@@ -121,15 +120,6 @@ function Perfil({ usuario, profileUserId, onOpenProfile, onOpenTraining }: Perfi
                 {perfil.viewer_follows ? "Dejar de seguir" : "Seguir"}
               </button>
             ) : null}
-          </section>
-
-          <section className="page-hero compact">
-            <h2>Historial de entrenamientos</h2>
-            <p className="subtitle">
-              {perfil.is_own_profile
-                ? "Acá ves tus rutinas finalizadas guardadas en la base."
-                : "Acá ves las rutinas finalizadas visibles de este usuario."}
-            </p>
           </section>
 
           {perfil.entrenamientos.length === 0 ? (

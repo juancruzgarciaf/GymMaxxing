@@ -1,5 +1,6 @@
 import { useState } from "react";
 import "./App.css";
+import logo from "./assets/logo.png";
 import type { EntrenamientoResumen, Usuario } from "./types";
 import Home from "./pages/Home";
 import Buscar from "./pages/Buscar";
@@ -67,7 +68,7 @@ function App() {
     <div className="shell">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-dot" />
+          <img src={logo} alt="GymMaxxing logo" className="brand-logo" />
           <p>GymMaxxing</p>
         </div>
 

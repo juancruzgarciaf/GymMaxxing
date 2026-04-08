@@ -30,6 +30,14 @@
   margin: 0;
 }
 
+.brand-logo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  display: block;
+  flex-shrink: 0;
+}
+
 .brand-dot {
   width: 10px;
   height: 10px;
@@ -992,12 +1000,18 @@ h2 {
 
 .feed-card h2 {
   margin: 0;
+  font-size: clamp(1.5rem, 2.6vw, 2.15rem);
 }
 
 .feed-card-header {
   display: flex;
   justify-content: space-between;
   gap: 12px;
+}
+
+.feed-card .feed-description {
+  margin: 8px 0 0;
+  font-size: 1rem;
 }
 
 .profile-chip {
@@ -1120,9 +1134,42 @@ h2 {
   color: #e5f8ff;
 }
 
+.feed-card .metrics-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  padding: 4px 0 2px;
+}
+
+.feed-card .metric-box {
+  min-width: 88px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  gap: 4px;
+}
+
+.feed-card .metric-box span {
+  font-size: 0.92rem;
+  color: #8ea3b2;
+}
+
+.feed-card .metric-box strong {
+  font-size: 1rem;
+  line-height: 1.1;
+  color: #eef6fb;
+}
+
 .exercise-preview-list {
   display: grid;
   gap: 10px;
+}
+
+.feed-card .exercise-preview-list {
+  gap: 14px;
+  padding-top: 18px;
+  border-top: 1px solid #24323c;
 }
 
 .exercise-preview-item {
@@ -1134,14 +1181,36 @@ h2 {
   color: #dce8f0;
 }
 
+.feed-card .exercise-preview-item {
+  border-top: 0;
+  padding-top: 0;
+  align-items: center;
+}
+
+.feed-card .exercise-preview-item span {
+  font-size: clamp(1.08rem, 2.1vw, 1.28rem);
+  line-height: 1.25;
+  color: #eef6fb;
+}
+
 .exercise-preview-item small {
   color: #8fa5b3;
+}
+
+.feed-card .exercise-preview-item small {
+  font-size: 1rem;
+  white-space: nowrap;
 }
 
 .exercise-preview-more {
   margin: 2px 0 0;
   color: #8fa5b3;
   font-size: 14px;
+}
+
+.feed-card .exercise-preview-more {
+  margin: 2px 0 0;
+  font-size: 1rem;
 }
 
 .feed-card-actions {
@@ -1324,12 +1393,25 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .feed-card .metrics-row {
+    gap: 14px 22px;
+  }
+
   .metrics-row {
     grid-template-columns: 1fr;
   }
 
   .readonly-grid {
     grid-template-columns: 1fr;
+  }
+
+  .feed-card .exercise-preview-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .feed-card .exercise-preview-item small {
+    white-space: normal;
   }
 
   .detail-topbar {

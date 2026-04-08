@@ -78,11 +78,7 @@ function Buscar({ usuario, onOpenProfile }: BuscarProps) {
   return (
     <main className="page-shell">
       <section className="page-hero">
-        <p className="eyebrow">Buscar</p>
-        <h1>Encontrá usuarios</h1>
-        <p className="subtitle">
-          Buscá por username, entrá al perfil y seguí a quienes quieras ver en tu feed.
-        </p>
+        <h1>Busca Usuarios</h1>
       </section>
 
       <section className="search-panel">

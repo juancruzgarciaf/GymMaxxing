@@ -54,11 +54,7 @@ function Home({ usuario, onOpenProfile, onOpenTraining }: HomeProps) {
   return (
     <main className="page-shell">
       <section className="page-hero">
-        <p className="eyebrow">Feed</p>
-        <h1>Tus entrenamientos y los de tus seguidos</h1>
-        <p className="subtitle">
-          Acá vas a ver tanto tus sesiones finalizadas como las publicaciones de las personas que seguís.
-        </p>
+        <h1>FEED</h1>
       </section>
 
       {loading ? <div className="status">Cargando feed...</div> : null}
