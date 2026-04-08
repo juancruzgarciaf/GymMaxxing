@@ -107,6 +107,38 @@ export const getSesionPorId = async (req: Request, res: Response) => {
   }
 };
 
+export const getSessionInteractionSummary = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (!id || Array.isArray(id)) {
+      return res.status(400).json({
+        error: "id inválido",
+      });
+    }
+
+    const viewerIdRaw = req.query.viewer_id;
+    const viewerId =
+      typeof viewerIdRaw === "string" && viewerIdRaw.trim()
+        ? Number(viewerIdRaw)
+        : undefined;
+
+    if (viewerIdRaw != null && (viewerId == null || Number.isNaN(viewerId))) {
+      return res.status(400).json({
+        error: "viewer_id inválido",
+      });
+    }
+
+    const summary = await entrenamientoService.getSessionInteractionSummary(id, viewerId);
+    return res.json(summary);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error obteniendo interacciones de la sesión",
+    });
+  }
+};
+
 // =========================
 // SERIE
 // =========================
@@ -166,6 +198,139 @@ export const getSeriesDeSesion = async (req: Request, res: Response) => {
     console.error(error);
     return res.status(500).json({
       error: "Error obteniendo series de la sesión",
+    });
+  }
+};
+
+export const addLikeToSesion = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const usuarioId = Number(req.body.usuario_id);
+
+    if (!id || Array.isArray(id) || Number.isNaN(usuarioId)) {
+      return res.status(400).json({
+        error: "id y usuario_id son obligatorios",
+      });
+    }
+
+    const summary = await entrenamientoService.addLikeToSesion(id, usuarioId);
+    return res.status(201).json(summary);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error registrando like",
+    });
+  }
+};
+
+export const removeLikeFromSesion = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const usuarioId = Number(req.body.usuario_id ?? req.query.usuario_id);
+
+    if (!id || Array.isArray(id) || Number.isNaN(usuarioId)) {
+      return res.status(400).json({
+        error: "id y usuario_id son obligatorios",
+      });
+    }
+
+    const summary = await entrenamientoService.removeLikeFromSesion(id, usuarioId);
+    return res.json(summary);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error eliminando like",
+    });
+  }
+};
+
+export const getComentariosDeSesion = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (!id || Array.isArray(id)) {
+      return res.status(400).json({
+        error: "id inválido",
+      });
+    }
+
+    const comentarios = await entrenamientoService.getComentariosDeSesion(id);
+    return res.json(comentarios);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error obteniendo comentarios",
+    });
+  }
+};
+
+export const createComentarioDeSesion = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const usuarioId = Number(req.body.usuario_id);
+    const contenido =
+      typeof req.body.contenido === "string" ? req.body.contenido.trim() : "";
+
+    if (!id || Array.isArray(id) || Number.isNaN(usuarioId) || !contenido) {
+      return res.status(400).json({
+        error: "id, usuario_id y contenido son obligatorios",
+      });
+    }
+
+    const result = await entrenamientoService.createComentarioDeSesion(
+      id,
+      usuarioId,
+      contenido
+    );
+    return res.status(201).json(result);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error creando comentario",
+    });
+  }
+};
+
+export const deleteComentarioDeSesion = async (req: Request, res: Response) => {
+  try {
+    const { id, commentId } = req.params;
+    const usuarioId = Number(req.body.usuario_id ?? req.query.usuario_id);
+
+    if (
+      !id ||
+      Array.isArray(id) ||
+      !commentId ||
+      Array.isArray(commentId) ||
+      Number.isNaN(usuarioId)
+    ) {
+      return res.status(400).json({
+        error: "id, commentId y usuario_id son obligatorios",
+      });
+    }
+
+    const result = await entrenamientoService.deleteComentarioDeSesion(
+      id,
+      commentId,
+      usuarioId
+    );
+
+    if (!result.ok) {
+      return res.status(result.reason === "forbidden" ? 403 : 404).json({
+        error:
+          result.reason === "forbidden"
+            ? "Solo puedes borrar tus propios comentarios"
+            : "Comentario no encontrado",
+      });
+    }
+
+    return res.json({
+      mensaje: "Comentario eliminado",
+      summary: result.summary,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error eliminando comentario",
     });
   }
 };

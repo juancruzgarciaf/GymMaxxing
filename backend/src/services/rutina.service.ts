@@ -199,19 +199,55 @@ export const updateRutina = async (id: string, data: any) => {
 };
 
 export const deleteRutina = async (id: string, creadorId?: number) => {
-  const result = await pool.query(
-    creadorId == null
-      ? `DELETE FROM rutina
-         WHERE id_rutina = $1
-         RETURNING *`
-      : `DELETE FROM rutina
-         WHERE id_rutina = $1
-           AND creador_id = $2
-         RETURNING *`,
-    creadorId == null ? [id] : [id, creadorId]
-  );
+  const client = await pool.connect();
 
-  return result.rows[0] ?? null;
+  try {
+    await client.query("BEGIN");
+
+    const rutinaResult = await client.query(
+      creadorId == null
+        ? `SELECT *
+           FROM rutina
+           WHERE id_rutina = $1
+           FOR UPDATE`
+        : `SELECT *
+           FROM rutina
+           WHERE id_rutina = $1
+             AND creador_id = $2
+           FOR UPDATE`,
+      creadorId == null ? [id] : [id, creadorId]
+    );
+
+    const rutina = rutinaResult.rows[0] ?? null;
+
+    if (!rutina) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+
+    await client.query(
+      `UPDATE sesionentrenamiento
+       SET rutina_id = NULL,
+           nombre_rutina_snapshot = COALESCE(NULLIF(nombre_rutina_snapshot, ''), $2)
+       WHERE rutina_id = $1`,
+      [id, rutina.nombre ?? null]
+    );
+
+    const deleteResult = await client.query(
+      `DELETE FROM rutina
+       WHERE id_rutina = $1
+       RETURNING *`,
+      [id]
+    );
+
+    await client.query("COMMIT");
+    return deleteResult.rows[0] ?? null;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 export const getCarpetasRutina = async (usuarioId?: number) => {

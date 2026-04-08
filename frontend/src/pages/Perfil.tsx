@@ -7,7 +7,6 @@ type PerfilProps = {
   profileUserId: number;
   onOpenProfile: (userId: number) => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
-  onCopyToTraining: (training: EntrenamientoResumen) => void;
   onSaveAsRoutine: (training: EntrenamientoResumen) => void;
 };
 
@@ -18,7 +17,6 @@ function Perfil({
   profileUserId,
   onOpenProfile,
   onOpenTraining,
-  onCopyToTraining,
   onSaveAsRoutine,
 }: PerfilProps) {
   const [perfil, setPerfil] = useState<PerfilUsuario | null>(null);
@@ -142,9 +140,9 @@ function Perfil({
                 <TrainingPostCard
                   key={item.id_sesion}
                   item={item}
+                  viewerId={usuario.id}
                   onOpenProfile={onOpenProfile}
                   onOpenTraining={onOpenTraining}
-                  onCopyToTraining={onCopyToTraining}
                   onSaveAsRoutine={onSaveAsRoutine}
                 />
               ))}

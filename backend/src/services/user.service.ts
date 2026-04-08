@@ -35,6 +35,9 @@ type SessionSummaryRow = {
   volumen_total: number | null;
   total_series: number;
   total_ejercicios: number;
+  likes_count: number;
+  comments_count: number;
+  viewer_liked: boolean;
 };
 
 type ExercisePreviewRow = {
@@ -108,9 +111,23 @@ const buildSessionsWithPreview = async (sessions: SessionSummaryRow[]) => {
 const getSessionSummaries = async (
   whereClause: string,
   params: Array<number | string>,
-  limit: number
+  limit: number,
+  viewerId?: number
 ) => {
-  const finalParams = [...params, limit];
+  const queryParams = [...params];
+  const viewerLikedSql =
+    viewerId == null
+      ? `FALSE AS viewer_liked`
+      : (() => {
+          queryParams.push(viewerId);
+          return `EXISTS (
+            SELECT 1
+            FROM sesion_like sl
+            WHERE sl.sesion_id = se.id_sesion
+              AND sl.usuario_id = $${queryParams.length}
+          ) AS viewer_liked`;
+        })();
+  const finalParams = [...queryParams, limit];
 
   const result = await pool.query<SessionSummaryRow>(
     `SELECT se.id_sesion,
@@ -147,7 +164,18 @@ const getSessionSummaries = async (
               SELECT COUNT(DISTINCT sr.ejercicio_id)::int
               FROM serie sr
               WHERE sr.sesion_id = se.id_sesion
-            ) AS total_ejercicios
+            ) AS total_ejercicios,
+            (
+              SELECT COUNT(*)::int
+              FROM sesion_like sl
+              WHERE sl.sesion_id = se.id_sesion
+            ) AS likes_count,
+            (
+              SELECT COUNT(*)::int
+              FROM sesion_comentario sc
+              WHERE sc.sesion_id = se.id_sesion
+            ) AS comments_count,
+            ${viewerLikedSql}
      FROM sesionentrenamiento se
      JOIN usuario u ON u.id = se.usuario_id
      LEFT JOIN rutina r ON r.id_rutina = se.rutina_id
@@ -408,7 +436,8 @@ export const getUserProfile = async (profileId: number, viewerId?: number) => {
     `se.usuario_id = $1
       AND se.estado = 'finalizada'`,
     [profileId],
-    20
+    20,
+    viewerId
   );
 
   return {
@@ -434,5 +463,6 @@ export const getFeed = async (userId: number) =>
         )
       )`,
     [userId],
-    30
+    30,
+    userId
   );

@@ -6,7 +6,6 @@ type HomeProps = {
   usuario: Usuario;
   onOpenProfile: (userId: number) => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
-  onCopyToTraining: (training: EntrenamientoResumen) => void;
   onSaveAsRoutine: (training: EntrenamientoResumen) => void;
 };
 
@@ -16,7 +15,6 @@ function Home({
   usuario,
   onOpenProfile,
   onOpenTraining,
-  onCopyToTraining,
   onSaveAsRoutine,
 }: HomeProps) {
   const [feed, setFeed] = useState<EntrenamientoResumen[]>([]);
@@ -83,9 +81,9 @@ function Home({
           <TrainingPostCard
             key={item.id_sesion}
             item={item}
+            viewerId={usuario.id}
             onOpenProfile={onOpenProfile}
             onOpenTraining={onOpenTraining}
-            onCopyToTraining={onCopyToTraining}
             onSaveAsRoutine={onSaveAsRoutine}
           />
         ))}

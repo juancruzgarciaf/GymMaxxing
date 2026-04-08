@@ -5,6 +5,7 @@ type EntrenamientoDetalleProps = {
   entrenamiento: EntrenamientoResumen;
   onBack: () => void;
   onOpenProfile: (userId: number) => void;
+  onCopyToTraining: (training: EntrenamientoResumen) => void;
 };
 
 const API = "http://localhost:3000";
@@ -58,10 +59,36 @@ const formatRest = (value: number | null) => {
   return `${value}s`;
 };
 
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect
+        x="9"
+        y="9"
+        width="10"
+        height="10"
+        rx="2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M7 15H6C4.9 15 4 14.1 4 13V6C4 4.9 4.9 4 6 4H13C14.1 4 15 4.9 15 6V7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function EntrenamientoDetalle({
   entrenamiento,
   onBack,
   onOpenProfile,
+  onCopyToTraining,
 }: EntrenamientoDetalleProps) {
   const [series, setSeries] = useState<SerieSesionDetalle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,9 +173,20 @@ function EntrenamientoDetalle({
   return (
     <main className="page-shell">
       <section className="detail-topbar">
-        <button type="button" className="btn secondary" onClick={onBack}>
-          Volver
-        </button>
+        <div className="detail-topbar-actions">
+          <button type="button" className="btn secondary" onClick={onBack}>
+            Volver
+          </button>
+          <button
+            type="button"
+            className="social-action icon-only"
+            onClick={() => onCopyToTraining(entrenamiento)}
+            aria-label="Copiar entrenamiento"
+            title="Copiar entrenamiento"
+          >
+            <CopyIcon />
+          </button>
+        </div>
         <button
           type="button"
           className="profile-chip detail-author"

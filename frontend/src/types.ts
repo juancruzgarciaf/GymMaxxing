@@ -30,7 +30,19 @@ export type EntrenamientoResumen = {
   volumen_total: number | null;
   total_series: number;
   total_ejercicios: number;
+  likes_count: number;
+  comments_count: number;
+  viewer_liked: boolean;
   ejercicios_preview: EjercicioPreview[];
+};
+
+export type SessionComment = {
+  id_comentario: number;
+  sesion_id: number;
+  usuario_id: number;
+  username: string;
+  contenido: string;
+  fecha: string;
 };
 
 export type SerieSesionDetalle = {

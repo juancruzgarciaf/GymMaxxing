@@ -218,7 +218,6 @@ function App() {
             usuario={usuario}
             onOpenProfile={openProfile}
             onOpenTraining={(training) => openTraining(training, "home")}
-            onCopyToTraining={handleCopyTrainingToWorkout}
             onSaveAsRoutine={handleSaveTrainingAsRoutine}
           />
         ) : null}
@@ -249,7 +248,6 @@ function App() {
             profileUserId={selectedProfileId ?? usuario.id}
             onOpenProfile={openProfile}
             onOpenTraining={(training) => openTraining(training, "perfil")}
-            onCopyToTraining={handleCopyTrainingToWorkout}
             onSaveAsRoutine={handleSaveTrainingAsRoutine}
           />
         ) : null}
@@ -258,6 +256,7 @@ function App() {
             entrenamiento={selectedTraining}
             onBack={goBackFromTraining}
             onOpenProfile={openProfile}
+            onCopyToTraining={handleCopyTrainingToWorkout}
           />
         ) : null}
       </div>

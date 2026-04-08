@@ -15,6 +15,25 @@ type SesionEntrenamientoRow = {
   nombre_rutina_snapshot: string | null;
 };
 
+type SessionInteractionSummaryRow = {
+  likes_count: number;
+  comments_count: number;
+  viewer_liked: boolean;
+};
+
+type SessionCommentRow = {
+  id_comentario: number;
+  sesion_id: number;
+  usuario_id: number;
+  username: string;
+  contenido: string;
+  fecha: string;
+};
+
+type CommentDeleteResult =
+  | { ok: true; summary: SessionInteractionSummaryRow }
+  | { ok: false; reason: "not_found" | "forbidden" };
+
 // =========================
 // SESION_ENTRENAMIENTO
 // =========================
@@ -64,6 +83,49 @@ export const getSesionPorId = async (id_sesion: string) => {
   );
 
   return result.rows[0];
+};
+
+export const getSessionInteractionSummary = async (
+  sesion_id: string,
+  viewerId?: number
+) => {
+  const params: Array<string | number> = [sesion_id];
+  const viewerLikedSql =
+    viewerId == null
+      ? `FALSE AS viewer_liked`
+      : (() => {
+          params.push(viewerId);
+          return `EXISTS (
+            SELECT 1
+            FROM sesion_like sl
+            WHERE sl.sesion_id = $1
+              AND sl.usuario_id = $2
+          ) AS viewer_liked`;
+        })();
+
+  const result = await pool.query<SessionInteractionSummaryRow>(
+    `SELECT
+       (
+         SELECT COUNT(*)::int
+         FROM sesion_like sl
+         WHERE sl.sesion_id = $1
+       ) AS likes_count,
+       (
+         SELECT COUNT(*)::int
+         FROM sesion_comentario sc
+         WHERE sc.sesion_id = $1
+       ) AS comments_count,
+       ${viewerLikedSql}`,
+    params
+  );
+
+  return (
+    result.rows[0] ?? {
+      likes_count: 0,
+      comments_count: 0,
+      viewer_liked: false,
+    }
+  );
 };
 
 export const updateSesionEntrenamiento = async (
@@ -142,6 +204,106 @@ export const getSeriesDeSesion = async (sesion_id: string) => {
   );
 
   return result.rows;
+};
+
+export const addLikeToSesion = async (sesion_id: string, usuario_id: number) => {
+  await pool.query(
+    `INSERT INTO sesion_like (sesion_id, usuario_id, fecha)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (sesion_id, usuario_id) DO NOTHING`,
+    [sesion_id, usuario_id]
+  );
+
+  return getSessionInteractionSummary(sesion_id, usuario_id);
+};
+
+export const removeLikeFromSesion = async (sesion_id: string, usuario_id: number) => {
+  await pool.query(
+    `DELETE FROM sesion_like
+     WHERE sesion_id = $1
+       AND usuario_id = $2`,
+    [sesion_id, usuario_id]
+  );
+
+  return getSessionInteractionSummary(sesion_id, usuario_id);
+};
+
+export const getComentariosDeSesion = async (sesion_id: string) => {
+  const result = await pool.query<SessionCommentRow>(
+    `SELECT sc.id_comentario,
+            sc.sesion_id,
+            sc.usuario_id,
+            u.username,
+            sc.contenido,
+            sc.fecha::text AS fecha
+     FROM sesion_comentario sc
+     JOIN usuario u ON u.id = sc.usuario_id
+     WHERE sc.sesion_id = $1
+     ORDER BY sc.fecha ASC, sc.id_comentario ASC`,
+    [sesion_id]
+  );
+
+  return result.rows;
+};
+
+export const createComentarioDeSesion = async (
+  sesion_id: string,
+  usuario_id: number,
+  contenido: string
+) => {
+  const result = await pool.query<{ id_comentario: number }>(
+    `INSERT INTO sesion_comentario (sesion_id, usuario_id, contenido, fecha)
+     VALUES ($1, $2, $3, NOW())
+     RETURNING id_comentario`,
+    [sesion_id, usuario_id, contenido.trim()]
+  );
+
+  const commentId = result.rows[0]?.id_comentario;
+  const comments = await getComentariosDeSesion(sesion_id);
+  const comentario = comments.find((item) => item.id_comentario === commentId) ?? null;
+  const summary = await getSessionInteractionSummary(sesion_id, usuario_id);
+
+  return {
+    comentario,
+    summary,
+  };
+};
+
+export const deleteComentarioDeSesion = async (
+  sesion_id: string,
+  comentario_id: string,
+  usuario_id: number
+): Promise<CommentDeleteResult> => {
+  const comentarioResult = await pool.query<{ usuario_id: number }>(
+    `SELECT usuario_id
+     FROM sesion_comentario
+     WHERE sesion_id = $1
+       AND id_comentario = $2`,
+    [sesion_id, comentario_id]
+  );
+
+  const comentario = comentarioResult.rows[0];
+
+  if (!comentario) {
+    return { ok: false, reason: "not_found" };
+  }
+
+  if (comentario.usuario_id !== usuario_id) {
+    return { ok: false, reason: "forbidden" };
+  }
+
+  await pool.query(
+    `DELETE FROM sesion_comentario
+     WHERE sesion_id = $1
+       AND id_comentario = $2
+       AND usuario_id = $3`,
+    [sesion_id, comentario_id, usuario_id]
+  );
+
+  return {
+    ok: true,
+    summary: await getSessionInteractionSummary(sesion_id, usuario_id),
+  };
 };
 
 export const replaceSeriesDeSesion = async (

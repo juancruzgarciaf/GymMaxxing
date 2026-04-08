@@ -1232,9 +1232,150 @@ h2 {
 }
 
 .feed-card-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.feed-card-social-actions,
+.feed-card-secondary-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  align-items: center;
+}
+
+.social-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid #33414c;
+  background: #111920;
+  color: #d6e3ea;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.social-action:hover:not(:disabled) {
+  background: #172129;
+  border-color: #4b5b67;
+  transform: translateY(-1px);
+}
+
+.social-action.active {
+  background: rgba(126, 214, 161, 0.08);
+  border-color: #5ca57c;
+  color: #86e2ab;
+}
+
+.social-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.social-action svg {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.social-action-count {
+  min-width: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.social-action.icon-only {
+  width: 44px;
+  padding: 0;
+}
+
+.comment-panel {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #24323c;
+}
+
+.comment-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.comment-list {
+  display: grid;
+  gap: 10px;
+}
+
+.comment-item {
+  border: 1px solid #2f3b45;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #141c23;
+}
+
+.comment-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.comment-item-meta {
+  display: grid;
+  gap: 2px;
+}
+
+.comment-item strong {
+  color: #e5f8ff;
+}
+
+.comment-item p {
+  margin: 6px 0 4px;
+  color: #d8e2ea;
+}
+
+.comment-delete-btn {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid #4c3137;
+  background: #24171a;
+  color: #f4adb8;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.comment-delete-btn:hover:not(:disabled) {
+  background: #311b20;
+  border-color: #6d414a;
+  color: #ffc3cc;
+}
+
+.comment-delete-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.comment-delete-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.comment-item small,
+.social-feedback {
+  color: #9fb3c1;
 }
 
 .exercise-card.readonly {
@@ -1246,6 +1387,13 @@ h2 {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.detail-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -1411,6 +1559,10 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .comment-form {
+    grid-template-columns: 1fr;
+  }
+
   .feed-card .metrics-row {
     gap: 14px 22px;
   }
@@ -1430,6 +1582,11 @@ h2 {
 
   .feed-card .exercise-preview-item small {
     white-space: normal;
+  }
+
+  .feed-card-social-actions,
+  .feed-card-secondary-actions {
+    gap: 8px;
   }
 
   .detail-topbar {
