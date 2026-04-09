@@ -159,6 +159,54 @@ export const deleteRutina = async (req: Request, res: Response) => {
   }
 };
 
+export const recordRutinaSave = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const usuarioId = Number(req.body.usuario_id);
+
+    if (!id || Array.isArray(id) || Number.isNaN(usuarioId)) {
+      return res.status(400).json({
+        error: "id y usuario_id son obligatorios",
+      });
+    }
+
+    const summary = await rutinaService.recordRutinaSave(id, usuarioId);
+
+    if (!summary) {
+      return res.status(404).json({ error: "Rutina no encontrada" });
+    }
+
+    return res.status(201).json(summary);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Error registrando guardado de rutina" });
+  }
+};
+
+export const recordRutinaCopy = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const usuarioId = Number(req.body.usuario_id);
+
+    if (!id || Array.isArray(id) || Number.isNaN(usuarioId)) {
+      return res.status(400).json({
+        error: "id y usuario_id son obligatorios",
+      });
+    }
+
+    const summary = await rutinaService.recordRutinaCopy(id, usuarioId);
+
+    if (!summary) {
+      return res.status(404).json({ error: "Rutina no encontrada" });
+    }
+
+    return res.status(201).json(summary);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Error registrando copia de rutina" });
+  }
+};
+
 export const getCarpetasRutina = async (req: Request, res: Response) => {
   /*
     Devuelve todas las carpetas donde se pueden organizar rutinas.

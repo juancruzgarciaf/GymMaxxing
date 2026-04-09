@@ -20,6 +20,11 @@ type PersistedRutinaEjercicio = {
   }>;
 };
 
+type RoutineMetricSummary = {
+  save_count: number;
+  copy_count: number;
+};
+
 const parseError = async (res: Response, fallback: string) => {
   try {
     const data = (await res.json()) as { error?: string };
@@ -62,6 +67,37 @@ export const createRoutineShareUrl = (routineId: number) => {
   return url.toString();
 };
 
+export const getSourceRoutineIdFromSeed = (seed: TrainingSeed) =>
+  seed.sourceRoutineId ?? (seed.origin === "rutina" ? seed.sourceId : null);
+
+export const recordRoutineSave = async (routineId: number, userId: number) => {
+  const res = await fetch(`${API}/rutinas/${routineId}/metricas/guardar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ usuario_id: userId }),
+  });
+
+  if (!res.ok) {
+    throw new Error(await parseError(res, "No se pudo registrar el guardado de la rutina"));
+  }
+
+  return (await res.json()) as RoutineMetricSummary;
+};
+
+export const recordRoutineCopy = async (routineId: number, userId: number) => {
+  const res = await fetch(`${API}/rutinas/${routineId}/metricas/copiar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ usuario_id: userId }),
+  });
+
+  if (!res.ok) {
+    throw new Error(await parseError(res, "No se pudo registrar la copia de la rutina"));
+  }
+
+  return (await res.json()) as RoutineMetricSummary;
+};
+
 export const fetchRoutineSummary = async (routineId: number) => {
   const res = await fetch(`${API}/rutinas/${routineId}`);
   if (!res.ok) {
@@ -84,6 +120,7 @@ export const buildTrainingSeedFromRoutine = (
 ): TrainingSeed => ({
   origin: "rutina",
   sourceId: routine.id_rutina,
+  sourceRoutineId: routine.id_rutina,
   title: routine.nombre,
   description: routine.descripcion,
   durationMinutes: routine.duracion_estimada,
@@ -163,6 +200,7 @@ export const fetchSessionSeed = async (training: EntrenamientoResumen): Promise<
   return {
     origin: "sesion",
     sourceId: training.id_sesion,
+    sourceRoutineId: training.rutina_id,
     title: training.titulo,
     description: training.descripcion,
     durationMinutes,
@@ -257,6 +295,15 @@ export const saveTrainingSeedAsRoutine = async (
       })),
     })),
   );
+
+  const sourceRoutineId = getSourceRoutineIdFromSeed(seed);
+  if (sourceRoutineId != null) {
+    try {
+      await recordRoutineSave(sourceRoutineId, userId);
+    } catch (error) {
+      console.error("No se pudo registrar el guardado de rutina", error);
+    }
+  }
 
   return routine;
 };

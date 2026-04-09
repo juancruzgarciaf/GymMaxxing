@@ -26,6 +26,28 @@ type CarpetaTableInfo = {
   hasUsuarioColumn: boolean;
 };
 
+type RutinaRow = {
+  id_rutina: number;
+  nombre: string;
+  descripcion: string | null;
+  duracion_estimada: number | null;
+  fecha_creacion: string | null;
+  creador_id: number;
+  id_carpeta: number | null;
+  save_count: number;
+  copy_count: number;
+};
+
+type RutinaMetricSummary = {
+  save_count: number;
+  copy_count: number;
+};
+
+type RutinaMetricSupport = {
+  has_save: boolean;
+  has_copy: boolean;
+};
+
 const resolveCarpetaTableByFk = async () => {
   const result = await pool.query<{ table_name: string; id_column: string }>(
     `SELECT target_table.relname AS table_name,
@@ -116,6 +138,103 @@ const resolveCarpetaTable = async (): Promise<CarpetaTableInfo | null> => {
   };
 };
 
+const getRutinaMetricsSupport = async (): Promise<RutinaMetricSupport> => {
+  const result = await pool.query<RutinaMetricSupport>(
+    `SELECT
+       to_regclass('public.rutina_guardado') IS NOT NULL AS has_save,
+       to_regclass('public.rutina_copia') IS NOT NULL AS has_copy`
+  );
+
+  return (
+    result.rows[0] ?? {
+      has_save: false,
+      has_copy: false,
+    }
+  );
+};
+
+const buildRutinaSelectSql = (alias: string, support: RutinaMetricSupport) => `
+  SELECT ${alias}.id_rutina,
+         ${alias}.nombre,
+         ${alias}.descripcion,
+         ${alias}.duracion_estimada,
+         ${alias}.fecha_creacion,
+         ${alias}.creador_id,
+         ${alias}.id_carpeta,
+         ${
+           support.has_save
+             ? `(SELECT COUNT(*)::int FROM rutina_guardado rg WHERE rg.rutina_id = ${alias}.id_rutina)`
+             : `0::int`
+         } AS save_count,
+         ${
+           support.has_copy
+             ? `(SELECT COUNT(*)::int FROM rutina_copia rc WHERE rc.rutina_id = ${alias}.id_rutina)`
+             : `0::int`
+         } AS copy_count
+  FROM rutina ${alias}
+`;
+
+const getRutinaMetricSummary = async (
+  id_rutina: string,
+  support?: RutinaMetricSupport
+): Promise<RutinaMetricSummary> => {
+  const resolvedSupport = support ?? (await getRutinaMetricsSupport());
+  const usesParams = resolvedSupport.has_save || resolvedSupport.has_copy;
+  const result = await pool.query<RutinaMetricSummary>(
+    `SELECT
+       ${
+         resolvedSupport.has_save
+           ? `(SELECT COUNT(*)::int FROM rutina_guardado rg WHERE rg.rutina_id = $1)`
+           : `0::int`
+       } AS save_count,
+       ${
+         resolvedSupport.has_copy
+           ? `(SELECT COUNT(*)::int FROM rutina_copia rc WHERE rc.rutina_id = $1)`
+           : `0::int`
+       } AS copy_count`,
+    usesParams ? [id_rutina] : []
+  );
+
+  return (
+    result.rows[0] ?? {
+      save_count: 0,
+      copy_count: 0,
+    }
+  );
+};
+
+const recordRutinaMetric = async (
+  id_rutina: string,
+  usuario_id: number,
+  metric: "save" | "copy"
+) => {
+  const rutina = await getRutinaPorId(id_rutina);
+  if (!rutina) {
+    return null;
+  }
+
+  const support = await getRutinaMetricsSupport();
+  const tableName =
+    metric === "save"
+      ? support.has_save
+        ? "rutina_guardado"
+        : null
+      : support.has_copy
+        ? "rutina_copia"
+        : null;
+
+  if (tableName) {
+    await pool.query(
+      `INSERT INTO ${tableName} (rutina_id, usuario_id, fecha)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (rutina_id, usuario_id) DO NOTHING`,
+      [id_rutina, usuario_id]
+    );
+  }
+
+  return getRutinaMetricSummary(id_rutina, support);
+};
+
 // =========================
 // RUTINA
 // =========================
@@ -129,7 +248,7 @@ export const crearRutina = async (data: any) => {
     id_carpeta,
   } = data;
 
-  const result = await pool.query(
+  const result = await pool.query<RutinaRow>(
     `INSERT INTO rutina (nombre, descripcion, duracion_estimada, fecha_creacion, creador_id, id_carpeta)
      VALUES ($1, $2, $3, NOW(), $4, $5)
      RETURNING *`,
@@ -142,25 +261,35 @@ export const crearRutina = async (data: any) => {
     ]
   );
 
-  return result.rows[0];
+  return result.rows[0]
+    ? {
+        ...result.rows[0],
+        save_count: 0,
+        copy_count: 0,
+      }
+    : null;
 };
 
 export const getRutinas = async (creadorId?: number) => {
-  const result = await pool.query(
+  const support = await getRutinaMetricsSupport();
+  const baseSql = buildRutinaSelectSql("r", support);
+  const result = await pool.query<RutinaRow>(
     creadorId == null
-      ? `SELECT * FROM rutina ORDER BY fecha_creacion DESC`
-      : `SELECT *
-         FROM rutina
-         WHERE creador_id = $1
-         ORDER BY fecha_creacion DESC`,
+      ? `${baseSql}
+         ORDER BY r.fecha_creacion DESC`
+      : `${baseSql}
+         WHERE r.creador_id = $1
+         ORDER BY r.fecha_creacion DESC`,
     creadorId == null ? [] : [creadorId]
   );
   return result.rows;
 };
 
 export const getRutinaPorId = async (id: string) => {
-  const result = await pool.query(
-    `SELECT * FROM rutina WHERE id_rutina = $1`,
+  const support = await getRutinaMetricsSupport();
+  const result = await pool.query<RutinaRow>(
+    `${buildRutinaSelectSql("r", support)}
+     WHERE r.id_rutina = $1`,
     [id]
   );
   return result.rows[0];
@@ -175,7 +304,7 @@ export const updateRutina = async (id: string, data: any) => {
     id_carpeta,
   } = data;
 
-  const result = await pool.query(
+  const result = await pool.query<RutinaRow>(
     `UPDATE rutina
      SET nombre = $1,
          descripcion = $2,
@@ -195,7 +324,7 @@ export const updateRutina = async (id: string, data: any) => {
     ]
   );
 
-  return result.rows[0];
+  return result.rows[0] ? getRutinaPorId(String(result.rows[0].id_rutina)) : null;
 };
 
 export const deleteRutina = async (id: string, creadorId?: number) => {
@@ -281,6 +410,12 @@ export const getCarpetasRutina = async (usuarioId?: number) => {
 
   return result.rows;
 };
+
+export const recordRutinaSave = async (id_rutina: string, usuario_id: number) =>
+  recordRutinaMetric(id_rutina, usuario_id, "save");
+
+export const recordRutinaCopy = async (id_rutina: string, usuario_id: number) =>
+  recordRutinaMetric(id_rutina, usuario_id, "copy");
 
 export const crearCarpetaRutina = async (data: any) => {
   const tableInfo = await resolveCarpetaTable();

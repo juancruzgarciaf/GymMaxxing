@@ -5,6 +5,8 @@ import {
   getRutinaPorId,
   updateRutina,
   deleteRutina,
+  recordRutinaSave,
+  recordRutinaCopy,
   getCarpetasRutina,
   crearCarpetaRutina,
   updateCarpetaRutina,
@@ -27,6 +29,8 @@ router.delete("/carpetas/:id", deleteCarpetaRutina);
 router.get("/:id", getRutinaPorId);
 router.put("/:id", updateRutina);
 router.delete("/:id", deleteRutina);
+router.post("/:id/metricas/guardar", recordRutinaSave);
+router.post("/:id/metricas/copiar", recordRutinaCopy);
 
 // Gestión de ejercicios dentro de la rutina
 router.post("/ejercicios", agregarEjercicioARutina);

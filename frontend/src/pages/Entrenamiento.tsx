@@ -125,6 +125,7 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
   const [busquedaEjercicio, setBusquedaEjercicio] = useState("");
 
   const [sesionActiva, setSesionActiva] = useState<SesionEntrenamiento | null>(null);
+  const [sourceRoutineIdContext, setSourceRoutineIdContext] = useState<number | null>(null);
   const [ejecucionEjercicios, setEjecucionEjercicios] = useState<EjecucionEjercicio[]>([]);
   const [descansoActivo, setDescansoActivo] = useState<DescansoActivo | null>(null);
   const [elapsedSesionSegundos, setElapsedSesionSegundos] = useState(0);
@@ -268,6 +269,7 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
   const resetEntrenamiento = () => {
     setVista("inicio");
     setSesionActiva(null);
+    setSourceRoutineIdContext(null);
     setEjecucionEjercicios([]);
     setDescansoActivo(null);
     setElapsedSesionSegundos(0);
@@ -376,6 +378,7 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
   const buildCurrentTrainingSeed = (): TrainingSeed => ({
     origin: "sesion",
     sourceId: sesionActiva?.id_sesion ?? 0,
+    sourceRoutineId: sourceRoutineIdContext,
     title: guardarNombre.trim() || "Entrenamiento",
     description: guardarDescripcion.trim() || null,
     durationMinutes: Math.max(1, Math.round(elapsedSesionSegundos / 60) || 1),
@@ -439,6 +442,9 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
 
       const sesion = (await startRes.json()) as SesionEntrenamiento;
       setSesionActiva(sesion);
+      setSourceRoutineIdContext(
+        nextSeed?.sourceRoutineId ?? (nextSeed?.origin === "rutina" ? nextSeed.sourceId : null),
+      );
       setEjecucionEjercicios(nextSeed ? seedToExecution(nextSeed) : []);
       setGuardarNombre(nextSeed?.title ?? "");
       setGuardarDescripcion(nextSeed?.description ?? "");
@@ -1144,6 +1150,8 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
             Esto crea una sesion activa sin rutina base. Desde ahi puedes sumar o quitar ejercicios
             mientras entrenas.
           </p>
+
+          
           <div className="actions-row">
             <button
               type="button"

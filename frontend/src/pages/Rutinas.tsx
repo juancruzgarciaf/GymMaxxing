@@ -9,6 +9,8 @@ type Rutina = {
   duracion_estimada: number | null;
   creador_id: number;
   id_carpeta: number | null;
+  save_count: number;
+  copy_count: number;
 };
 
 type CarpetaRutina = {
@@ -2024,7 +2026,13 @@ function Rutinas({ usuario }: RutinasProps) {
               <div className="detail-meta">
                 <span>Duracion: {rutinaSeleccionada.duracion_estimada ?? "-"} min</span>
                 <span>ID {rutinaSeleccionada.id_rutina}</span>
+                <span>Guardados: {rutinaSeleccionada.save_count}</span>
+                <span>Copias: {rutinaSeleccionada.copy_count}</span>
               </div>
+
+              <p className="helper-text routine-copy-insight">
+                Cantidad de veces copiadas: {rutinaSeleccionada.copy_count}
+              </p>
 
               <h3 className="detail-subtitle">Grupos musculares</h3>
               {resumenLoading ? (

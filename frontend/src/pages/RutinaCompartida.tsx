@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  fetchRoutineSummary,
   fetchRoutineSeed,
   saveTrainingSeedAsRoutine,
 } from "../lib/trainingTransfer";
@@ -84,6 +85,8 @@ function RutinaCompartida({
         name: routine.nombre,
         description: routine.descripcion,
       });
+      const refreshedRoutine = await fetchRoutineSummary(routine.id_rutina);
+      setRoutine(refreshedRoutine);
       setMessage("Rutina guardada en tus rutinas");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo guardar la rutina");
@@ -118,6 +121,8 @@ function RutinaCompartida({
             <div className="detail-meta">
               <span>Duracion: {routine.duracion_estimada ?? "-"} min</span>
               <span>ID {routine.id_rutina}</span>
+              <span>Guardados: {routine.save_count}</span>
+              <span>Copias: {routine.copy_count}</span>
             </div>
 
             <h3 className="detail-subtitle">Ejercicios ({seed.exercises.length})</h3>
@@ -150,15 +155,23 @@ function RutinaCompartida({
               <button type="button" className="btn" onClick={() => onCopyToTraining(seed)}>
                 Copiar a entrenamiento
               </button>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => void handleSaveAsOwnRoutine()}
-                disabled={saving}
-              >
-                Guardar como mi rutina
-              </button>
+              <div className="action-with-metric">
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => void handleSaveAsOwnRoutine()}
+                  disabled={saving}
+                >
+                  Guardar como mi rutina
+                </button>
+                <span className="action-metric-pill" title="Cantidad de usuarios que guardaron esta rutina">
+                  {routine.save_count}
+                </span>
+              </div>
             </div>
+            <p className="helper-text routine-copy-insight">
+              Cantidad de veces copiada: {routine.copy_count}
+            </p>
           </article>
         </section>
       ) : null}

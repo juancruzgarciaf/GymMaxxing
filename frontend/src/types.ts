@@ -66,6 +66,8 @@ export type RoutineSummary = {
   duracion_estimada: number | null;
   creador_id: number;
   id_carpeta: number | null;
+  save_count: number;
+  copy_count: number;
 };
 
 export type RoutineExerciseDetailed = {
@@ -101,6 +103,7 @@ export type TrainingSeedExercise = {
 export type TrainingSeed = {
   origin: "rutina" | "sesion";
   sourceId: number;
+  sourceRoutineId?: number | null;
   title: string;
   description: string | null;
   durationMinutes: number | null;

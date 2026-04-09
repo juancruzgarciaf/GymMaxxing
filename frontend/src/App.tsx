@@ -3,6 +3,8 @@ import "./App.css";
 import logo from "./assets/logo.png";
 import {
   fetchSessionSeed,
+  getSourceRoutineIdFromSeed,
+  recordRoutineCopy,
   saveTrainingSeedAsRoutine,
 } from "./lib/trainingTransfer";
 import type { EntrenamientoResumen, TrainingSeed, Usuario } from "./types";
@@ -82,6 +84,12 @@ function App() {
   };
 
   const openTrainingFromSeed = (seed: TrainingSeed) => {
+    const sourceRoutineId = getSourceRoutineIdFromSeed(seed);
+    if (usuario && sourceRoutineId != null) {
+      void recordRoutineCopy(sourceRoutineId, usuario.id).catch((error) => {
+        console.error("No se pudo registrar la copia de rutina", error);
+      });
+    }
     setTrainingSeed(seed);
     setTrainingSeedKey((prev) => prev + 1);
     setMainScreen("entrenamientoLibre");

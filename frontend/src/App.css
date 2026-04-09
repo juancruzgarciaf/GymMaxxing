@@ -427,6 +427,26 @@ h2 {
   margin-top: 12px;
 }
 
+.action-with-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-metric-pill {
+  min-width: 40px;
+  height: 40px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid #3f4c55;
+  background: #111920;
+  color: #d7e3eb;
+  font-weight: 700;
+}
+
 .btn {
   border: 1px solid #3b7655;
   background: #7ed6a1;
@@ -875,6 +895,10 @@ h2 {
   color: #a9bfd0;
   font-size: 13px;
   background: #111920;
+}
+
+.routine-copy-insight {
+  margin: 10px 0 0;
 }
 
 .muscle-chips {
