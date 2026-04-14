@@ -73,6 +73,24 @@ src/
 
 ---
 
+## ⚙️ Configuración local
+
+El backend toma la conexión a PostgreSQL desde variables de entorno en `backend/.env`.
+
+Podés usar `backend/.env.example` como plantilla y crear tu propio `backend/.env` local con los valores de tu máquina:
+
+```env
+DB_USER=postgres
+DB_HOST=localhost
+DB_NAME=gymmaxxing_db
+DB_PASSWORD=tu_password_local
+DB_PORT=5432
+```
+
+Cada integrante del equipo puede necesitar valores distintos en `DB_USER`, `DB_PASSWORD`, `DB_NAME` o `DB_PORT`, según cómo tenga configurado PostgreSQL.
+
+---
+
 ## 📌 Estado del proyecto
 
 Actualmente el sistema cuenta con:
