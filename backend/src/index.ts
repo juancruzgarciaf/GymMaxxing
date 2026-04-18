@@ -1,5 +1,4 @@
 import cors from "cors";
-import dotenv from "dotenv";
 import express from "express";
 import { pool } from "./db";
 
@@ -9,8 +8,6 @@ import rutinaRoutes from "./routes/rutina.routes";
 import entrenamientoRoutes from "./routes/entrenamiento.routes";
 import ejercicioRoutes from "./routes/ejercicio.routes";
 
-
-dotenv.config();
 
 const app = express();
 
