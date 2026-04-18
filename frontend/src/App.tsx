@@ -11,6 +11,7 @@ import type { EntrenamientoResumen, TrainingSeed, Usuario } from "./types";
 import Entrenamiento from "./pages/Entrenamiento";
 import Home from "./pages/Home";
 import Buscar from "./pages/Buscar";
+import DescubrirRutinas from "./pages/DescubrirRutinas";
 import EntrenamientoDetalle from "./pages/EntrenamientoDetalle";
 import Login from "./pages/Login";
 import Perfil from "./pages/Perfil";
@@ -24,6 +25,7 @@ type MainScreen =
   | "rutinas"
   | "rutinaCompartida"
   | "buscar"
+  | "descubrir"
   | "perfil"
   | "entrenamientoLibre"
   | "entrenamiento";
@@ -205,6 +207,13 @@ function App() {
           </button>
           <button
             type="button"
+            className={`nav-btn ${mainScreen === "descubrir" ? "active" : ""}`}
+            onClick={() => navigateTo("descubrir")}
+          >
+            Descubrir
+          </button>
+          <button
+            type="button"
             className={`nav-btn ${mainScreen === "perfil" ? "active" : ""}`}
             onClick={() => openProfile(usuario.id)}
           >
@@ -238,6 +247,7 @@ function App() {
           />
         ) : null}
         {mainScreen === "rutinas" ? <Rutinas usuario={usuario} /> : null}
+        {mainScreen === "descubrir" ? <DescubrirRutinas usuario={usuario} /> : null}
         {mainScreen === "rutinaCompartida" && sharedRoutineId != null ? (
           <RutinaCompartida
             usuario={usuario}

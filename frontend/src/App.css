@@ -1476,6 +1476,87 @@ h2 {
   gap: 10px;
 }
 
+.discover-controls {
+  display: grid;
+  gap: 12px;
+}
+
+.discover-main-filters {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 200px 220px auto auto;
+  gap: 10px;
+}
+
+.discover-switches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.discover-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #c5d6e2;
+}
+
+.discover-muscles {
+  margin-top: 2px;
+}
+
+.muscle-chip-btn {
+  border: 1px solid #296949;
+  border-radius: 999px;
+  padding: 6px 12px;
+  color: #b8f0d0;
+  background: rgba(25, 63, 45, 0.45);
+  cursor: pointer;
+}
+
+.muscle-chip-btn.active {
+  background: #7ed6a1;
+  color: #10221a;
+  border-color: #7ed6a1;
+  font-weight: 600;
+}
+
+.discover-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.discover-card {
+  background: linear-gradient(145deg, #19242d 0%, #121920 100%);
+  border: 1px solid #2f3b45;
+  border-radius: 20px;
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.discover-card-head h2 {
+  margin: 0;
+}
+
+.discover-card-head small {
+  color: #9eb2c0;
+}
+
+.discover-description {
+  margin: 0;
+  color: #b8cad7;
+}
+
+.discover-empty {
+  grid-column: 1 / -1;
+}
+
+.discover-detail {
+  margin-top: 4px;
+}
+
 @media (max-width: 1050px) {
   .auth-grid {
     grid-template-columns: 1fr;
@@ -1511,6 +1592,10 @@ h2 {
 
   .detail-author {
     margin-left: 0;
+  }
+
+  .discover-main-filters {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
@@ -1580,6 +1665,10 @@ h2 {
   .search-panel,
   .user-card {
     display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .discover-main-filters {
     grid-template-columns: 1fr;
   }
 

@@ -4,6 +4,23 @@ Aplicación web para el registro, seguimiento y compartición de entrenamientos 
 
 ---
 
+## Seed de Rutinas Oficiales
+
+Para cargar rutinas oficiales de la app (creadas por `admin@gmail.com`) podes correr:
+
+```bash
+psql -h 127.0.0.1 -U postgres -d gymmaxxing_db -f sql/2026-04-18_seed_official_routines.sql
+```
+
+Este seed:
+
+* crea el usuario admin si no existe
+* crea ejercicios base si faltan
+* crea rutinas oficiales (PPL, Upper/Lower, Full Body, por musculo)
+* vincula ejercicios a cada rutina
+
+Es idempotente: se puede ejecutar mas de una vez.
+
 ## 🧠 Descripción de la app
 
 GymMaxxing permite a los usuarios registrar sus rutinas de entrenamiento, hacer seguimiento de su progreso y visualizar entrenamientos propios y de otros usuarios.

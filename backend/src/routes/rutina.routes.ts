@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   crearRutina,
   getRutinas,
+  getDiscoverRutinas,
   getRutinaPorId,
   updateRutina,
   deleteRutina,
@@ -22,6 +23,7 @@ const router = Router();
 // ABM de rutina
 router.post("/", crearRutina);
 router.get("/", getRutinas);
+router.get("/discover", getDiscoverRutinas);
 router.get("/carpetas", getCarpetasRutina);
 router.post("/carpetas", crearCarpetaRutina);
 router.put("/carpetas/:id", updateCarpetaRutina);

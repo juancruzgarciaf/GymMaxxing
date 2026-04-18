@@ -67,6 +67,123 @@ export const getRutinas = async (req: Request, res: Response) => {
   }
 };
 
+export const getDiscoverRutinas = async (req: Request, res: Response) => {
+  try {
+    const viewerIdRaw = req.query.viewer_id;
+    const viewerId =
+      typeof viewerIdRaw === "string" && viewerIdRaw.trim()
+        ? Number(viewerIdRaw)
+        : undefined;
+
+    if (viewerIdRaw != null && (viewerId == null || Number.isNaN(viewerId))) {
+      return res.status(400).json({ error: "viewer_id inválido" });
+    }
+
+    const queryRaw = req.query.q;
+    const q =
+      typeof queryRaw === "string" && queryRaw.trim()
+        ? queryRaw.trim()
+        : undefined;
+
+    const grupoRaw = req.query.grupo_muscular;
+    const gruposMusculares =
+      typeof grupoRaw === "string" && grupoRaw.trim()
+        ? grupoRaw
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean)
+        : undefined;
+
+    const ordenRaw = req.query.orden;
+    const orden =
+      typeof ordenRaw === "string" && ordenRaw.trim()
+        ? ordenRaw.trim()
+        : "recientes";
+
+    const excludeFollowingRaw = req.query.exclude_following;
+    const excludeFollowing =
+      excludeFollowingRaw === "1" ||
+      excludeFollowingRaw === "true";
+
+    const soloAdminRaw = req.query.solo_admin;
+    const rutinasOficialesRaw =
+      req.query.rutinas_oficiales ?? req.query.solo_admin;
+    const soloAdmin =
+      rutinasOficialesRaw === "1" ||
+      rutinasOficialesRaw === "true" ||
+      soloAdminRaw === "1" ||
+      soloAdminRaw === "true";
+    const adminEmail = "admin@gmail.com";
+
+    const adminIdRaw = req.query.admin_id;
+    const adminId =
+      typeof adminIdRaw === "string" && adminIdRaw.trim()
+        ? Number(adminIdRaw)
+        : undefined;
+
+    if (adminIdRaw != null && (adminId == null || Number.isNaN(adminId))) {
+      return res.status(400).json({ error: "admin_id inválido" });
+    }
+
+    const tipoCreadorRaw = req.query.tipo_creador;
+    const tipoCreador =
+      typeof tipoCreadorRaw === "string" && tipoCreadorRaw.trim()
+        ? tipoCreadorRaw.trim().toLowerCase()
+        : undefined;
+
+    if (
+      tipoCreador &&
+      !["usuario", "entrenador", "gimnasio"].includes(tipoCreador)
+    ) {
+      return res.status(400).json({ error: "tipo_creador inválido" });
+    }
+
+    const discoverFilters: {
+      viewerId?: number;
+      q?: string;
+      gruposMusculares?: string[];
+      orden?: string;
+      excludeFollowing?: boolean;
+      soloAdmin?: boolean;
+      adminId?: number;
+      adminEmail?: string;
+      tipoCreador?: string;
+    } = {
+      orden,
+      excludeFollowing,
+      soloAdmin,
+      adminEmail,
+    };
+
+    if (viewerId != null) {
+      discoverFilters.viewerId = viewerId;
+    }
+
+    if (q) {
+      discoverFilters.q = q;
+    }
+
+    if (gruposMusculares && gruposMusculares.length > 0) {
+      discoverFilters.gruposMusculares = gruposMusculares;
+    }
+
+    if (adminId != null) {
+      discoverFilters.adminId = adminId;
+    }
+
+    if (tipoCreador) {
+      discoverFilters.tipoCreador = tipoCreador;
+    }
+
+    const rutinas = await rutinaService.getDiscoverRutinas(discoverFilters);
+
+    return res.json(rutinas);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Error obteniendo rutinas para descubrir" });
+  }
+};
+
 export const getRutinaPorId = async (req: Request, res: Response) => {
   /*
     Busca una rutina específica.

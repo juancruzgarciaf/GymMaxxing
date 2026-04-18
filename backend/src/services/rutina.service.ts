@@ -48,6 +48,25 @@ type RutinaMetricSupport = {
   has_copy: boolean;
 };
 
+type DiscoverRutinaRow = RutinaRow & {
+  creador_username: string;
+  total_ejercicios: number;
+  grupos_musculares: string[];
+  creador_seguido: boolean;
+};
+
+type DiscoverRutinasFilters = {
+  viewerId?: number;
+  q?: string;
+  gruposMusculares?: string[];
+  orden?: string;
+  excludeFollowing?: boolean;
+  soloAdmin?: boolean;
+  adminId?: number;
+  adminEmail?: string;
+  tipoCreador?: string;
+};
+
 const resolveCarpetaTableByFk = async () => {
   const result = await pool.query<{ table_name: string; id_column: string }>(
     `SELECT target_table.relname AS table_name,
@@ -282,6 +301,160 @@ export const getRutinas = async (creadorId?: number) => {
          ORDER BY r.fecha_creacion DESC`,
     creadorId == null ? [] : [creadorId]
   );
+  return result.rows;
+};
+
+const getUsuarioIdByEmail = async (email: string) => {
+  const result = await pool.query<{ id: number }>(
+    `SELECT id
+     FROM usuario
+     WHERE LOWER(email) = LOWER($1)
+     LIMIT 1`,
+    [email]
+  );
+
+  return result.rows[0]?.id ?? null;
+};
+
+const getDiscoverOrderSql = (orden: string | undefined) => {
+  switch (orden) {
+    case "populares":
+      return "ORDER BY (r.save_count + r.copy_count) DESC, r.fecha_creacion DESC";
+    case "copiadas":
+      return "ORDER BY r.copy_count DESC, r.fecha_creacion DESC";
+    case "guardadas":
+      return "ORDER BY r.save_count DESC, r.fecha_creacion DESC";
+    case "random":
+      return "ORDER BY RANDOM()";
+    case "recientes":
+    default:
+      return "ORDER BY r.fecha_creacion DESC";
+  }
+};
+
+export const getDiscoverRutinas = async (filters: DiscoverRutinasFilters) => {
+  const support = await getRutinaMetricsSupport();
+  const params: Array<number | string | string[]> = [];
+  const whereClauses: string[] = ["TRUE"];
+
+  const {
+    viewerId,
+    q,
+    gruposMusculares,
+    orden,
+    excludeFollowing,
+    soloAdmin,
+    adminId,
+    adminEmail,
+    tipoCreador,
+  } = filters;
+
+  const resolvedAdminId =
+    adminId ?? (await getUsuarioIdByEmail(adminEmail ?? "admin@gmail.com"));
+
+  if (viewerId != null) {
+    params.push(viewerId);
+    whereClauses.push(`r.creador_id <> $${params.length}`);
+  }
+
+  if (excludeFollowing && viewerId != null) {
+    params.push(viewerId);
+    whereClauses.push(`NOT EXISTS (
+      SELECT 1
+      FROM seguimientousuario su
+      WHERE su.id_seguidor = $${params.length}
+        AND su.id_seguido = r.creador_id
+    )`);
+
+    if (!soloAdmin && resolvedAdminId != null) {
+      params.push(resolvedAdminId);
+      whereClauses.push(`r.creador_id <> $${params.length}`);
+    }
+  }
+
+  if (soloAdmin) {
+    if (resolvedAdminId == null) {
+      whereClauses.push("FALSE");
+    } else {
+      params.push(resolvedAdminId);
+      whereClauses.push(`r.creador_id = $${params.length}`);
+    }
+  }
+
+  if (q) {
+    params.push(`%${q}%`);
+    whereClauses.push(`r.nombre ILIKE $${params.length}`);
+  }
+
+  if (tipoCreador) {
+    params.push(tipoCreador);
+    whereClauses.push(`LOWER(u.tipo_usuario) = LOWER($${params.length})`);
+
+    // Las rutinas oficiales (admin@gmail.com) no deben contaminar filtros
+    // de creadores comunes, entrenadores o gimnasios.
+    if (!soloAdmin && resolvedAdminId != null) {
+      params.push(resolvedAdminId);
+      whereClauses.push(`r.creador_id <> $${params.length}`);
+    }
+  }
+
+  if (gruposMusculares && gruposMusculares.length > 0) {
+    params.push(gruposMusculares);
+    whereClauses.push(`EXISTS (
+      SELECT 1
+      FROM rutinaejercicio re
+      JOIN ejercicio e ON e.id_ejercicio = re.id_ejercicio
+      WHERE re.id_rutina = r.id_rutina
+        AND e.grupo_muscular = ANY($${params.length}::text[])
+    )`);
+  }
+
+  const viewerFollowSql =
+    viewerId == null
+      ? "FALSE AS creador_seguido"
+      : (() => {
+          params.push(viewerId);
+          return `EXISTS (
+            SELECT 1
+            FROM seguimientousuario su
+            WHERE su.id_seguidor = $${params.length}
+              AND su.id_seguido = r.creador_id
+          ) AS creador_seguido`;
+        })();
+
+  const result = await pool.query<DiscoverRutinaRow>(
+    `SELECT r.id_rutina,
+            r.nombre,
+            r.descripcion,
+            r.duracion_estimada,
+            r.fecha_creacion,
+            r.creador_id,
+            r.id_carpeta,
+            r.save_count,
+            r.copy_count,
+            u.username AS creador_username,
+            (
+              SELECT COUNT(*)::int
+              FROM rutinaejercicio re
+              WHERE re.id_rutina = r.id_rutina
+            ) AS total_ejercicios,
+            COALESCE((
+              SELECT ARRAY_AGG(DISTINCT e.grupo_muscular ORDER BY e.grupo_muscular)
+              FROM rutinaejercicio re
+              JOIN ejercicio e ON e.id_ejercicio = re.id_ejercicio
+              WHERE re.id_rutina = r.id_rutina
+            ), ARRAY[]::text[]) AS grupos_musculares,
+            ${viewerFollowSql}
+     FROM (
+       ${buildRutinaSelectSql("base", support)}
+     ) r
+     JOIN usuario u ON u.id = r.creador_id
+     WHERE ${whereClauses.join(" AND ")}
+     ${getDiscoverOrderSql(orden)}
+     LIMIT 80`,
+    params
+  );
+
   return result.rows;
 };
 

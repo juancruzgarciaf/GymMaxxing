@@ -70,6 +70,13 @@ export type RoutineSummary = {
   copy_count: number;
 };
 
+export type DiscoverRoutineSummary = RoutineSummary & {
+  creador_username: string;
+  total_ejercicios: number;
+  grupos_musculares: string[];
+  creador_seguido: boolean;
+};
+
 export type RoutineExerciseDetailed = {
   id_rutina: number;
   id_ejercicio: number;
