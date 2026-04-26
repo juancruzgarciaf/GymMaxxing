@@ -8,6 +8,7 @@ import type { RoutineSummary, TrainingSeed, Usuario } from "../types";
 
 type RutinaCompartidaProps = {
   usuario: Usuario;
+  canTrain: boolean;
   routineId: number;
   onClose: () => void;
   onCopyToTraining: (seed: TrainingSeed) => void;
@@ -15,6 +16,7 @@ type RutinaCompartidaProps = {
 
 function RutinaCompartida({
   usuario,
+  canTrain,
   routineId,
   onClose,
   onCopyToTraining,
@@ -144,17 +146,25 @@ function RutinaCompartida({
 
           <article className="box">
             <h2>Que puedes hacer</h2>
-            <p className="helper-text">
-              Copiarla a Entrenamiento para arrancar una sesion nueva ahora mismo.
-            </p>
+            {canTrain ? (
+              <p className="helper-text">
+                Copiarla a Entrenamiento para arrancar una sesion nueva ahora mismo.
+              </p>
+            ) : (
+              <p className="helper-text">
+                Las cuentas gimnasio no pueden iniciar entrenamientos.
+              </p>
+            )}
             <p className="helper-text">
               Guardarla como tu propia rutina para tenerla en tu biblioteca.
             </p>
 
             <div className="actions-row">
-              <button type="button" className="btn" onClick={() => onCopyToTraining(seed)}>
-                Copiar a entrenamiento
-              </button>
+              {canTrain ? (
+                <button type="button" className="btn" onClick={() => onCopyToTraining(seed)}>
+                  Copiar a entrenamiento
+                </button>
+              ) : null}
               <div className="action-with-metric">
                 <button
                   type="button"

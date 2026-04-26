@@ -1,26 +1,40 @@
-import { useState, type FormEventHandler } from "react";
+import { useEffect, useState, type FormEventHandler } from "react";
 import showcase from "../assets/login-showcase.png";
 import logo from "../assets/logo.png";
 import type { Usuario } from "../types";
 
 type LoginProps = {
   goToRegister: () => void;
-  onLoginSuccess: (usuario: Usuario) => void;
+  onLoginSuccess: (usuario: Usuario, token: string) => void;
 };
 
 function Login({ goToRegister, onLoginSuccess }: LoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "error" | "ok"; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!feedback) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setFeedback(null);
+    }, 3200);
+
+    return () => window.clearTimeout(timer);
+  }, [feedback]);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      alert("Completa email y password");
+      setFeedback({ type: "error", text: "Completa email y password" });
       return;
     }
 
     try {
       setLoading(true);
+      setFeedback(null);
       const res = await fetch("http://localhost:3000/auth/login", {
         method: "POST",
         headers: {
@@ -29,21 +43,21 @@ function Login({ goToRegister, onLoginSuccess }: LoginProps) {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = (await res.json()) as { usuario?: Usuario; error?: string };
+      const data = (await res.json()) as { usuario?: Usuario; token?: string; error?: string };
 
       if (!res.ok) {
-        alert(data.error || "Credenciales incorrectas");
+        setFeedback({ type: "error", text: data.error || "Credenciales incorrectas" });
         return;
       }
 
-      if (data.usuario) {
-        onLoginSuccess(data.usuario);
+      if (data.usuario && data.token) {
+        onLoginSuccess(data.usuario, data.token);
       } else {
-        alert("No se pudo iniciar sesion.");
+        setFeedback({ type: "error", text: "No se pudo iniciar sesion." });
       }
     } catch (error) {
       console.error(error);
-      alert("Error conectando al backend");
+      setFeedback({ type: "error", text: "Error conectando al backend" });
     } finally {
       setLoading(false);
     }
@@ -71,6 +85,7 @@ function Login({ goToRegister, onLoginSuccess }: LoginProps) {
           </div>
           <h2>Iniciar sesion</h2>
           <p className="auth-subtitle">Bienvenido de nuevo.</p>
+          {feedback ? <p className={`status ${feedback.type}`}>{feedback.text}</p> : null}
 
           <form onSubmit={submit} className="auth-form">
             <input

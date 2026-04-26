@@ -209,6 +209,18 @@ export const getUsuarioPorId = async (id: number) => {
   return result.rows[0] ? sanitizeUser(result.rows[0]) : null;
 };
 
+export const getUserRoleById = async (id: number) => {
+  const result = await pool.query<{ tipo_usuario: string }>(
+    `SELECT tipo_usuario
+     FROM usuario
+     WHERE id = $1`,
+    [id]
+  );
+
+  const role = result.rows[0]?.tipo_usuario;
+  return role ? role.toLowerCase() : null;
+};
+
 export const updateUser = async (id: number, data: Partial<UsuarioRow>) => {
   const {
     username,

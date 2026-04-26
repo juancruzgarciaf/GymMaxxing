@@ -133,6 +133,8 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
   const [guardarNombre, setGuardarNombre] = useState("");
   const [guardarDescripcion, setGuardarDescripcion] = useState("");
   const [guardarCarpetaId, setGuardarCarpetaId] = useState("");
+  const [guardarComoRutina, setGuardarComoRutina] = useState(false);
+  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
 
   const totalSeriesEjecucion = useMemo(
     () => ejecucionEjercicios.reduce((acc, ejercicio) => acc + ejercicio.series.length, 0),
@@ -276,9 +278,11 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
     setGuardarNombre("");
     setGuardarDescripcion("");
     setGuardarCarpetaId("");
+    setGuardarComoRutina(false);
     setFiltroEquipo("");
     setFiltroMusculo("");
     setBusquedaEjercicio("");
+    setConfirmDiscardOpen(false);
   };
 
   const renderToast = () => {
@@ -657,11 +661,6 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
       return;
     }
 
-    const confirmar = window.confirm("Descartar este entrenamiento? Se borrara por completo.");
-    if (!confirmar) {
-      return;
-    }
-
     try {
       setLoading(true);
       setError("");
@@ -681,6 +680,14 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
     } finally {
       setLoading(false);
     }
+  };
+
+  const requestDescartarEntrenamiento = () => {
+    if (!sesionActiva) {
+      resetEntrenamiento();
+      return;
+    }
+    setConfirmDiscardOpen(true);
   };
 
   const guardarEntrenamiento = async () => {
@@ -707,10 +714,6 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
       if (!updateRes.ok) {
         throw new Error(await parseError(updateRes, "No se pudo guardar el entrenamiento"));
       }
-
-      const guardarComoRutina = window.confirm(
-        "Quieres guardar este entrenamiento tambien como rutina?",
-      );
 
       if (guardarComoRutina) {
         const currentSeed = buildCurrentTrainingSeed();
@@ -744,6 +747,63 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
     });
   }, [seed, seedKey]);
 
+  const renderDiscardModal = () => {
+    if (!confirmDiscardOpen) {
+      return null;
+    }
+
+    return (
+      <div
+        className="modal-backdrop"
+        role="presentation"
+        onClick={() => {
+          if (!loading) {
+            setConfirmDiscardOpen(false);
+          }
+        }}
+      >
+        <div
+          className="modal-card save-name-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Descartar entrenamiento"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="modal-head">
+            <h2>Descartar entrenamiento</h2>
+            <button
+              type="button"
+              className="modal-close"
+              onClick={() => setConfirmDiscardOpen(false)}
+              disabled={loading}
+            >
+              ×
+            </button>
+          </div>
+          <p className="helper-text">Se borrara por completo. ¿Quieres continuar?</p>
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setConfirmDiscardOpen(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              onClick={() => void descartarEntrenamiento()}
+              disabled={loading}
+            >
+              {loading ? "Descartando..." : "Descartar"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (vista === "guardar") {
     return (
       <main className="app">
@@ -772,8 +832,8 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
           <article className="box">
             <h2>Que pasa al guardar</h2>
             <p className="helper-text">
-              Se guarda esta sesion en tu historial y despues te preguntamos si tambien la quieres
-              convertir en rutina.
+              Se guarda esta sesion en tu historial y puedes elegir si tambien quieres convertirla
+              en rutina.
             </p>
             <p className="helper-text">
               La carpeta solo se usa si decides guardar el entrenamiento como rutina.
@@ -800,6 +860,7 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
                 className="field"
                 value={guardarCarpetaId}
                 onChange={(event) => setGuardarCarpetaId(event.target.value)}
+                disabled={!guardarComoRutina}
               >
                 <option value="">Carpeta de rutina (opcional)</option>
                 {carpetas.map((carpeta) => (
@@ -808,13 +869,21 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
                   </option>
                 ))}
               </select>
+              <label className="discover-check">
+                <input
+                  type="checkbox"
+                  checked={guardarComoRutina}
+                  onChange={(event) => setGuardarComoRutina(event.target.checked)}
+                />
+                Guardar tambien como rutina
+              </label>
             </div>
 
             <div className="actions-row training-save-actions">
               <button
                 type="button"
                 className="btn danger"
-                onClick={() => void descartarEntrenamiento()}
+                onClick={requestDescartarEntrenamiento}
                 disabled={loading}
               >
                 Descartar entrenamiento
@@ -825,6 +894,7 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
             </div>
           </article>
         </section>
+        {renderDiscardModal()}
       </main>
     );
   }
@@ -861,7 +931,7 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
           <button
             type="button"
             className="btn secondary"
-            onClick={() => void descartarEntrenamiento()}
+            onClick={requestDescartarEntrenamiento}
             disabled={loading}
           >
             Cancelar
@@ -1126,6 +1196,7 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
             </div>
           </aside>
         </section>
+        {renderDiscardModal()}
       </main>
     );
   }
@@ -1174,6 +1245,7 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
           </p>
         </article>
       </section>
+      {renderDiscardModal()}
     </main>
   );
 }

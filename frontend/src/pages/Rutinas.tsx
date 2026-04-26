@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createRoutineShareUrl } from "../lib/trainingTransfer";
+import { canUseTrainingFeatures } from "../lib/roles";
 import type { Usuario } from "../types";
 
 type Rutina = {
@@ -92,6 +93,7 @@ type SesionEntrenamiento = {
 
 type RutinasProps = {
   usuario: Usuario;
+  canTrain?: boolean;
 };
 
 type VistaRutinas = "lista" | "editor" | "ejecucion";
@@ -180,7 +182,8 @@ const SET_TIPO_OPTIONS: Array<{ value: SetTipo; label: string }> = [
   { value: "failure", label: "Failure" },
 ];
 
-function Rutinas({ usuario }: RutinasProps) {
+function Rutinas({ usuario, canTrain }: RutinasProps) {
+  const canStartTraining = canTrain ?? canUseTrainingFeatures(usuario);
   const [vista, setVista] = useState<VistaRutinas>("lista");
   const [loading, setLoading] = useState(false);
   const [mensaje, setMensaje] = useState("");
@@ -202,6 +205,17 @@ function Rutinas({ usuario }: RutinasProps) {
     id: null,
     value: "",
   });
+  const [createFolderModal, setCreateFolderModal] = useState({
+    open: false,
+    value: "",
+  });
+  const [shareModal, setShareModal] = useState({
+    open: false,
+    url: "",
+  });
+  const [pendingRoutineDelete, setPendingRoutineDelete] = useState<Rutina | null>(null);
+  const [pendingFolderDelete, setPendingFolderDelete] = useState<CarpetaRutina | null>(null);
+  const [finalizeModalOpen, setFinalizeModalOpen] = useState(false);
   const [busquedaRutina, setBusquedaRutina] = useState("");
   const [resumenLoading, setResumenLoading] = useState(false);
   const [resumenEjercicios, setResumenEjercicios] = useState<ResumenEjercicio[]>([]);
@@ -536,8 +550,9 @@ function Rutinas({ usuario }: RutinasProps) {
   };
 
   const handleCrearCarpeta = async () => {
-    const nombre = window.prompt("Nombre de la carpeta");
-    if (!nombre || !nombre.trim()) {
+    const nombre = createFolderModal.value.trim();
+    if (!nombre) {
+      setError("El nombre de la carpeta es obligatorio");
       return;
     }
 
@@ -548,7 +563,7 @@ function Rutinas({ usuario }: RutinasProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          nombre: nombre.trim(),
+          nombre,
           usuario_id: usuario.id,
         }),
       });
@@ -558,26 +573,22 @@ function Rutinas({ usuario }: RutinasProps) {
       }
 
       await cargarCarpetas();
+      setCreateFolderModal({ open: false, value: "" });
       setMensaje("Carpeta creada");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error creando carpeta");
     }
   };
 
-  const handleEliminarRutina = async () => {
-    if (!rutinaSeleccionada) {
-      return;
-    }
-
-    const confirmar = window.confirm(`Eliminar la rutina "${rutinaSeleccionada.nombre}"?`);
-    if (!confirmar) {
+  const handleEliminarRutina = async (rutina: Rutina | null) => {
+    if (!rutina) {
       return;
     }
 
     try {
       setError("");
       setMensaje("");
-      const res = await fetch(`${API}/rutinas/${rutinaSeleccionada.id_rutina}`, {
+      const res = await fetch(`${API}/rutinas/${rutina.id_rutina}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -591,6 +602,7 @@ function Rutinas({ usuario }: RutinasProps) {
 
       await cargarRutinas();
       setSelectedRutinaId(null);
+      setPendingRoutineDelete(null);
       setMensaje("Rutina eliminada");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error eliminando rutina");
@@ -702,7 +714,7 @@ function Rutinas({ usuario }: RutinasProps) {
       // fallback abajo
     }
 
-    window.prompt("Copiá este link para compartir la rutina", url);
+    setShareModal({ open: true, url });
   };
 
   const abrirModalRenombrarCarpeta = (carpeta: CarpetaRutina) => {
@@ -778,13 +790,6 @@ function Rutinas({ usuario }: RutinasProps) {
   };
 
   const eliminarCarpeta = async (carpeta: CarpetaRutina) => {
-    const confirmar = window.confirm(
-      `Eliminar carpeta "${carpeta.nombre}"? Las rutinas quedaran en "Sin carpeta".`,
-    );
-    if (!confirmar) {
-      return;
-    }
-
     try {
       setOpenFolderMenuId(null);
       setError("");
@@ -802,6 +807,7 @@ function Rutinas({ usuario }: RutinasProps) {
       }
 
       await Promise.all([cargarCarpetas(), cargarRutinas()]);
+      setPendingFolderDelete(null);
       setMensaje("Carpeta eliminada");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error eliminando carpeta");
@@ -919,7 +925,7 @@ function Rutinas({ usuario }: RutinasProps) {
 
   const guardarRutina = async () => {
     if (!editorNombre.trim()) {
-      alert("El nombre de la rutina es obligatorio");
+      setError("El nombre de la rutina es obligatorio");
       return;
     }
 
@@ -1027,6 +1033,11 @@ function Rutinas({ usuario }: RutinasProps) {
 
   const iniciarRutina = async () => {
     if (!rutinaSeleccionada) {
+      return;
+    }
+
+    if (!canStartTraining) {
+      setError("Las cuentas gimnasio no pueden iniciar entrenamientos");
       return;
     }
 
@@ -1230,13 +1241,15 @@ function Rutinas({ usuario }: RutinasProps) {
     }
   };
 
-  const finalizarRutina = async () => {
+  const abrirModalFinalizarRutina = () => {
+    setFinalizeModalOpen(true);
+  };
+
+  const finalizarRutina = async (shouldOverwrite: boolean) => {
     try {
       setLoading(true);
       setError("");
-      const shouldOverwrite =
-        rutinaEnEjecucion != null &&
-        window.confirm("Quieres sobre escribir la rutina actual con los cambios de esta sesion?");
+      setFinalizeModalOpen(false);
       if (sesionActiva) {
         const res = await fetch(`${API}/entrenamientos/${sesionActiva.id_sesion}/finalizar`, {
           method: "POST",
@@ -1441,7 +1454,14 @@ function Rutinas({ usuario }: RutinasProps) {
               <button type="button" onClick={() => duplicarCarpeta(carpeta)}>
                 Duplicar carpeta
               </button>
-              <button type="button" className="danger" onClick={() => eliminarCarpeta(carpeta)}>
+              <button
+                type="button"
+                className="danger"
+                onClick={() => {
+                  setOpenFolderMenuId(null);
+                  setPendingFolderDelete(carpeta);
+                }}
+              >
                 Eliminar carpeta
               </button>
             </div>
@@ -1767,7 +1787,12 @@ function Rutinas({ usuario }: RutinasProps) {
             ← Volver
           </button>
           <h1>{rutinaEnEjecucion?.nombre || "Ejecucion de rutina"}</h1>
-          <button type="button" className="btn danger" onClick={finalizarRutina} disabled={loading}>
+          <button
+            type="button"
+            className="btn danger"
+            onClick={abrirModalFinalizarRutina}
+            disabled={loading}
+          >
             Finalizar rutina
           </button>
         </section>
@@ -1946,6 +1971,59 @@ function Rutinas({ usuario }: RutinasProps) {
             </div>
           </article>
         </section>
+
+        {finalizeModalOpen ? (
+          <div
+            className="modal-backdrop"
+            role="presentation"
+            onClick={() => {
+              if (!loading) {
+                setFinalizeModalOpen(false);
+              }
+            }}
+          >
+            <div
+              className="modal-card save-name-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Finalizar rutina"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="modal-head">
+                <h2>Finalizar rutina</h2>
+                <button
+                  type="button"
+                  className="modal-close"
+                  onClick={() => setFinalizeModalOpen(false)}
+                  disabled={loading}
+                >
+                  ×
+                </button>
+              </div>
+              <p className="helper-text">
+                ¿Quieres sobreescribir la rutina actual con los cambios de esta sesion?
+              </p>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => void finalizarRutina(false)}
+                  disabled={loading}
+                >
+                  {loading ? "Finalizando..." : "No, solo finalizar"}
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => void finalizarRutina(true)}
+                  disabled={loading}
+                >
+                  {loading ? "Finalizando..." : "Si, sobreescribir"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </main>
     );
   }
@@ -1992,7 +2070,11 @@ function Rutinas({ usuario }: RutinasProps) {
             <button className="btn secondary" type="button" onClick={handleBuscarRutinas}>
               Buscar
             </button>
-            <button className="btn secondary" type="button" onClick={handleCrearCarpeta}>
+            <button
+              className="btn secondary"
+              type="button"
+              onClick={() => setCreateFolderModal({ open: true, value: "" })}
+            >
               Nueva carpeta
             </button>
           </div>
@@ -2076,10 +2158,24 @@ function Rutinas({ usuario }: RutinasProps) {
                 <button type="button" className="btn secondary" onClick={() => void compartirRutina()}>
                   Compartir link
                 </button>
-                <button type="button" className="btn" onClick={iniciarRutina}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={iniciarRutina}
+                  disabled={!canStartTraining}
+                  title={
+                    canStartTraining
+                      ? "Comenzar rutina"
+                      : "Disponible para usuario y entrenador"
+                  }
+                >
                   Comenzar rutina
                 </button>
-                <button type="button" className="btn danger" onClick={handleEliminarRutina}>
+                <button
+                  type="button"
+                  className="btn danger"
+                  onClick={() => setPendingRoutineDelete(rutinaSeleccionada)}
+                >
                   Eliminar
                 </button>
               </div>
@@ -2132,8 +2228,186 @@ function Rutinas({ usuario }: RutinasProps) {
           </div>
         </div>
       )}
+
+      {createFolderModal.open ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setCreateFolderModal({ open: false, value: "" })}
+        >
+          <div
+            className="modal-card save-name-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Crear carpeta"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>Nueva carpeta</h2>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setCreateFolderModal({ open: false, value: "" })}
+                disabled={loading}
+              >
+                ×
+              </button>
+            </div>
+            <input
+              className="field"
+              placeholder="Nombre de carpeta"
+              value={createFolderModal.value}
+              onChange={(event) =>
+                setCreateFolderModal((prev) => ({
+                  ...prev,
+                  value: event.target.value,
+                }))
+              }
+            />
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setCreateFolderModal({ open: false, value: "" })}
+                disabled={loading}
+              >
+                Cancelar
+              </button>
+              <button type="button" className="btn" onClick={() => void handleCrearCarpeta()} disabled={loading}>
+                {loading ? "Creando..." : "Crear carpeta"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingRoutineDelete ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setPendingRoutineDelete(null)}
+        >
+          <div
+            className="modal-card save-name-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Eliminar rutina"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>Eliminar rutina</h2>
+              <button type="button" className="modal-close" onClick={() => setPendingRoutineDelete(null)}>
+                ×
+              </button>
+            </div>
+            <p className="helper-text">
+              ¿Eliminar la rutina "{pendingRoutineDelete.nombre}"?
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" onClick={() => setPendingRoutineDelete(null)}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn danger"
+                onClick={() => void handleEliminarRutina(pendingRoutineDelete)}
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingFolderDelete ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setPendingFolderDelete(null)}
+        >
+          <div
+            className="modal-card save-name-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Eliminar carpeta"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>Eliminar carpeta</h2>
+              <button type="button" className="modal-close" onClick={() => setPendingFolderDelete(null)}>
+                ×
+              </button>
+            </div>
+            <p className="helper-text">
+              ¿Eliminar carpeta "{pendingFolderDelete.nombre}"? Las rutinas quedaran en "Sin carpeta".
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" onClick={() => setPendingFolderDelete(null)}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn danger"
+                onClick={() => void eliminarCarpeta(pendingFolderDelete)}
+              >
+                Eliminar carpeta
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {shareModal.open ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setShareModal({ open: false, url: "" })}
+        >
+          <div
+            className="modal-card save-name-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Compartir rutina"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>Compartir rutina</h2>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setShareModal({ open: false, url: "" })}
+              >
+                ×
+              </button>
+            </div>
+            <p className="helper-text">Copia este link para compartir la rutina.</p>
+            <input className="field" value={shareModal.url} readOnly />
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setShareModal({ open: false, url: "" })}
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(shareModal.url);
+                  setMensaje("Link de rutina copiado");
+                  setShareModal({ open: false, url: "" });
+                }}
+              >
+                Copiar link
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
 
 export default Rutinas;
+

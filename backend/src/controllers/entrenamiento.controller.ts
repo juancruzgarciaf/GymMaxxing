@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import * as entrenamientoService from "../services/entrenamiento.service";
+import { getUserRoleById } from "../services/user.service";
 
 /*
   Este controller maneja lo que pasa mientras una persona entrena:
@@ -10,6 +11,31 @@ import * as entrenamientoService from "../services/entrenamiento.service";
 // =========================
 // SESION_ENTRENAMIENTO
 // =========================
+
+const isGymRole = (role: string | null) => role === "gimnasio";
+
+const ensureTrainingAllowed = async (
+  res: Response,
+  userId: number
+) => {
+  const role = await getUserRoleById(userId);
+
+  if (!role) {
+    res.status(404).json({
+      error: "Usuario no encontrado",
+    });
+    return false;
+  }
+
+  if (isGymRole(role)) {
+    res.status(403).json({
+      error: "Las cuentas de gimnasio no pueden iniciar ni registrar entrenamientos",
+    });
+    return false;
+  }
+
+  return true;
+};
 
 export const iniciarSesionEntrenamiento = async (
   req: Request,
@@ -26,13 +52,20 @@ export const iniciarSesionEntrenamiento = async (
     O sea, este endpoint prende la "sesión activa" con el contexto mínimo.
   */
   try {
-    const { usuario_id } = req.body;
+    const usuarioId = Number(req.body.usuario_id);
 
-    if (!usuario_id) {
+    if (Number.isNaN(usuarioId)) {
       return res.status(400).json({
         error: "usuario_id es obligatorio",
       });
     }
+
+    const allowed = await ensureTrainingAllowed(res, usuarioId);
+    if (!allowed) {
+      return;
+    }
+
+    req.body.usuario_id = usuarioId;
 
     const sesion = await entrenamientoService.iniciarSesionEntrenamiento(
       req.body
@@ -55,6 +88,18 @@ export const updateSesionEntrenamiento = async (req: Request, res: Response) => 
       return res.status(400).json({
         error: "id inválido",
       });
+    }
+
+    const sesionActual = await entrenamientoService.getSesionPorId(id);
+    if (!sesionActual) {
+      return res.status(404).json({
+        error: "Sesión no encontrada",
+      });
+    }
+
+    const allowed = await ensureTrainingAllowed(res, sesionActual.usuario_id);
+    if (!allowed) {
+      return;
     }
 
     const sesion = await entrenamientoService.updateSesionEntrenamiento(id, req.body);
@@ -165,6 +210,18 @@ export const registrarSerie = async (req: Request, res: Response) => {
         error:
           "repeticiones, orden, ejercicio_id y sesion_id son obligatorios",
       });
+    }
+
+    const sesion = await entrenamientoService.getSesionPorId(String(sesion_id));
+    if (!sesion) {
+      return res.status(404).json({
+        error: "Sesión no encontrada",
+      });
+    }
+
+    const allowed = await ensureTrainingAllowed(res, sesion.usuario_id);
+    if (!allowed) {
+      return;
     }
 
     const serie = await entrenamientoService.registrarSerie(req.body);
@@ -352,6 +409,18 @@ export const replaceSeriesDeSesion = async (req: Request, res: Response) => {
       });
     }
 
+    const sesion = await entrenamientoService.getSesionPorId(id);
+    if (!sesion) {
+      return res.status(404).json({
+        error: "Sesión no encontrada",
+      });
+    }
+
+    const allowed = await ensureTrainingAllowed(res, sesion.usuario_id);
+    if (!allowed) {
+      return;
+    }
+
     const nextSeries = series.filter(
       (serie) =>
         serie &&
@@ -394,6 +463,18 @@ export const finalizarSesion = async (req: Request, res: Response) => {
       });
     }
 
+    const sesion = await entrenamientoService.getSesionPorId(sesion_id);
+    if (!sesion) {
+      return res.status(404).json({
+        error: "Sesión no encontrada",
+      });
+    }
+
+    const allowed = await ensureTrainingAllowed(res, sesion.usuario_id);
+    if (!allowed) {
+      return;
+    }
+
     const resultado = await entrenamientoService.finalizarSesion(sesion_id);
 
     if (!resultado) {
@@ -421,17 +502,23 @@ export const deleteSesionEntrenamiento = async (req: Request, res: Response) => 
       });
     }
 
-    const sesion = await entrenamientoService.deleteSesionEntrenamiento(id);
-
+    const sesion = await entrenamientoService.getSesionPorId(id);
     if (!sesion) {
       return res.status(404).json({
         error: "Sesión no encontrada",
       });
     }
 
+    const allowed = await ensureTrainingAllowed(res, sesion.usuario_id);
+    if (!allowed) {
+      return;
+    }
+
+    const deletedSesion = await entrenamientoService.deleteSesionEntrenamiento(id);
+
     return res.json({
       mensaje: "Sesión eliminada",
-      sesion,
+      sesion: deletedSesion,
     });
   } catch (error) {
     console.error(error);

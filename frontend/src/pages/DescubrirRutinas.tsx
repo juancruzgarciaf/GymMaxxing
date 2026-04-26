@@ -42,6 +42,9 @@ function DescubrirRutinas({ usuario }: DescubrirRutinasProps) {
   const [detalleRutina, setDetalleRutina] = useState<RoutineSummary | null>(null);
   const [detalleEjercicios, setDetalleEjercicios] = useState<RoutineExerciseDetailed[]>([]);
   const [detalleLoading, setDetalleLoading] = useState(false);
+  const [copiarModalRutinaId, setCopiarModalRutinaId] = useState<number | null>(null);
+  const [copyNameDraft, setCopyNameDraft] = useState("");
+  const [copyingRoutine, setCopyingRoutine] = useState(false);
 
   const availableGroups = useMemo(() => {
     const grupos = new Set<string>();
@@ -117,14 +120,14 @@ function DescubrirRutinas({ usuario }: DescubrirRutinasProps) {
     }
   };
 
-  const handleCopiarRutina = async (rutinaId: number) => {
+  const handleCopiarRutina = async (rutinaId: number, customName?: string) => {
     try {
       setError("");
       setMensaje("");
       const { seed, routine } = await fetchRoutineSeed(rutinaId);
 
       await saveTrainingSeedAsRoutine(seed, usuario.id, {
-        name: `${routine.nombre} (Copia)`,
+        name: customName?.trim() || `${routine.nombre} (Copia)`,
         description: routine.descripcion,
       });
 
@@ -133,6 +136,46 @@ function DescubrirRutinas({ usuario }: DescubrirRutinasProps) {
       await fetchDescubrirRutinas();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo copiar la rutina");
+    }
+  };
+
+  const openCopyModal = (rutina: DiscoverRoutineSummary) => {
+    setCopiarModalRutinaId(rutina.id_rutina);
+    setCopyNameDraft(`${rutina.nombre} (Copia)`);
+  };
+
+  const closeCopyModal = () => {
+    if (copyingRoutine) {
+      return;
+    }
+    setCopiarModalRutinaId(null);
+    setCopyNameDraft("");
+  };
+
+  const closeDetailModal = () => {
+    setDetalleRutinaId(null);
+    setDetalleRutina(null);
+    setDetalleEjercicios([]);
+  };
+
+  const confirmCopyRoutine = async () => {
+    if (!copiarModalRutinaId) {
+      return;
+    }
+
+    const nextName = copyNameDraft.trim();
+    if (!nextName) {
+      setError("El nombre de la rutina no puede estar vacio");
+      return;
+    }
+
+    try {
+      setCopyingRoutine(true);
+      await handleCopiarRutina(copiarModalRutinaId, nextName);
+      setCopiarModalRutinaId(null);
+      setCopyNameDraft("");
+    } finally {
+      setCopyingRoutine(false);
     }
   };
 
@@ -304,7 +347,7 @@ function DescubrirRutinas({ usuario }: DescubrirRutinasProps) {
               <button
                 type="button"
                 className="btn"
-                onClick={() => void handleCopiarRutina(rutina.id_rutina)}
+                onClick={() => openCopyModal(rutina)}
               >
                 Copiar rutina
               </button>
@@ -321,63 +364,102 @@ function DescubrirRutinas({ usuario }: DescubrirRutinasProps) {
       </section>
 
       {detalleRutinaId != null ? (
-        <section className="box discover-detail">
-          <div className="detail-topbar">
-            <h2>Detalle de rutina #{detalleRutinaId}</h2>
-            <button
-              type="button"
-              className="btn secondary"
-              onClick={() => {
-                setDetalleRutinaId(null);
-                setDetalleRutina(null);
-                setDetalleEjercicios([]);
-              }}
-            >
-              Cerrar
-            </button>
-          </div>
+        <div className="modal-backdrop" role="presentation" onClick={closeDetailModal}>
+          <section
+            className="modal-card discover-detail-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Detalle de rutina"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="detail-topbar">
+              <h2>Detalle de rutina #{detalleRutinaId}</h2>
+              <button type="button" className="btn secondary" onClick={closeDetailModal}>
+                Cerrar
+              </button>
+            </div>
 
-          {detalleLoading ? (
-            <p className="helper-text">Cargando detalle...</p>
-          ) : (
-            <>
-              <h3 className="routine-title-xl">{detalleRutina?.nombre || "Rutina"}</h3>
-              <p className="helper-text">{detalleRutina?.descripcion || "Sin descripcion"}</p>
+            {detalleLoading ? (
+              <p className="helper-text">Cargando detalle...</p>
+            ) : (
+              <>
+                <h3 className="routine-title-xl">{detalleRutina?.nombre || "Rutina"}</h3>
+                <p className="helper-text">{detalleRutina?.descripcion || "Sin descripcion"}</p>
 
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Orden</th>
-                      <th>Ejercicio</th>
-                      <th>Grupo</th>
-                      <th>Series</th>
-                      <th>Reps</th>
-                      <th>Descanso</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detalleEjercicios.map((ejercicio) => (
-                      <tr key={`${ejercicio.id_rutina}-${ejercicio.id_ejercicio}`}>
-                        <td>{ejercicio.orden}</td>
-                        <td>{ejercicio.nombre}</td>
-                        <td>{ejercicio.grupo_muscular}</td>
-                        <td>{ejercicio.series}</td>
-                        <td>{ejercicio.repeticiones}</td>
-                        <td>{ejercicio.descanso}s</td>
-                      </tr>
-                    ))}
-                    {detalleEjercicios.length === 0 ? (
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
                       <tr>
-                        <td colSpan={6}>Esta rutina no tiene ejercicios.</td>
+                        <th>Orden</th>
+                        <th>Ejercicio</th>
+                        <th>Grupo</th>
+                        <th>Series</th>
+                        <th>Reps</th>
+                        <th>Descanso</th>
                       </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </section>
+                    </thead>
+                    <tbody>
+                      {detalleEjercicios.map((ejercicio) => (
+                        <tr key={`${ejercicio.id_rutina}-${ejercicio.id_ejercicio}`}>
+                          <td>{ejercicio.orden}</td>
+                          <td>{ejercicio.nombre}</td>
+                          <td>{ejercicio.grupo_muscular}</td>
+                          <td>{ejercicio.series}</td>
+                          <td>{ejercicio.repeticiones}</td>
+                          <td>{ejercicio.descanso}s</td>
+                        </tr>
+                      ))}
+                      {detalleEjercicios.length === 0 ? (
+                        <tr>
+                          <td colSpan={6}>Esta rutina no tiene ejercicios.</td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+      ) : null}
+
+      {copiarModalRutinaId != null ? (
+        <div className="modal-backdrop" role="presentation" onClick={closeCopyModal}>
+          <section
+            className="modal-card save-name-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Copiar rutina"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>Copiar rutina</h2>
+              <button type="button" className="modal-close" onClick={closeCopyModal} disabled={copyingRoutine}>
+                ×
+              </button>
+            </div>
+            <p className="helper-text">Elegi el nombre con el que queres guardarla en tus rutinas.</p>
+            <input
+              className="field"
+              placeholder="Nombre de rutina"
+              value={copyNameDraft}
+              onChange={(event) => setCopyNameDraft(event.target.value)}
+            />
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" onClick={closeCopyModal} disabled={copyingRoutine}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void confirmCopyRoutine()}
+                disabled={copyingRoutine}
+              >
+                {copyingRoutine ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </section>
+        </div>
       ) : null}
     </main>
   );

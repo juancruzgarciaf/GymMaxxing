@@ -3,6 +3,7 @@ import type { EntrenamientoResumen, SerieSesionDetalle } from "../types";
 
 type EntrenamientoDetalleProps = {
   entrenamiento: EntrenamientoResumen;
+  canTrain: boolean;
   onBack: () => void;
   onOpenProfile: (userId: number) => void;
   onCopyToTraining: (training: EntrenamientoResumen) => void;
@@ -86,6 +87,7 @@ function CopyIcon() {
 
 function EntrenamientoDetalle({
   entrenamiento,
+  canTrain,
   onBack,
   onOpenProfile,
   onCopyToTraining,
@@ -177,15 +179,17 @@ function EntrenamientoDetalle({
           <button type="button" className="btn secondary" onClick={onBack}>
             Volver
           </button>
-          <button
-            type="button"
-            className="social-action icon-only"
-            onClick={() => onCopyToTraining(entrenamiento)}
-            aria-label="Copiar entrenamiento"
-            title="Copiar entrenamiento"
-          >
-            <CopyIcon />
-          </button>
+          {canTrain ? (
+            <button
+              type="button"
+              className="social-action icon-only"
+              onClick={() => onCopyToTraining(entrenamiento)}
+              aria-label="Copiar entrenamiento"
+              title="Copiar entrenamiento"
+            >
+              <CopyIcon />
+            </button>
+          ) : null}
         </div>
         <button
           type="button"

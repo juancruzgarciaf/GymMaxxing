@@ -6,7 +6,7 @@ type HomeProps = {
   usuario: Usuario;
   onOpenProfile: (userId: number) => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
-  onSaveAsRoutine: (training: EntrenamientoResumen) => void;
+  onSaveAsRoutine: (training: EntrenamientoResumen, customName?: string) => void | Promise<void>;
 };
 
 const API = "http://localhost:3000";

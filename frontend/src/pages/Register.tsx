@@ -9,9 +9,18 @@ function Register({ goToLogin }: RegisterProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [tipoUsuario, setTipoUsuario] = useState("usuario");
+  const [loading, setLoading] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "error" | "ok"; text: string } | null>(null);
 
   const handleRegister = async () => {
+    if (!username.trim() || !email.trim() || !password.trim()) {
+      setFeedback({ type: "error", text: "Completa usuario, email y password" });
+      return;
+    }
+
     try {
+      setLoading(true);
+      setFeedback(null);
       const res = await fetch("http://localhost:3000/auth/register", {
         method: "POST",
         headers: {
@@ -28,19 +37,23 @@ function Register({ goToLogin }: RegisterProps) {
       const data = (await res.json()) as { id?: number; error?: string };
 
       if (!res.ok) {
-        alert(data.error || "Error al registrarse");
+        setFeedback({ type: "error", text: data.error || "Error al registrarse" });
         return;
       }
 
       if (data.id) {
-        alert("Usuario creado");
-        goToLogin();
+        setFeedback({ type: "ok", text: "Usuario creado. Redirigiendo al login..." });
+        window.setTimeout(() => {
+          goToLogin();
+        }, 850);
       } else {
-        alert("Respuesta invalida del servidor");
+        setFeedback({ type: "error", text: "Respuesta invalida del servidor" });
       }
     } catch (error) {
       console.error(error);
-      alert("Error conectando al backend");
+      setFeedback({ type: "error", text: "Error conectando al backend" });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -48,6 +61,16 @@ function Register({ goToLogin }: RegisterProps) {
     <div style={styles.container}>
       <div style={styles.card}>
         <h1 style={styles.title}>Crear cuenta</h1>
+        {feedback ? (
+          <p
+            style={{
+              ...styles.feedback,
+              ...(feedback.type === "error" ? styles.feedbackError : styles.feedbackOk),
+            }}
+          >
+            {feedback.text}
+          </p>
+        ) : null}
 
         <input
           style={styles.input}
@@ -81,8 +104,8 @@ function Register({ goToLogin }: RegisterProps) {
           <option value="gimnasio">Gimnasio</option>
         </select>
 
-        <button style={styles.button} onClick={handleRegister}>
-          Registrarse
+        <button style={styles.button} onClick={handleRegister} disabled={loading}>
+          {loading ? "Creando..." : "Registrarse"}
         </button>
 
         <p style={styles.link} onClick={goToLogin}>
@@ -128,6 +151,22 @@ const styles: Record<string, CSSProperties> = {
     backgroundColor: "#22c55e",
     fontWeight: "bold",
     cursor: "pointer",
+  },
+  feedback: {
+    margin: 0,
+    borderRadius: "8px",
+    padding: "10px 12px",
+    fontSize: "0.92rem",
+  },
+  feedbackError: {
+    border: "1px solid #7a2f35",
+    backgroundColor: "#2b1a1d",
+    color: "#ffc0c6",
+  },
+  feedbackOk: {
+    border: "1px solid #2d6042",
+    backgroundColor: "#172821",
+    color: "#b9f2d1",
   },
   link: {
     color: "#93c5fd",

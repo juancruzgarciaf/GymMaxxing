@@ -1,5 +1,11 @@
 import { Request, Response } from "express";
 import { pool } from "../db";
+import { createAuthToken } from "../utils/token";
+
+const sanitizeUser = <T extends { password?: string }>(user: T) => {
+  const { password: _password, ...safeUser } = user;
+  return safeUser;
+};
 
 /*
   primero mira si vino lo mínimo necesario,
@@ -71,7 +77,19 @@ export const register = async (req: Request, res: Response) => {
       ]
     );
 
-    return res.json(result.rows[0]);
+    const usuario = sanitizeUser(result.rows[0]);
+    const token = createAuthToken({
+      id: usuario.id,
+      email: usuario.email,
+      username: usuario.username,
+      tipo_usuario: usuario.tipo_usuario,
+    });
+
+    return res.json({
+      id: usuario.id,
+      usuario,
+      token,
+    });
 
   } catch (error) {
     console.error("ERROR REGISTER:", error);
@@ -122,9 +140,18 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
+    const safeUser = sanitizeUser(usuario);
+    const token = createAuthToken({
+      id: safeUser.id,
+      email: safeUser.email,
+      username: safeUser.username,
+      tipo_usuario: safeUser.tipo_usuario,
+    });
+
     res.json({
       mensaje: "Login exitoso",
-      usuario,
+      usuario: safeUser,
+      token,
     });
 
   } catch (error) {

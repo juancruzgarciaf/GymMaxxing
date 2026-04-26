@@ -6,7 +6,7 @@ type TrainingPostCardProps = {
   viewerId: number;
   onOpenProfile?: (userId: number) => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
-  onSaveAsRoutine?: (training: EntrenamientoResumen) => void;
+  onSaveAsRoutine?: (training: EntrenamientoResumen, customName?: string) => void | Promise<void>;
 };
 
 const API = "http://localhost:3000";
@@ -123,6 +123,10 @@ function TrainingPostCard({
   const [interactionLoading, setInteractionLoading] = useState(false);
   const [interactionError, setInteractionError] = useState("");
   const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
+  const [pendingDeleteCommentId, setPendingDeleteCommentId] = useState<number | null>(null);
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [saveRoutineName, setSaveRoutineName] = useState(item.titulo);
+  const [savingRoutine, setSavingRoutine] = useState(false);
 
   useEffect(() => {
     setLiked(item.viewer_liked);
@@ -136,7 +140,39 @@ function TrainingPostCard({
     setInteractionLoading(false);
     setInteractionError("");
     setDeletingCommentId(null);
+    setPendingDeleteCommentId(null);
+    setSaveModalOpen(false);
+    setSaveRoutineName(item.titulo);
+    setSavingRoutine(false);
   }, [item]);
+
+  const handleOpenSaveRoutineModal = () => {
+    setSaveRoutineName(item.titulo);
+    setSaveModalOpen(true);
+  };
+
+  const handleConfirmSaveRoutine = async () => {
+    if (!onSaveAsRoutine) {
+      return;
+    }
+
+    const nextName = saveRoutineName.trim();
+    if (!nextName) {
+      setInteractionError("El nombre de la rutina no puede estar vacio");
+      return;
+    }
+
+    try {
+      setSavingRoutine(true);
+      setInteractionError("");
+      await onSaveAsRoutine(item, nextName);
+      setSaveModalOpen(false);
+    } catch (error) {
+      setInteractionError(error instanceof Error ? error.message : "No se pudo guardar la rutina");
+    } finally {
+      setSavingRoutine(false);
+    }
+  };
 
   const loadComments = async () => {
     try {
@@ -250,11 +286,6 @@ function TrainingPostCard({
   };
 
   const handleDeleteComment = async (commentId: number) => {
-    const confirmed = window.confirm("¿Quieres borrar este comentario?");
-    if (!confirmed) {
-      return;
-    }
-
     try {
       setInteractionLoading(true);
       setDeletingCommentId(commentId);
@@ -292,6 +323,7 @@ function TrainingPostCard({
     } finally {
       setInteractionLoading(false);
       setDeletingCommentId(null);
+      setPendingDeleteCommentId(null);
     }
   };
 
@@ -384,7 +416,7 @@ function TrainingPostCard({
             <button
               type="button"
               className="social-action icon-only"
-              onClick={() => onSaveAsRoutine(item)}
+              onClick={handleOpenSaveRoutineModal}
               aria-label="Guardar como mi rutina"
               title="Guardar como mi rutina"
             >
@@ -445,7 +477,7 @@ function TrainingPostCard({
                       <button
                         type="button"
                         className="comment-delete-btn"
-                        onClick={() => void handleDeleteComment(comment.id_comentario)}
+                        onClick={() => setPendingDeleteCommentId(comment.id_comentario)}
                         disabled={interactionLoading && deletingCommentId === comment.id_comentario}
                         aria-label="Borrar comentario"
                         title="Borrar comentario"
@@ -459,6 +491,114 @@ function TrainingPostCard({
               ))}
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {saveModalOpen ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => {
+            if (!savingRoutine) {
+              setSaveModalOpen(false);
+            }
+          }}
+        >
+          <div
+            className="modal-card save-name-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Guardar rutina"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>Guardar rutina</h2>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setSaveModalOpen(false)}
+                disabled={savingRoutine}
+              >
+                ×
+              </button>
+            </div>
+            <p className="helper-text">Elegi el nombre con el que queres guardarla.</p>
+            <input
+              className="field"
+              placeholder="Nombre de rutina"
+              value={saveRoutineName}
+              onChange={(event) => setSaveRoutineName(event.target.value)}
+            />
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setSaveModalOpen(false)}
+                disabled={savingRoutine}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void handleConfirmSaveRoutine()}
+                disabled={savingRoutine}
+              >
+                {savingRoutine ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingDeleteCommentId != null ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => {
+            if (!interactionLoading) {
+              setPendingDeleteCommentId(null);
+            }
+          }}
+        >
+          <div
+            className="modal-card save-name-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Eliminar comentario"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>Eliminar comentario</h2>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setPendingDeleteCommentId(null)}
+                disabled={interactionLoading}
+              >
+                ×
+              </button>
+            </div>
+            <p className="helper-text">¿Quieres borrar este comentario?</p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setPendingDeleteCommentId(null)}
+                disabled={interactionLoading}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn danger"
+                onClick={() => void handleDeleteComment(pendingDeleteCommentId)}
+                disabled={interactionLoading}
+              >
+                {interactionLoading ? "Borrando..." : "Borrar"}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </article>

@@ -12,20 +12,30 @@ export const updateUser = async (req: Request, res: Response) => {
   /*
     Acá la lógica es:
     1. Agarrar el id que viene por URL para saber qué usuario tocar.
-    2. Leer del body los datos nuevos.
-    3. Ejecutar un UPDATE con todos esos campos.
-    4. Mandar null en los opcionales si no vinieron, así queda explícito qué guardar.
-    5. Si la query no devolvió filas, significa que ese id no existía.
-    6. Si todo salió bien, devuelve el usuario ya actualizado.
-
-    Ojo: este endpoint pisa los campos con lo que le manden.
+    2. Validar que haya token y que ese token sea del mismo usuario.
+    3. Leer del body los datos nuevos.
+    4. Ejecutar un UPDATE con todos esos campos.
+    5. Si no hay filas, el id no existía.
   */
   try {
     const id = Number(req.params.id);
+    const authUser = req.authUser;
 
     if (Number.isNaN(id)) {
       return res.status(400).json({
         error: "id inválido",
+      });
+    }
+
+    if (!authUser) {
+      return res.status(401).json({
+        error: "No autorizado",
+      });
+    }
+
+    if (authUser.id !== id) {
+      return res.status(403).json({
+        error: "Solo podes modificar tu propio usuario",
       });
     }
 
@@ -60,7 +70,6 @@ export const updateUser = async (req: Request, res: Response) => {
     }
 
     res.json(usuario);
-
   } catch (error) {
     console.error(error);
     res.status(500).json({
@@ -322,3 +331,4 @@ export const getFeed = async (req: Request, res: Response) => {
     });
   }
 };
+

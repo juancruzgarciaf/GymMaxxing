@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 import logo from "./assets/logo.png";
 import {
@@ -7,6 +7,7 @@ import {
   recordRoutineCopy,
   saveTrainingSeedAsRoutine,
 } from "./lib/trainingTransfer";
+import { canUseTrainingFeatures } from "./lib/roles";
 import type { EntrenamientoResumen, TrainingSeed, Usuario } from "./types";
 import Entrenamiento from "./pages/Entrenamiento";
 import Home from "./pages/Home";
@@ -30,6 +31,13 @@ type MainScreen =
   | "entrenamientoLibre"
   | "entrenamiento";
 
+const AUTH_STORAGE_KEY = "gymmaxxing_auth_v1";
+
+type StoredAuth = {
+  usuario: Usuario;
+  token: string;
+};
+
 const getSharedRoutineIdFromUrl = () => {
   const raw = new URLSearchParams(window.location.search).get("sharedRoutineId");
   if (!raw) {
@@ -40,8 +48,40 @@ const getSharedRoutineIdFromUrl = () => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
+const readStoredAuth = (): StoredAuth | null => {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<StoredAuth>;
+    if (!parsed.usuario || !parsed.token) {
+      return null;
+    }
+
+    return {
+      usuario: parsed.usuario,
+      token: parsed.token,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const persistAuth = (data: StoredAuth | null) => {
+  if (!data) {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    return;
+  }
+
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
+};
+
 function App() {
-  const [usuario, setUsuario] = useState<Usuario | null>(null);
+  const initialAuth = readStoredAuth();
+  const [usuario, setUsuario] = useState<Usuario | null>(initialAuth?.usuario ?? null);
+  const [authToken, setAuthToken] = useState<string | null>(initialAuth?.token ?? null);
   const [authScreen, setAuthScreen] = useState<AuthScreen>("login");
   const [mainScreen, setMainScreen] = useState<MainScreen>("home");
   const [sharedRoutineId, setSharedRoutineId] = useState<number | null>(getSharedRoutineIdFromUrl);
@@ -50,6 +90,18 @@ function App() {
   const [trainingReturnScreen, setTrainingReturnScreen] = useState<Exclude<MainScreen, "entrenamiento">>("home");
   const [trainingSeed, setTrainingSeed] = useState<TrainingSeed | null>(null);
   const [trainingSeedKey, setTrainingSeedKey] = useState(0);
+  const [appToast, setAppToast] = useState<{ type: "error" | "ok"; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!appToast) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setAppToast(null);
+    }, 3000);
+
+    return () => window.clearTimeout(timer);
+  }, [appToast]);
 
   const dismissSharedRoutine = () => {
     if (sharedRoutineId == null) {
@@ -86,6 +138,14 @@ function App() {
   };
 
   const openTrainingFromSeed = (seed: TrainingSeed) => {
+    if (!canUseTrainingFeatures(usuario)) {
+      setAppToast({
+        type: "error",
+        text: "Las cuentas gimnasio no pueden iniciar entrenamientos",
+      });
+      return;
+    }
+
     const sourceRoutineId = getSourceRoutineIdFromSeed(seed);
     if (usuario && sourceRoutineId != null) {
       void recordRoutineCopy(sourceRoutineId, usuario.id).catch((error) => {
@@ -98,15 +158,29 @@ function App() {
   };
 
   const handleCopyTrainingToWorkout = async (training: EntrenamientoResumen) => {
+    if (!canUseTrainingFeatures(usuario)) {
+      setAppToast({
+        type: "error",
+        text: "Las cuentas gimnasio no pueden iniciar entrenamientos",
+      });
+      return;
+    }
+
     try {
       const seed = await fetchSessionSeed(training);
       openTrainingFromSeed(seed);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "No se pudo copiar al entrenamiento");
+      setAppToast({
+        type: "error",
+        text: error instanceof Error ? error.message : "No se pudo copiar al entrenamiento",
+      });
     }
   };
 
-  const handleSaveTrainingAsRoutine = async (training: EntrenamientoResumen) => {
+  const handleSaveTrainingAsRoutine = async (
+    training: EntrenamientoResumen,
+    customName?: string,
+  ) => {
     if (!usuario) {
       return;
     }
@@ -114,12 +188,15 @@ function App() {
     try {
       const seed = await fetchSessionSeed(training);
       await saveTrainingSeedAsRoutine(seed, usuario.id, {
-        name: training.titulo,
+        name: customName?.trim() || training.titulo,
         description: training.descripcion,
       });
-      window.alert("Rutina guardada en tus rutinas");
+      setAppToast({ type: "ok", text: "Rutina guardada en tus rutinas" });
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "No se pudo guardar la rutina");
+      setAppToast({
+        type: "error",
+        text: error instanceof Error ? error.message : "No se pudo guardar la rutina",
+      });
     }
   };
 
@@ -129,6 +206,8 @@ function App() {
 
   const handleLogout = () => {
     setUsuario(null);
+    setAuthToken(null);
+    persistAuth(null);
     setAuthScreen("login");
     dismissSharedRoutine();
     setMainScreen("home");
@@ -145,8 +224,10 @@ function App() {
     return (
       <Login
         goToRegister={() => setAuthScreen("register")}
-        onLoginSuccess={(loggedUser) => {
+        onLoginSuccess={(loggedUser, token) => {
           setUsuario(loggedUser);
+          setAuthToken(token);
+          persistAuth({ usuario: loggedUser, token });
           setMainScreen(sharedRoutineId != null ? "rutinaCompartida" : "home");
           setSelectedProfileId(loggedUser.id);
         }}
@@ -154,8 +235,11 @@ function App() {
     );
   }
 
+  const canTrain = canUseTrainingFeatures(usuario);
+
   return (
     <div className="shell">
+      {appToast ? <div className={`toast-pop ${appToast.type}`}>{appToast.text}</div> : null}
       <header className="topbar">
         <div className="brand">
           <img src={logo} alt="GymMaxxing logo" className="brand-logo" />
@@ -191,13 +275,15 @@ function App() {
           >
             Feed
           </button>
-          <button
-            type="button"
-            className={`nav-btn ${mainScreen === "entrenamientoLibre" ? "active" : ""}`}
-            onClick={() => navigateTo("entrenamientoLibre")}
-          >
-            Entrenamiento
-          </button>
+          {canTrain ? (
+            <button
+              type="button"
+              className={`nav-btn ${mainScreen === "entrenamientoLibre" ? "active" : ""}`}
+              onClick={() => navigateTo("entrenamientoLibre")}
+            >
+              Entrenamiento
+            </button>
+          ) : null}
           <button
             type="button"
             className={`nav-btn ${mainScreen === "rutinas" ? "active" : ""}`}
@@ -238,7 +324,7 @@ function App() {
             onSaveAsRoutine={handleSaveTrainingAsRoutine}
           />
         ) : null}
-        {mainScreen === "entrenamientoLibre" ? (
+        {mainScreen === "entrenamientoLibre" && canTrain ? (
           <Entrenamiento
             usuario={usuario}
             seed={trainingSeed}
@@ -246,17 +332,27 @@ function App() {
             onSeedConsumed={() => setTrainingSeed(null)}
           />
         ) : null}
-        {mainScreen === "rutinas" ? <Rutinas usuario={usuario} /> : null}
+        {mainScreen === "rutinas" ? <Rutinas usuario={usuario} canTrain={canTrain} /> : null}
         {mainScreen === "descubrir" ? <DescubrirRutinas usuario={usuario} /> : null}
         {mainScreen === "rutinaCompartida" && sharedRoutineId != null ? (
           <RutinaCompartida
             usuario={usuario}
+            canTrain={canTrain}
             routineId={sharedRoutineId}
             onClose={() => {
               dismissSharedRoutine();
               setMainScreen("rutinas");
             }}
-            onCopyToTraining={openTrainingFromSeed}
+            onCopyToTraining={(seed) => {
+              if (!canTrain) {
+                setAppToast({
+                  type: "error",
+                  text: "Las cuentas gimnasio no pueden iniciar entrenamientos",
+                });
+                return;
+              }
+              openTrainingFromSeed(seed);
+            }}
           />
         ) : null}
         {mainScreen === "buscar" ? <Buscar usuario={usuario} onOpenProfile={openProfile} /> : null}
@@ -267,11 +363,19 @@ function App() {
             onOpenProfile={openProfile}
             onOpenTraining={(training) => openTraining(training, "perfil")}
             onSaveAsRoutine={handleSaveTrainingAsRoutine}
+            authToken={authToken}
+            onUserUpdated={(nextUser) => {
+              setUsuario(nextUser);
+              if (authToken) {
+                persistAuth({ usuario: nextUser, token: authToken });
+              }
+            }}
           />
         ) : null}
         {mainScreen === "entrenamiento" && selectedTraining ? (
           <EntrenamientoDetalle
             entrenamiento={selectedTraining}
+            canTrain={canTrain}
             onBack={goBackFromTraining}
             onOpenProfile={openProfile}
             onCopyToTraining={handleCopyTrainingToWorkout}

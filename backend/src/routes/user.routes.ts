@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requireAuth } from "../middleware/auth.middleware";
 import {
   searchUsers,
   getUserProfile,
@@ -23,6 +24,6 @@ router.post("/:id/follow", followUser);
 router.delete("/:id/follow", unfollowUser);
 router.get("/", getUsuarios);
 router.get("/:id", getUsuarioPorId);
-router.put("/:id", updateUser);
+router.put("/:id", requireAuth, updateUser);
 
 export default router;

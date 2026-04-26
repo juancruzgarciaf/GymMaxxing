@@ -1557,6 +1557,29 @@ h2 {
   margin-top: 4px;
 }
 
+.discover-detail-modal {
+  width: min(980px, calc(100vw - 24px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  background: linear-gradient(145deg, #19242d 0%, #121920 100%);
+  color: #d8e2ea;
+}
+
+.save-name-modal {
+  width: min(560px, calc(100vw - 24px));
+  background: linear-gradient(145deg, #19242d 0%, #121920 100%);
+  color: #d8e2ea;
+}
+
+.save-name-modal .modal-head h2 {
+  color: #e5f8ff;
+}
+
+.save-name-modal .field {
+  background: #141c23;
+  color: #d8e2ea;
+}
+
 @media (max-width: 1050px) {
   .auth-grid {
     grid-template-columns: 1fr;
