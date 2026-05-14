@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import TrainingPostCard from "../components/TrainingPostCard";
+import { COUNTRY_OPTIONS } from "../lib/countries";
 import type { EntrenamientoResumen, PerfilUsuario, Usuario } from "../types";
 
 type PerfilProps = {
@@ -13,6 +14,7 @@ type PerfilProps = {
 };
 
 const API = "http://localhost:3000";
+const TRAINING_LEVEL_OPTIONS = ["Principiante", "Avanzado", "Veterano", "GYMMAXXER"];
 
 function Perfil({
   usuario,
@@ -38,6 +40,10 @@ function Perfil({
     nivel_entrenamiento: "",
     objetivo_entrenamiento: "",
   });
+  const currentNationalityIsKnown =
+    !form.nacionalidad || COUNTRY_OPTIONS.includes(form.nacionalidad);
+  const currentTrainingLevelIsKnown =
+    !form.nivel_entrenamiento || TRAINING_LEVEL_OPTIONS.includes(form.nivel_entrenamiento);
 
   const cargarPerfil = async () => {
     try {
@@ -207,13 +213,13 @@ function Perfil({
 
               <div className="profile-meta">
                 {perfil.usuario.nivel_entrenamiento ? (
-                  <span className="tag-soft">{perfil.usuario.nivel_entrenamiento}</span>
+                  <span className="tag-soft">Nivel: {perfil.usuario.nivel_entrenamiento}</span>
                 ) : null}
                 {perfil.usuario.objetivo_entrenamiento ? (
-                  <span className="tag-soft">{perfil.usuario.objetivo_entrenamiento}</span>
+                  <span className="tag-soft">Objetivo: {perfil.usuario.objetivo_entrenamiento}</span>
                 ) : null}
                 {perfil.usuario.nacionalidad ? (
-                  <span className="tag-soft">{perfil.usuario.nacionalidad}</span>
+                  <span className="tag-soft">Nacionalidad: {perfil.usuario.nacionalidad}</span>
                 ) : null}
               </div>
             </div>
@@ -269,18 +275,36 @@ function Perfil({
                   value={form.altura}
                   onChange={(event) => setForm((prev) => ({ ...prev, altura: event.target.value }))}
                 />
-                <input
+                <select
                   className="field"
-                  placeholder="Nacionalidad"
                   value={form.nacionalidad}
                   onChange={(event) => setForm((prev) => ({ ...prev, nacionalidad: event.target.value }))}
-                />
-                <input
+                >
+                  <option value="">Nacionalidad</option>
+                  {!currentNationalityIsKnown ? (
+                    <option value={form.nacionalidad}>{form.nacionalidad}</option>
+                  ) : null}
+                  {COUNTRY_OPTIONS.map((country) => (
+                    <option key={country} value={country}>
+                      {country}
+                    </option>
+                  ))}
+                </select>
+                <select
                   className="field"
-                  placeholder="Nivel de entrenamiento"
                   value={form.nivel_entrenamiento}
                   onChange={(event) => setForm((prev) => ({ ...prev, nivel_entrenamiento: event.target.value }))}
-                />
+                >
+                  <option value="">Nivel de entrenamiento</option>
+                  {!currentTrainingLevelIsKnown ? (
+                    <option value={form.nivel_entrenamiento}>{form.nivel_entrenamiento}</option>
+                  ) : null}
+                  {TRAINING_LEVEL_OPTIONS.map((level) => (
+                    <option key={level} value={level}>
+                      {level}
+                    </option>
+                  ))}
+                </select>
                 <input
                   className="field"
                   placeholder="Objetivo de entrenamiento"
