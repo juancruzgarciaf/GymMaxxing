@@ -10,6 +10,7 @@ import type { DiscoverRoutineSummary, RoutineExerciseDetailed, RoutineSummary, U
 
 type DescubrirRutinasProps = {
   usuario: Usuario;
+  onBack?: () => void;
 };
 
 type OrdenDiscover = "recientes" | "populares" | "copiadas" | "guardadas" | "random";
@@ -24,7 +25,7 @@ const ORDEN_OPTIONS: Array<{ value: OrdenDiscover; label: string }> = [
   { value: "random", label: "Random" },
 ];
 
-function DescubrirRutinas({ usuario }: DescubrirRutinasProps) {
+function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
@@ -212,12 +213,19 @@ function DescubrirRutinas({ usuario }: DescubrirRutinasProps) {
 
   return (
     <main className="page-shell">
-      <section className="page-hero compact">
-        <p className="eyebrow">Descubrir Rutinas</p>
-        <h1>Explora rutinas nuevas</h1>
-        <p className="subtitle">
-          Aqui aparecen rutinas publicas de otros usuarios para descubrir, ver y copiar.
-        </p>
+      <section className={`page-hero compact ${onBack ? "discover-branch-hero" : ""}`}>
+        {onBack ? (
+          <button type="button" className="btn secondary" onClick={onBack}>
+            Volver
+          </button>
+        ) : null}
+        <div>
+          <p className="eyebrow">Descubrir Rutinas</p>
+          <h1>Explora rutinas nuevas</h1>
+          <p className="subtitle">
+            Aqui aparecen rutinas publicas de otros usuarios para descubrir, ver y copiar.
+          </p>
+        </div>
       </section>
 
       {error ? <div className="status error">{error}</div> : null}

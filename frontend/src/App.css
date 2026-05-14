@@ -1596,6 +1596,78 @@ h2 {
   gap: 10px;
 }
 
+.discover-module-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.discover-module-card {
+  min-height: 210px;
+  border: 1px solid #2f3b45;
+  border-radius: 18px;
+  padding: 20px;
+  background: linear-gradient(145deg, #19242d 0%, #121920 100%);
+  color: #d8e2ea;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  text-align: left;
+}
+
+button.discover-module-card {
+  cursor: pointer;
+  transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+
+button.discover-module-card:hover {
+  border-color: #5fbb85;
+  transform: translateY(-2px);
+  background: linear-gradient(145deg, #1c2d35 0%, #121f26 100%);
+}
+
+.discover-module-card span,
+.discover-module-card h2 {
+  margin: 0;
+  color: #e5f8ff;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.discover-module-card small,
+.discover-module-card p {
+  margin: 0;
+  color: #9fb3c1;
+  line-height: 1.45;
+}
+
+.discover-module-card.is-muted {
+  min-height: 180px;
+}
+
+.discover-module-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: #13263a;
+  color: #8fe5b2;
+  border: 1px solid #2f4e68;
+}
+
+.discover-module-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.discover-branch-hero {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 16px;
+}
+
 .discover-controls {
   display: grid;
   gap: 12px;
@@ -1740,6 +1812,14 @@ h2 {
   .discover-main-filters {
     grid-template-columns: 1fr 1fr;
   }
+
+  .discover-module-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .discover-branch-hero {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1840,6 +1920,10 @@ h2 {
 
   .discover-main-filters {
     grid-template-columns: 1fr;
+  }
+
+  .discover-module-card {
+    min-height: 170px;
   }
 
   .comment-form {

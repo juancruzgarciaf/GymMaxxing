@@ -12,7 +12,7 @@ import type { EntrenamientoResumen, TrainingSeed, Usuario } from "./types";
 import Entrenamiento, { type ActiveTrainingSnapshot } from "./pages/Entrenamiento";
 import Home from "./pages/Home";
 import Buscar from "./pages/Buscar";
-import DescubrirRutinas from "./pages/DescubrirRutinas";
+import Descubrir from "./pages/Descubrir";
 import EntrenamientoDetalle from "./pages/EntrenamientoDetalle";
 import Login from "./pages/Login";
 import Perfil from "./pages/Perfil";
@@ -384,7 +384,7 @@ function App() {
             onStartTraining={(seed) => openTrainingFromSeed(seed, { recordCopy: false })}
           />
         ) : null}
-        {mainScreen === "descubrir" ? <DescubrirRutinas usuario={usuario} /> : null}
+        {mainScreen === "descubrir" ? <Descubrir usuario={usuario} /> : null}
         {mainScreen === "rutinaCompartida" && sharedRoutineId != null ? (
           <RutinaCompartida
             usuario={usuario}
