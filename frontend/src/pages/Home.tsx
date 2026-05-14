@@ -10,6 +10,15 @@ type HomeProps = {
 };
 
 const API = "http://localhost:3000";
+const FEED_PAGE_SIZE = 10;
+
+type FeedResponse = {
+  items: EntrenamientoResumen[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
 
 function Home({
   usuario,
@@ -18,8 +27,15 @@ function Home({
   onSaveAsRoutine,
 }: HomeProps) {
   const [feed, setFeed] = useState<EntrenamientoResumen[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setPage(1);
+  }, [usuario.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,15 +45,30 @@ function Home({
         setLoading(true);
         setError("");
 
-        const res = await fetch(`${API}/users/${usuario.id}/feed`);
-        const data = (await res.json()) as EntrenamientoResumen[] | { error?: string };
+        const res = await fetch(`${API}/users/${usuario.id}/feed?page=${page}&pageSize=${FEED_PAGE_SIZE}`);
+        const data = (await res.json()) as EntrenamientoResumen[] | FeedResponse | { error?: string };
 
         if (!res.ok) {
           throw new Error("error" in data ? data.error || "No se pudo cargar el feed" : "No se pudo cargar el feed");
         }
 
         if (!cancelled) {
-          setFeed(Array.isArray(data) ? data : []);
+          if (Array.isArray(data)) {
+            setFeed(data);
+            setTotalItems(data.length);
+            setTotalPages(1);
+          } else if ("items" in data && Array.isArray(data.items)) {
+            setFeed(data.items);
+            setTotalItems(data.total);
+            setTotalPages(data.totalPages);
+            if (data.page !== page) {
+              setPage(data.page);
+            }
+          } else {
+            setFeed([]);
+            setTotalItems(0);
+            setTotalPages(1);
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -55,7 +86,11 @@ function Home({
     return () => {
       cancelled = true;
     };
-  }, [usuario.id]);
+  }, [page, usuario.id]);
+
+  const goToPage = (nextPage: number) => {
+    setPage(Math.min(Math.max(nextPage, 1), totalPages));
+  };
 
   return (
     <main className="page-shell">
@@ -88,6 +123,25 @@ function Home({
           />
         ))}
       </section>
+
+      {!loading && !error && totalItems > 0 && totalPages > 1 ? (
+        <nav className="feed-pagination" aria-label="Paginación del feed">
+          <button type="button" className="btn secondary" onClick={() => goToPage(page - 1)} disabled={page <= 1}>
+            Anterior
+          </button>
+          <span>
+            Página {page} de {totalPages}
+          </span>
+          <button
+            type="button"
+            className="btn secondary"
+            onClick={() => goToPage(page + 1)}
+            disabled={page >= totalPages}
+          >
+            Siguiente
+          </button>
+        </nav>
+      ) : null}
     </main>
   );
 }

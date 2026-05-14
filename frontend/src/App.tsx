@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 import logo from "./assets/logo.png";
 import {
@@ -9,7 +9,7 @@ import {
 } from "./lib/trainingTransfer";
 import { canUseTrainingFeatures } from "./lib/roles";
 import type { EntrenamientoResumen, TrainingSeed, Usuario } from "./types";
-import Entrenamiento from "./pages/Entrenamiento";
+import Entrenamiento, { type ActiveTrainingSnapshot } from "./pages/Entrenamiento";
 import Home from "./pages/Home";
 import Buscar from "./pages/Buscar";
 import DescubrirRutinas from "./pages/DescubrirRutinas";
@@ -78,6 +78,15 @@ const persistAuth = (data: StoredAuth | null) => {
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
 };
 
+const twoDigits = (value: number) => String(value).padStart(2, "0");
+
+const formatDuration = (totalSeconds: number) => {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const min = Math.floor(safeSeconds / 60);
+  const sec = safeSeconds % 60;
+  return `${twoDigits(min)}:${twoDigits(sec)}`;
+};
+
 function App() {
   const initialAuth = readStoredAuth();
   const [usuario, setUsuario] = useState<Usuario | null>(initialAuth?.usuario ?? null);
@@ -90,6 +99,9 @@ function App() {
   const [trainingReturnScreen, setTrainingReturnScreen] = useState<Exclude<MainScreen, "entrenamiento">>("home");
   const [trainingSeed, setTrainingSeed] = useState<TrainingSeed | null>(null);
   const [trainingSeedKey, setTrainingSeedKey] = useState(0);
+  const [activeTraining, setActiveTraining] = useState<ActiveTrainingSnapshot | null>(null);
+  const [discardTrainingRequestKey, setDiscardTrainingRequestKey] = useState(0);
+  const [discardTrainingModalOpen, setDiscardTrainingModalOpen] = useState(false);
   const [appToast, setAppToast] = useState<{ type: "error" | "ok"; text: string } | null>(null);
 
   useEffect(() => {
@@ -121,6 +133,10 @@ function App() {
     setMainScreen(screen);
   };
 
+  const handleActiveTrainingChange = useCallback((snapshot: ActiveTrainingSnapshot | null) => {
+    setActiveTraining(snapshot);
+  }, []);
+
   const openProfile = (userId: number) => {
     dismissSharedRoutine();
     setSelectedProfileId(userId);
@@ -137,7 +153,7 @@ function App() {
     setMainScreen("entrenamiento");
   };
 
-  const openTrainingFromSeed = (seed: TrainingSeed) => {
+  const openTrainingFromSeed = (seed: TrainingSeed, options: { recordCopy?: boolean } = {}) => {
     if (!canUseTrainingFeatures(usuario)) {
       setAppToast({
         type: "error",
@@ -146,8 +162,17 @@ function App() {
       return;
     }
 
+    if (activeTraining) {
+      setAppToast({
+        type: "error",
+        text: "Ya hay un entrenamiento en curso",
+      });
+      setMainScreen("entrenamientoLibre");
+      return;
+    }
+
     const sourceRoutineId = getSourceRoutineIdFromSeed(seed);
-    if (usuario && sourceRoutineId != null) {
+    if (options.recordCopy !== false && usuario && sourceRoutineId != null) {
       void recordRoutineCopy(sourceRoutineId, usuario.id).catch((error) => {
         console.error("No se pudo registrar la copia de rutina", error);
       });
@@ -155,6 +180,19 @@ function App() {
     setTrainingSeed(seed);
     setTrainingSeedKey((prev) => prev + 1);
     setMainScreen("entrenamientoLibre");
+  };
+
+  const requestDiscardActiveTraining = () => {
+    if (!activeTraining || activeTraining.loading) {
+      return;
+    }
+
+    setDiscardTrainingModalOpen(true);
+  };
+
+  const confirmDiscardActiveTraining = () => {
+    setDiscardTrainingModalOpen(false);
+    setDiscardTrainingRequestKey((prev) => prev + 1);
   };
 
   const handleCopyTrainingToWorkout = async (training: EntrenamientoResumen) => {
@@ -214,6 +252,8 @@ function App() {
     setSelectedProfileId(null);
     setSelectedTraining(null);
     setTrainingSeed(null);
+    setActiveTraining(null);
+    setDiscardTrainingModalOpen(false);
   };
 
   if (!usuario) {
@@ -236,9 +276,10 @@ function App() {
   }
 
   const canTrain = canUseTrainingFeatures(usuario);
+  const showActiveTrainingBar = Boolean(activeTraining && mainScreen !== "entrenamientoLibre");
 
   return (
-    <div className="shell">
+    <div className={`shell ${showActiveTrainingBar ? "has-active-training" : ""}`}>
       {appToast ? <div className={`toast-pop ${appToast.type}`}>{appToast.text}</div> : null}
       <header className="topbar">
         <div className="brand">
@@ -324,15 +365,25 @@ function App() {
             onSaveAsRoutine={handleSaveTrainingAsRoutine}
           />
         ) : null}
-        {mainScreen === "entrenamientoLibre" && canTrain ? (
-          <Entrenamiento
+        {canTrain ? (
+          <div className={mainScreen === "entrenamientoLibre" ? "" : "screen-hidden"}>
+            <Entrenamiento
+              usuario={usuario}
+              seed={trainingSeed}
+              seedKey={trainingSeedKey}
+              onSeedConsumed={() => setTrainingSeed(null)}
+              onActiveTrainingChange={handleActiveTrainingChange}
+              discardRequestKey={discardTrainingRequestKey}
+            />
+          </div>
+        ) : null}
+        {mainScreen === "rutinas" ? (
+          <Rutinas
             usuario={usuario}
-            seed={trainingSeed}
-            seedKey={trainingSeedKey}
-            onSeedConsumed={() => setTrainingSeed(null)}
+            canTrain={canTrain}
+            onStartTraining={(seed) => openTrainingFromSeed(seed, { recordCopy: false })}
           />
         ) : null}
-        {mainScreen === "rutinas" ? <Rutinas usuario={usuario} canTrain={canTrain} /> : null}
         {mainScreen === "descubrir" ? <DescubrirRutinas usuario={usuario} /> : null}
         {mainScreen === "rutinaCompartida" && sharedRoutineId != null ? (
           <RutinaCompartida
@@ -382,6 +433,115 @@ function App() {
           />
         ) : null}
       </div>
+      {showActiveTrainingBar && activeTraining ? (
+        <div
+          className="active-training-bar"
+          role="button"
+          tabIndex={0}
+          onClick={() => setMainScreen("entrenamientoLibre")}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setMainScreen("entrenamientoLibre");
+            }
+          }}
+        >
+          <div className="active-training-main">
+            <small>{activeTraining.rest ? "Descanso activo" : "Entrenamiento en curso"}</small>
+            <strong>{activeTraining.title}</strong>
+          </div>
+          <div className="active-training-meta">
+            <span className={activeTraining.rest ? "active-training-timer resting" : "active-training-timer"}>
+              {formatDuration(activeTraining.rest?.restanteSegundos ?? activeTraining.elapsedSeconds)}
+            </span>
+            <span>
+              {activeTraining.nextExerciseName
+                ? `Próximo: ${activeTraining.nextExerciseName}`
+                : "Listo para completar"}
+            </span>
+            <span>
+              {activeTraining.completedSeries}/{activeTraining.totalSeries} series
+            </span>
+          </div>
+          <button
+            type="button"
+            className="active-training-discard"
+            onClick={(event) => {
+              event.stopPropagation();
+              requestDiscardActiveTraining();
+            }}
+            disabled={activeTraining.loading}
+            aria-label="Descartar entrenamiento"
+            title="Descartar entrenamiento"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 6h18" />
+              <path d="M8 6V4h8v2" />
+              <path d="M19 6l-1 14H6L5 6" />
+              <path d="M10 11v5" />
+              <path d="M14 11v5" />
+            </svg>
+          </button>
+        </div>
+      ) : null}
+      {discardTrainingModalOpen && activeTraining ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => {
+            if (!activeTraining.loading) {
+              setDiscardTrainingModalOpen(false);
+            }
+          }}
+        >
+          <div
+            className="modal-card save-name-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Descartar entrenamiento"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>Descartar entrenamiento</h2>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setDiscardTrainingModalOpen(false)}
+                disabled={activeTraining.loading}
+              >
+                ×
+              </button>
+            </div>
+            <p className="helper-text">Se borrara por completo el entrenamiento en curso.</p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setDiscardTrainingModalOpen(false)}
+                disabled={activeTraining.loading}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn danger"
+                onClick={confirmDiscardActiveTraining}
+                disabled={activeTraining.loading}
+              >
+                Descartar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

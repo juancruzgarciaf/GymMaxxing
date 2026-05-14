@@ -315,6 +315,8 @@ export const getUserProfile = async (req: Request, res: Response) => {
 export const getFeed = async (req: Request, res: Response) => {
   try {
     const userId = Number(req.params.id);
+    const page = Number(req.query.page ?? 1);
+    const pageSize = Number(req.query.pageSize ?? 10);
 
     if (Number.isNaN(userId)) {
       return res.status(400).json({
@@ -322,7 +324,13 @@ export const getFeed = async (req: Request, res: Response) => {
       });
     }
 
-    const feed = await userService.getFeed(userId);
+    if (!Number.isFinite(page) || !Number.isFinite(pageSize)) {
+      return res.status(400).json({
+        error: "paginación inválida",
+      });
+    }
+
+    const feed = await userService.getFeed(userId, page, pageSize);
     return res.json(feed);
   } catch (error) {
     console.error(error);
@@ -331,4 +339,3 @@ export const getFeed = async (req: Request, res: Response) => {
     });
   }
 };
-

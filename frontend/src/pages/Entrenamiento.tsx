@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import siluetaStrongman from "../assets/siluetastrongman.png";
 import { saveTrainingSeedAsRoutine } from "../lib/trainingTransfer";
 import type { TrainingSeed, TrainingSetType, Usuario } from "../types";
@@ -50,11 +50,24 @@ type DescansoActivo = {
   finalizado: boolean;
 };
 
+export type ActiveTrainingSnapshot = {
+  sessionId: number;
+  title: string;
+  elapsedSeconds: number;
+  completedSeries: number;
+  totalSeries: number;
+  nextExerciseName: string | null;
+  rest: DescansoActivo | null;
+  loading: boolean;
+};
+
 type EntrenamientoProps = {
   usuario: Usuario;
   seed?: TrainingSeed | null;
   seedKey?: number;
   onSeedConsumed?: () => void;
+  onActiveTrainingChange?: (snapshot: ActiveTrainingSnapshot | null) => void;
+  discardRequestKey?: number;
 };
 
 type VistaEntrenamiento = "inicio" | "ejecucion" | "guardar";
@@ -112,7 +125,14 @@ const crearSerieEjecucion = (): EjecucionSerie => ({
   registrada: false,
 });
 
-function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: EntrenamientoProps) {
+function Entrenamiento({
+  usuario,
+  seed,
+  seedKey,
+  onSeedConsumed,
+  onActiveTrainingChange,
+  discardRequestKey = 0,
+}: EntrenamientoProps) {
   const [vista, setVista] = useState<VistaEntrenamiento>("inicio");
   const [loading, setLoading] = useState(false);
   const [mensaje, setMensaje] = useState("");
@@ -135,6 +155,8 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
   const [guardarCarpetaId, setGuardarCarpetaId] = useState("");
   const [guardarComoRutina, setGuardarComoRutina] = useState(false);
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
+  const handledDiscardRequestKey = useRef(0);
+  const descartarEntrenamientoRef = useRef<(() => Promise<void>) | null>(null);
 
   const totalSeriesEjecucion = useMemo(
     () => ejecucionEjercicios.reduce((acc, ejercicio) => acc + ejercicio.series.length, 0),
@@ -178,6 +200,14 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
       return matchEquipo && matchMusculo && matchSearch;
     });
   }, [busquedaEjercicio, catalogoEjercicios, filtroEquipo, filtroMusculo]);
+
+  const nextExerciseName = useMemo(() => {
+    const nextExercise = ejecucionEjercicios.find((ejercicio) =>
+      ejercicio.series.some((serie) => !serie.completada),
+    );
+
+    return nextExercise?.nombre ?? null;
+  }, [ejecucionEjercicios]);
 
   const cargarCatalogoEjercicios = async () => {
     const res = await fetch(`${API}/ejercicios`);
@@ -430,13 +460,15 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
       setGuardarDescripcion("");
       setGuardarCarpetaId("");
 
+      const sourceRoutineId =
+        nextSeed?.sourceRoutineId ?? (nextSeed?.origin === "rutina" ? nextSeed.sourceId : null);
       const startRes = await fetch(`${API}/entrenamientos/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           usuario_id: usuario.id,
-          rutina_id: null,
-          descripcion: null,
+          rutina_id: sourceRoutineId,
+          descripcion: nextSeed?.title ?? null,
         }),
       });
 
@@ -446,9 +478,7 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
 
       const sesion = (await startRes.json()) as SesionEntrenamiento;
       setSesionActiva(sesion);
-      setSourceRoutineIdContext(
-        nextSeed?.sourceRoutineId ?? (nextSeed?.origin === "rutina" ? nextSeed.sourceId : null),
-      );
+      setSourceRoutineIdContext(sourceRoutineId);
       setEjecucionEjercicios(nextSeed ? seedToExecution(nextSeed) : []);
       setGuardarNombre(nextSeed?.title ?? "");
       setGuardarDescripcion(nextSeed?.description ?? "");
@@ -682,6 +712,8 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
     }
   };
 
+  descartarEntrenamientoRef.current = descartarEntrenamiento;
+
   const requestDescartarEntrenamiento = () => {
     if (!sesionActiva) {
       resetEntrenamiento();
@@ -746,6 +778,49 @@ function Entrenamiento({ usuario, seed, seedKey, onSeedConsumed }: Entrenamiento
       onSeedConsumed?.();
     });
   }, [seed, seedKey]);
+
+  useEffect(() => {
+    if (!sesionActiva || vista !== "ejecucion") {
+      onActiveTrainingChange?.(null);
+      return;
+    }
+
+    onActiveTrainingChange?.({
+      sessionId: sesionActiva.id_sesion,
+      title: guardarNombre.trim() || "Entrenamiento libre",
+      elapsedSeconds: elapsedSesionSegundos,
+      completedSeries: seriesCompletadasEjecucion,
+      totalSeries: totalSeriesEjecucion,
+      nextExerciseName,
+      rest: descansoActivo,
+      loading,
+    });
+  }, [
+    descansoActivo,
+    elapsedSesionSegundos,
+    guardarNombre,
+    loading,
+    nextExerciseName,
+    onActiveTrainingChange,
+    seriesCompletadasEjecucion,
+    sesionActiva,
+    totalSeriesEjecucion,
+    vista,
+  ]);
+
+  useEffect(() => {
+    if (
+      discardRequestKey <= 0 ||
+      handledDiscardRequestKey.current === discardRequestKey ||
+      !sesionActiva ||
+      vista !== "ejecucion"
+    ) {
+      return;
+    }
+
+    handledDiscardRequestKey.current = discardRequestKey;
+    void descartarEntrenamientoRef.current?.();
+  }, [discardRequestKey, sesionActiva, vista]);
 
   const renderDiscardModal = () => {
     if (!confirmDiscardOpen) {

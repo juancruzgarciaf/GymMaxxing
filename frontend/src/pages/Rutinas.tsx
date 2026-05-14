@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createRoutineShareUrl } from "../lib/trainingTransfer";
 import { canUseTrainingFeatures } from "../lib/roles";
-import type { Usuario } from "../types";
+import type { TrainingSeed, Usuario } from "../types";
 
 type Rutina = {
   id_rutina: number;
@@ -94,6 +94,7 @@ type SesionEntrenamiento = {
 type RutinasProps = {
   usuario: Usuario;
   canTrain?: boolean;
+  onStartTraining?: (seed: TrainingSeed) => void;
 };
 
 type VistaRutinas = "lista" | "editor" | "ejecucion";
@@ -182,7 +183,7 @@ const SET_TIPO_OPTIONS: Array<{ value: SetTipo; label: string }> = [
   { value: "failure", label: "Failure" },
 ];
 
-function Rutinas({ usuario, canTrain }: RutinasProps) {
+function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
   const canStartTraining = canTrain ?? canUseTrainingFeatures(usuario);
   const [vista, setVista] = useState<VistaRutinas>("lista");
   const [loading, setLoading] = useState(false);
@@ -1045,54 +1046,37 @@ function Rutinas({ usuario, canTrain }: RutinasProps) {
       setLoading(true);
       setError("");
       setMensaje("");
-      setDescansoActivo(null);
-      setElapsedSesionSegundos(0);
 
       const ejercicios = await cargarEjerciciosDeRutina(rutinaSeleccionada.id_rutina);
       const persistedByExercise = new Map(
         getPersistedRutinaEjercicios(rutinaSeleccionada.id_rutina).map((item) => [item.id_ejercicio, item]),
       );
-      const startRes = await fetch(`${API}/entrenamientos/start`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          usuario_id: usuario.id,
-          rutina_id: rutinaSeleccionada.id_rutina,
-          descripcion: rutinaSeleccionada.nombre,
+      const seed: TrainingSeed = {
+        origin: "rutina",
+        sourceId: rutinaSeleccionada.id_rutina,
+        sourceRoutineId: rutinaSeleccionada.id_rutina,
+        title: rutinaSeleccionada.nombre,
+        description: rutinaSeleccionada.descripcion,
+        durationMinutes: rutinaSeleccionada.duracion_estimada,
+        exercises: ejercicios.map((item) => {
+          const persisted = persistedByExercise.get(item.id_ejercicio);
+          const persistedSeries = persisted?.series ?? [];
+          return {
+            id_ejercicio: item.id_ejercicio,
+            nombre: item.nombre,
+            grupo_muscular: item.grupo_muscular,
+            tipo_disciplina: item.tipo_disciplina,
+            descansoSegundos: Math.max(0, persisted?.descansoSegundos ?? item.descanso ?? 0),
+            series: Array.from({ length: Math.max(1, item.series) }, (_, index) => ({
+              kg: persistedSeries[index]?.kg ?? "",
+              reps: persistedSeries[index]?.reps ?? String(item.repeticiones || ""),
+              tipo: persistedSeries[index]?.tipo ?? "serie",
+            })),
+          };
         }),
-      });
+      };
 
-      if (!startRes.ok) {
-        throw new Error(await parseError(startRes, "No se pudo iniciar la rutina"));
-      }
-
-      const sesion = (await startRes.json()) as SesionEntrenamiento;
-      const ejecucion = ejercicios.map((item) => {
-        const persisted = persistedByExercise.get(item.id_ejercicio);
-        const persistedSeries = persisted?.series ?? [];
-        return {
-          id_ejercicio: item.id_ejercicio,
-          nombre: item.nombre,
-          grupo_muscular: item.grupo_muscular,
-          tipo_disciplina: item.tipo_disciplina,
-          descansoSegundos: Math.max(0, persisted?.descansoSegundos ?? item.descanso ?? 0),
-          series: Array.from({ length: Math.max(1, item.series) }, (_, index) => ({
-            id: crypto.randomUUID(),
-            numero: index + 1,
-            kg: persistedSeries[index]?.kg ?? "",
-            reps: persistedSeries[index]?.reps ?? String(item.repeticiones || ""),
-            tipo: persistedSeries[index]?.tipo ?? "serie",
-            completada: false,
-            registrada: false,
-          })),
-        };
-      });
-
-      setSesionActiva(sesion);
-      setRutinaEnEjecucion(rutinaSeleccionada);
-      setEjecucionEjercicios(ejecucion);
-      setVista("ejecucion");
-      setMensaje(`Rutina iniciada (Sesion #${sesion.id_sesion})`);
+      onStartTraining?.(seed);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error iniciando rutina");
     } finally {
@@ -2410,4 +2394,3 @@ function Rutinas({ usuario, canTrain }: RutinasProps) {
 }
 
 export default Rutinas;
-

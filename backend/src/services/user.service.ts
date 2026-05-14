@@ -112,7 +112,8 @@ const getSessionSummaries = async (
   whereClause: string,
   params: Array<number | string>,
   limit: number,
-  viewerId?: number
+  viewerId?: number,
+  offset = 0
 ) => {
   const queryParams = [...params];
   const viewerLikedSql =
@@ -127,7 +128,9 @@ const getSessionSummaries = async (
               AND sl.usuario_id = $${queryParams.length}
           ) AS viewer_liked`;
         })();
-  const finalParams = [...queryParams, limit];
+  const finalParams = [...queryParams, limit, offset];
+  const limitParam = finalParams.length - 1;
+  const offsetParam = finalParams.length;
 
   const result = await pool.query<SessionSummaryRow>(
     `SELECT se.id_sesion,
@@ -181,7 +184,8 @@ const getSessionSummaries = async (
      LEFT JOIN rutina r ON r.id_rutina = se.rutina_id
      WHERE ${whereClause}
      ORDER BY COALESCE(se.fecha_fin, se.fecha_inicio, se.fecha) DESC, se.id_sesion DESC
-     LIMIT $${finalParams.length}`,
+     LIMIT $${limitParam}
+     OFFSET $${offsetParam}`,
     finalParams
   );
 
@@ -463,18 +467,41 @@ export const getUserProfile = async (profileId: number, viewerId?: number) => {
   };
 };
 
-export const getFeed = async (userId: number) =>
-  getSessionSummaries(
-    `se.estado = 'finalizada'
-      AND (
-        se.usuario_id = $1
-        OR se.usuario_id IN (
-          SELECT su.id_seguido
-          FROM seguimientousuario su
-          WHERE su.id_seguidor = $1
-        )
-      )`,
-    [userId],
-    30,
-    userId
+export const getFeed = async (userId: number, page = 1, pageSize = 10) => {
+  const feedWhereClause = `se.estado = 'finalizada'
+    AND (
+      se.usuario_id = $1
+      OR se.usuario_id IN (
+        SELECT su.id_seguido
+        FROM seguimientousuario su
+        WHERE su.id_seguidor = $1
+      )
+    )`;
+  const safePageSize = Math.min(Math.max(Math.floor(pageSize), 1), 30);
+
+  const totalResult = await pool.query<{ total: string }>(
+    `SELECT COUNT(*)::text AS total
+     FROM sesionentrenamiento se
+     WHERE ${feedWhereClause}`,
+    [userId]
   );
+  const total = Number(totalResult.rows[0]?.total ?? 0);
+  const totalPages = Math.max(Math.ceil(total / safePageSize), 1);
+  const safePage = Math.min(Math.max(Math.floor(page), 1), totalPages);
+  const offset = (safePage - 1) * safePageSize;
+  const items = await getSessionSummaries(
+    feedWhereClause,
+    [userId],
+    safePageSize,
+    userId,
+    offset
+  );
+
+  return {
+    items,
+    total,
+    page: safePage,
+    pageSize: safePageSize,
+    totalPages,
+  };
+};
