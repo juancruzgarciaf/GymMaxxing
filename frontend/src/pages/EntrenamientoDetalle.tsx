@@ -5,7 +5,7 @@ type EntrenamientoDetalleProps = {
   entrenamiento: EntrenamientoResumen;
   canTrain: boolean;
   onBack: () => void;
-  onOpenProfile: (userId: number) => void;
+  onOpenProfile: (username: string) => void;
   onCopyToTraining: (training: EntrenamientoResumen) => void;
 };
 
@@ -194,7 +194,7 @@ function EntrenamientoDetalle({
         <button
           type="button"
           className="profile-chip detail-author"
-          onClick={() => onOpenProfile(entrenamiento.usuario_id)}
+          onClick={() => onOpenProfile(entrenamiento.username)}
         >
           <span className="avatar-circle">{entrenamiento.username.slice(0, 1).toUpperCase()}</span>
           <span>

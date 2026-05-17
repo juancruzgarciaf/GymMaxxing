@@ -46,15 +46,32 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
+    const cleanUsername = String(username).trim();
+    const cleanEmail = String(email).trim();
+
+    if (!cleanUsername || !cleanEmail) {
+      return res.status(400).json({
+        error: "username y email son obligatorios",
+      });
+    }
+
     // Verificar si existe
-    const existente = await pool.query(
-      "SELECT id FROM usuario WHERE email = $1",
-      [email]
+    const existente = await pool.query<{ email_exists: boolean; username_exists: boolean }>(
+      `SELECT
+         EXISTS(SELECT 1 FROM usuario WHERE LOWER(email) = LOWER($1)) AS email_exists,
+         EXISTS(SELECT 1 FROM usuario WHERE LOWER(username) = LOWER($2)) AS username_exists`,
+      [cleanEmail, cleanUsername]
     );
 
-    if (existente.rows.length > 0) {
+    if (existente.rows[0]?.email_exists) {
       return res.status(400).json({
         error: "El usuario ya existe",
+      });
+    }
+
+    if (existente.rows[0]?.username_exists) {
+      return res.status(400).json({
+        error: "El username ya esta en uso",
       });
     }
 
@@ -64,8 +81,8 @@ export const register = async (req: Request, res: Response) => {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       RETURNING *`,
       [
-        username,
-        email,
+        cleanUsername,
+        cleanEmail,
         password,
         edad ?? null,
         peso ?? null,

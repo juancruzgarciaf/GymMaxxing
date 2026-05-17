@@ -4,7 +4,7 @@ import type { EntrenamientoResumen, Usuario } from "../types";
 
 type HomeProps = {
   usuario: Usuario;
-  onOpenProfile: (userId: number) => void;
+  onOpenProfile: (username: string) => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
   onSaveAsRoutine: (training: EntrenamientoResumen, customName?: string) => void | Promise<void>;
 };

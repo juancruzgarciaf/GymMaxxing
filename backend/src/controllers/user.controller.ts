@@ -51,9 +51,30 @@ export const updateUser = async (req: Request, res: Response) => {
       tipo_usuario,
     } = req.body;
 
+    const cleanUsername = typeof username === "string" ? username.trim() : "";
+    const cleanEmail = typeof email === "string" ? email.trim() : "";
+
+    if (!cleanUsername || !cleanEmail) {
+      return res.status(400).json({
+        error: "username y email son obligatorios",
+      });
+    }
+
+    if (await userService.isUsernameTaken(cleanUsername, id)) {
+      return res.status(400).json({
+        error: "El username ya esta en uso",
+      });
+    }
+
+    if (await userService.isEmailTaken(cleanEmail, id)) {
+      return res.status(400).json({
+        error: "El email ya esta en uso",
+      });
+    }
+
     const usuario = await userService.updateUser(id, {
-      username,
-      email,
+      username: cleanUsername,
+      email: cleanEmail,
       edad,
       peso,
       altura,
@@ -320,6 +341,46 @@ export const getUserProfile = async (req: Request, res: Response) => {
     }
 
     const profile = await userService.getUserProfile(profileId, viewerId);
+
+    if (!profile) {
+      return res.status(404).json({
+        error: "Usuario no encontrado",
+      });
+    }
+
+    return res.json(profile);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error obteniendo perfil",
+    });
+  }
+};
+
+export const getUserProfileByUsername = async (req: Request, res: Response) => {
+  try {
+    const usernameParam = req.params.username;
+    const username = typeof usernameParam === "string" ? usernameParam.trim() : "";
+
+    if (!username) {
+      return res.status(400).json({
+        error: "username invalido",
+      });
+    }
+
+    const viewerIdRaw = req.query.viewer_id;
+    const viewerId =
+      typeof viewerIdRaw === "string" && viewerIdRaw.trim()
+        ? Number(viewerIdRaw)
+        : undefined;
+
+    if (viewerIdRaw != null && (viewerId == null || Number.isNaN(viewerId))) {
+      return res.status(400).json({
+        error: "viewer_id inválido",
+      });
+    }
+
+    const profile = await userService.getUserProfileByUsername(username, viewerId);
 
     if (!profile) {
       return res.status(404).json({

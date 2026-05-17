@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
 import logo from "./assets/logo.png";
 import {
@@ -39,14 +40,80 @@ type StoredAuth = {
   token: string;
 };
 
-const getSharedRoutineIdFromUrl = () => {
-  const raw = new URLSearchParams(window.location.search).get("sharedRoutineId");
+type RoutedMainScreen = Exclude<MainScreen, "entrenamiento" | "rutinaCompartida">;
+
+type TrainingRouteState = {
+  training?: EntrenamientoResumen;
+  returnScreen?: RoutedMainScreen;
+};
+
+const getSharedRoutineIdFromSearch = (search: string) => {
+  const raw = new URLSearchParams(search).get("sharedRoutineId");
   if (!raw) {
     return null;
   }
 
   const parsed = Number(raw);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const sharedRoutinePath = (routineId: number) => `/rutina-compartida?sharedRoutineId=${routineId}`;
+
+const pathForScreen = (screen: RoutedMainScreen) => {
+  const paths: Record<RoutedMainScreen, string> = {
+    home: "/",
+    rutinas: "/rutinas",
+    buscar: "/buscar",
+    descubrir: "/descubrir",
+    perfil: "/perfil",
+    entrenamientoLibre: "/entrenamiento",
+  };
+
+  return paths[screen];
+};
+
+const getProfileUsernameFromPath = (pathname: string) => {
+  const match = pathname.match(/^\/perfil\/([^/]+)$/);
+  if (!match) {
+    return null;
+  }
+
+  return decodeURIComponent(match[1]);
+};
+
+const getTrainingIdFromPath = (pathname: string) => {
+  const match = pathname.match(/^\/entrenamientos\/(\d+)$/);
+  if (!match) {
+    return null;
+  }
+
+  return Number(match[1]);
+};
+
+const getMainScreenFromPath = (pathname: string): MainScreen => {
+  if (pathname === "/rutinas") {
+    return "rutinas";
+  }
+  if (pathname === "/buscar") {
+    return "buscar";
+  }
+  if (pathname === "/descubrir") {
+    return "descubrir";
+  }
+  if (pathname === "/entrenamiento") {
+    return "entrenamientoLibre";
+  }
+  if (pathname === "/rutina-compartida") {
+    return "rutinaCompartida";
+  }
+  if (pathname === "/perfil" || getProfileUsernameFromPath(pathname) != null) {
+    return "perfil";
+  }
+  if (pathname.startsWith("/entrenamientos/")) {
+    return "entrenamiento";
+  }
+
+  return "home";
 };
 
 const readStoredAuth = (): StoredAuth | null => {
@@ -89,21 +156,29 @@ const formatDuration = (totalSeconds: number) => {
 };
 
 function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const initialAuth = readStoredAuth();
   const [usuario, setUsuario] = useState<Usuario | null>(initialAuth?.usuario ?? null);
   const [authToken, setAuthToken] = useState<string | null>(initialAuth?.token ?? null);
-  const [authScreen, setAuthScreen] = useState<AuthScreen>("login");
-  const [mainScreen, setMainScreen] = useState<MainScreen>("home");
-  const [sharedRoutineId, setSharedRoutineId] = useState<number | null>(getSharedRoutineIdFromUrl);
-  const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
   const [selectedTraining, setSelectedTraining] = useState<EntrenamientoResumen | null>(null);
-  const [trainingReturnScreen, setTrainingReturnScreen] = useState<Exclude<MainScreen, "entrenamiento">>("home");
+  const [trainingReturnScreen, setTrainingReturnScreen] = useState<RoutedMainScreen>("home");
   const [trainingSeed, setTrainingSeed] = useState<TrainingSeed | null>(null);
   const [trainingSeedKey, setTrainingSeedKey] = useState(0);
   const [activeTraining, setActiveTraining] = useState<ActiveTrainingSnapshot | null>(null);
   const [discardTrainingRequestKey, setDiscardTrainingRequestKey] = useState(0);
   const [discardTrainingModalOpen, setDiscardTrainingModalOpen] = useState(false);
   const [appToast, setAppToast] = useState<{ type: "error" | "ok"; text: string } | null>(null);
+  const authScreen: AuthScreen = location.pathname === "/register" ? "register" : "login";
+  const mainScreen = getMainScreenFromPath(location.pathname);
+  const routeState = location.state as TrainingRouteState | null;
+  const routeTraining = routeState?.training ?? null;
+  const sharedRoutineId = getSharedRoutineIdFromSearch(location.search);
+  const routeTrainingId = getTrainingIdFromPath(location.pathname);
+  const availableTraining = routeTraining ?? selectedTraining;
+  const currentTraining =
+    mainScreen === "entrenamiento" && availableTraining?.id_sesion === routeTrainingId ? availableTraining : null;
+  const routeProfileUsername = getProfileUsernameFromPath(location.pathname);
 
   useEffect(() => {
     if (!appToast) {
@@ -116,42 +191,68 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [appToast]);
 
+  useEffect(() => {
+    if (!usuario) {
+      return;
+    }
+
+    if (location.pathname === "/login" || location.pathname === "/register") {
+      navigate(sharedRoutineId != null ? sharedRoutinePath(sharedRoutineId) : "/", { replace: true });
+    }
+  }, [location.pathname, navigate, sharedRoutineId, usuario]);
+
+  useEffect(() => {
+    if (usuario && sharedRoutineId != null && location.pathname === "/") {
+      navigate(sharedRoutinePath(sharedRoutineId), { replace: true });
+    }
+  }, [location.pathname, navigate, sharedRoutineId, usuario]);
+
+  useEffect(() => {
+    if (usuario && mainScreen === "entrenamiento" && !currentTraining) {
+      navigate("/", { replace: true });
+    }
+  }, [currentTraining, mainScreen, navigate, usuario]);
+
   const dismissSharedRoutine = () => {
     if (sharedRoutineId == null) {
       return;
     }
-
-    setSharedRoutineId(null);
-    const url = new URL(window.location.href);
-    url.searchParams.delete("sharedRoutineId");
-    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   };
 
   const navigateTo = (screen: Exclude<MainScreen, "entrenamiento">) => {
     if (screen !== "rutinaCompartida") {
       dismissSharedRoutine();
     }
-    setMainScreen(screen);
+
+    if (screen === "rutinaCompartida") {
+      if (sharedRoutineId != null) {
+        navigate(sharedRoutinePath(sharedRoutineId));
+      }
+      return;
+    }
+
+    navigate(pathForScreen(screen));
   };
 
   const handleActiveTrainingChange = useCallback((snapshot: ActiveTrainingSnapshot | null) => {
     setActiveTraining(snapshot);
   }, []);
 
-  const openProfile = (userId: number) => {
+  const openProfile = (username: string) => {
     dismissSharedRoutine();
-    setSelectedProfileId(userId);
-    setMainScreen("perfil");
+    navigate(`/perfil/${encodeURIComponent(username)}`);
   };
 
   const openTraining = (
     training: EntrenamientoResumen,
-    source: Exclude<MainScreen, "entrenamiento">
+    source: RoutedMainScreen
   ) => {
     dismissSharedRoutine();
     setSelectedTraining(training);
     setTrainingReturnScreen(source);
-    setMainScreen("entrenamiento");
+    navigate(`/entrenamientos/${training.id_sesion}`, {
+      state: { training, returnScreen: source } satisfies TrainingRouteState,
+    });
   };
 
   const openTrainingFromSeed = (seed: TrainingSeed, options: { recordCopy?: boolean } = {}) => {
@@ -168,7 +269,7 @@ function App() {
         type: "error",
         text: "Ya hay un entrenamiento en curso",
       });
-      setMainScreen("entrenamientoLibre");
+      navigate(pathForScreen("entrenamientoLibre"));
       return;
     }
 
@@ -180,7 +281,7 @@ function App() {
     }
     setTrainingSeed(seed);
     setTrainingSeedKey((prev) => prev + 1);
-    setMainScreen("entrenamientoLibre");
+    navigate(pathForScreen("entrenamientoLibre"));
   };
 
   const requestDiscardActiveTraining = () => {
@@ -240,37 +341,34 @@ function App() {
   };
 
   const goBackFromTraining = () => {
-    setMainScreen(trainingReturnScreen);
+    navigate(pathForScreen(routeState?.returnScreen ?? trainingReturnScreen), { replace: true });
   };
 
   const handleLogout = () => {
     setUsuario(null);
     setAuthToken(null);
     persistAuth(null);
-    setAuthScreen("login");
     dismissSharedRoutine();
-    setMainScreen("home");
-    setSelectedProfileId(null);
     setSelectedTraining(null);
     setTrainingSeed(null);
     setActiveTraining(null);
     setDiscardTrainingModalOpen(false);
+    navigate("/login", { replace: true });
   };
 
   if (!usuario) {
     if (authScreen === "register") {
-      return <Register goToLogin={() => setAuthScreen("login")} />;
+      return <Register goToLogin={() => navigate("/login")} />;
     }
 
     return (
       <Login
-        goToRegister={() => setAuthScreen("register")}
+        goToRegister={() => navigate("/register")}
         onLoginSuccess={(loggedUser, token) => {
           setUsuario(loggedUser);
           setAuthToken(token);
           persistAuth({ usuario: loggedUser, token });
-          setMainScreen(sharedRoutineId != null ? "rutinaCompartida" : "home");
-          setSelectedProfileId(loggedUser.id);
+          navigate(sharedRoutineId != null ? sharedRoutinePath(sharedRoutineId) : "/", { replace: true });
         }}
       />
     );
@@ -343,7 +441,7 @@ function App() {
           <button
             type="button"
             className={`nav-btn ${mainScreen === "perfil" ? "active" : ""}`}
-            onClick={() => openProfile(usuario.id)}
+            onClick={() => openProfile(usuario.username)}
           >
             Perfil
           </button>
@@ -399,7 +497,7 @@ function App() {
             routineId={sharedRoutineId}
             onClose={() => {
               dismissSharedRoutine();
-              setMainScreen("rutinas");
+              navigate(pathForScreen("rutinas"), { replace: true });
             }}
             onCopyToTraining={(seed) => {
               if (!canTrain) {
@@ -417,7 +515,7 @@ function App() {
         {mainScreen === "perfil" ? (
           <Perfil
             usuario={usuario}
-            profileUserId={selectedProfileId ?? usuario.id}
+            profileUsername={routeProfileUsername ?? usuario.username}
             onOpenProfile={openProfile}
             onOpenTraining={(training) => openTraining(training, "perfil")}
             onSaveAsRoutine={handleSaveTrainingAsRoutine}
@@ -427,12 +525,15 @@ function App() {
               if (authToken) {
                 persistAuth({ usuario: nextUser, token: authToken });
               }
+              if (mainScreen === "perfil") {
+                navigate(`/perfil/${encodeURIComponent(nextUser.username)}`, { replace: true });
+              }
             }}
           />
         ) : null}
-        {mainScreen === "entrenamiento" && selectedTraining ? (
+        {mainScreen === "entrenamiento" && currentTraining ? (
           <EntrenamientoDetalle
-            entrenamiento={selectedTraining}
+            entrenamiento={currentTraining}
             canTrain={canTrain}
             onBack={goBackFromTraining}
             onOpenProfile={openProfile}
@@ -445,11 +546,11 @@ function App() {
           className="active-training-bar"
           role="button"
           tabIndex={0}
-          onClick={() => setMainScreen("entrenamientoLibre")}
+          onClick={() => navigate(pathForScreen("entrenamientoLibre"))}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
-              setMainScreen("entrenamientoLibre");
+              navigate(pathForScreen("entrenamientoLibre"));
             }
           }}
         >

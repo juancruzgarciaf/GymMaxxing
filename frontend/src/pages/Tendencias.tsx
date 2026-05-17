@@ -29,7 +29,7 @@ type TrendConfig = {
 
 type TendenciasProps = {
   usuario: Usuario;
-  onOpenProfile?: (userId: number) => void;
+  onOpenProfile?: (username: string) => void;
   onOpenTraining?: (training: EntrenamientoResumen) => void;
 };
 
@@ -241,7 +241,7 @@ function Tendencias({ usuario, onOpenProfile, onOpenTraining }: TendenciasProps)
                   <div className="trend-row-side">
                     <span>{getMetricText(selectedTrend, item)}</span>
                     {isTrendUser(item) && onOpenProfile ? (
-                      <button type="button" className="btn secondary" onClick={() => onOpenProfile(item.id)}>
+                      <button type="button" className="btn secondary" onClick={() => onOpenProfile(item.username)}>
                         Ver perfil
                       </button>
                     ) : null}

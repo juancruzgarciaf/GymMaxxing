@@ -5,8 +5,8 @@ import type { EntrenamientoResumen, PerfilUsuario, Usuario } from "../types";
 
 type PerfilProps = {
   usuario: Usuario;
-  profileUserId: number;
-  onOpenProfile: (userId: number) => void;
+  profileUsername: string;
+  onOpenProfile: (username: string) => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
   onSaveAsRoutine: (training: EntrenamientoResumen, customName?: string) => void | Promise<void>;
   authToken: string | null;
@@ -18,7 +18,7 @@ const TRAINING_LEVEL_OPTIONS = ["Principiante", "Avanzado", "Veterano", "GYMMAXX
 
 function Perfil({
   usuario,
-  profileUserId,
+  profileUsername,
   onOpenProfile,
   onOpenTraining,
   onSaveAsRoutine,
@@ -50,7 +50,7 @@ function Perfil({
       setLoading(true);
       setError("");
 
-      const res = await fetch(`${API}/users/${profileUserId}/profile?viewer_id=${usuario.id}`);
+      const res = await fetch(`${API}/users/profile/${encodeURIComponent(profileUsername)}?viewer_id=${usuario.id}`);
       const data = (await res.json()) as PerfilUsuario | { error?: string };
 
       if (!res.ok) {
@@ -67,7 +67,7 @@ function Perfil({
 
   useEffect(() => {
     void cargarPerfil();
-  }, [profileUserId]);
+  }, [profileUsername]);
 
   useEffect(() => {
     if (!perfil || !perfil.is_own_profile) {
@@ -342,7 +342,7 @@ function Perfil({
 
           {!perfil.is_own_profile ? (
             <section className="profile-actions-row">
-              <button type="button" className="btn secondary" onClick={() => onOpenProfile(usuario.id)}>
+              <button type="button" className="btn secondary" onClick={() => onOpenProfile(usuario.username)}>
                 Volver a mi perfil
               </button>
             </section>

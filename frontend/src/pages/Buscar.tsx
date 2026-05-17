@@ -3,7 +3,7 @@ import type { SearchUser, Usuario } from "../types";
 
 type BuscarProps = {
   usuario: Usuario;
-  onOpenProfile: (userId: number) => void;
+  onOpenProfile: (username: string) => void;
 };
 
 const API = "http://localhost:3000";
@@ -112,7 +112,7 @@ function Buscar({ usuario, onOpenProfile }: BuscarProps) {
             </div>
 
             <div className="user-card-actions">
-              <button type="button" className="btn secondary" onClick={() => onOpenProfile(item.id)}>
+              <button type="button" className="btn secondary" onClick={() => onOpenProfile(item.username)}>
                 Ver perfil
               </button>
               {item.id !== usuario.id ? (

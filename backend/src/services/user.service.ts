@@ -256,6 +256,50 @@ export const getUsuarioPorId = async (id: number) => {
   return result.rows[0] ? sanitizeUser(result.rows[0]) : null;
 };
 
+export const isUsernameTaken = async (username: string, excludeUserId?: number) => {
+  const params: Array<string | number> = [username.trim()];
+  const excludeClause =
+    excludeUserId == null
+      ? ""
+      : (() => {
+          params.push(excludeUserId);
+          return `AND id <> $${params.length}`;
+        })();
+
+  const result = await pool.query<{ id: number }>(
+    `SELECT id
+     FROM usuario
+     WHERE LOWER(username) = LOWER($1)
+       ${excludeClause}
+     LIMIT 1`,
+    params
+  );
+
+  return result.rows.length > 0;
+};
+
+export const isEmailTaken = async (email: string, excludeUserId?: number) => {
+  const params: Array<string | number> = [email.trim()];
+  const excludeClause =
+    excludeUserId == null
+      ? ""
+      : (() => {
+          params.push(excludeUserId);
+          return `AND id <> $${params.length}`;
+        })();
+
+  const result = await pool.query<{ id: number }>(
+    `SELECT id
+     FROM usuario
+     WHERE LOWER(email) = LOWER($1)
+       ${excludeClause}
+     LIMIT 1`,
+    params
+  );
+
+  return result.rows.length > 0;
+};
+
 export const getUserRoleById = async (id: number) => {
   const result = await pool.query<{ tipo_usuario: string }>(
     `SELECT tipo_usuario
@@ -508,6 +552,22 @@ export const getUserProfile = async (profileId: number, viewerId?: number) => {
     is_own_profile: viewerId != null ? viewerId === profileId : false,
     entrenamientos: trainings,
   };
+};
+
+export const getUserProfileByUsername = async (username: string, viewerId?: number) => {
+  const userResult = await pool.query<{ id: number }>(
+    `SELECT id
+     FROM usuario
+     WHERE LOWER(username) = LOWER($1)`,
+    [username.trim()]
+  );
+
+  const userId = userResult.rows[0]?.id;
+  if (userId == null) {
+    return null;
+  }
+
+  return getUserProfile(userId, viewerId);
 };
 
 export const getFeed = async (userId: number, page = 1, pageSize = 10) => {

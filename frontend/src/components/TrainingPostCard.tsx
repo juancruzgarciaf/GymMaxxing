@@ -4,7 +4,7 @@ import type { EntrenamientoResumen, SessionComment } from "../types";
 type TrainingPostCardProps = {
   item: EntrenamientoResumen;
   viewerId: number;
-  onOpenProfile?: (userId: number) => void;
+  onOpenProfile?: (username: string) => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
   onSaveAsRoutine?: (training: EntrenamientoResumen, customName?: string) => void | Promise<void>;
 };
@@ -332,7 +332,7 @@ function TrainingPostCard({
       <button
         type="button"
         className={`profile-chip ${onOpenProfile ? "" : "static"}`}
-        onClick={() => onOpenProfile?.(item.usuario_id)}
+        onClick={() => onOpenProfile?.(item.username)}
         disabled={!onOpenProfile}
       >
         <span className="avatar-circle">{item.username.slice(0, 1).toUpperCase()}</span>

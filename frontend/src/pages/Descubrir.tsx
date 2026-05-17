@@ -5,7 +5,7 @@ import type { EntrenamientoResumen, Usuario } from "../types";
 
 type DescubrirProps = {
   usuario: Usuario;
-  onOpenProfile?: (userId: number) => void;
+  onOpenProfile?: (username: string) => void;
   onOpenTraining?: (training: EntrenamientoResumen) => void;
 };
 
