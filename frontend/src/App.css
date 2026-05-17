@@ -21,7 +21,7 @@
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-weight: 600;
   color: #e7f6ff;
 }
@@ -31,8 +31,8 @@
 }
 
 .brand-logo {
-  width: 34px;
-  height: 34px;
+  width: 100px;
+  height: 100px;
   object-fit: contain;
   display: block;
   flex-shrink: 0;
@@ -1662,10 +1662,28 @@ button.discover-module-card:hover {
 }
 
 .discover-branch-hero {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: start;
-  gap: 16px;
+  display: block;
+  position: relative;
+}
+
+.discover-branch-hero > .btn.secondary:first-child {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 12px);
+}
+
+@media (max-width: 1240px) {
+  .discover-branch-hero {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: start;
+    gap: 12px;
+  }
+
+  .discover-branch-hero > .btn.secondary:first-child {
+    position: static;
+    margin-left: -28px;
+  }
 }
 
 .discover-controls {
@@ -1819,6 +1837,10 @@ button.discover-module-card:hover {
 
   .discover-branch-hero {
     grid-template-columns: 1fr;
+  }
+
+  .discover-branch-hero > .btn.secondary:first-child {
+    margin-left: 0;
   }
 }
 
