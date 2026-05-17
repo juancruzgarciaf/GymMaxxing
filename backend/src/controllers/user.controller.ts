@@ -168,6 +168,30 @@ export const searchUsers = async (req: Request, res: Response) => {
   }
 };
 
+export const getTrends = async (req: Request, res: Response) => {
+  try {
+    const viewerIdRaw = req.query.viewer_id;
+    const viewerId =
+      typeof viewerIdRaw === "string" && viewerIdRaw.trim()
+        ? Number(viewerIdRaw)
+        : undefined;
+
+    if (viewerIdRaw != null && (viewerId == null || Number.isNaN(viewerId))) {
+      return res.status(400).json({
+        error: "viewer_id inválido",
+      });
+    }
+
+    const trends = await userService.getTrends(viewerId);
+    return res.json(trends);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error obteniendo tendencias",
+    });
+  }
+};
+
 export const followUser = async (req: Request, res: Response) => {
   try {
     const seguidoId = Number(req.params.id);

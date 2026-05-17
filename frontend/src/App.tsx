@@ -385,7 +385,13 @@ function App() {
             onStartTraining={(seed) => openTrainingFromSeed(seed, { recordCopy: false })}
           />
         ) : null}
-        {mainScreen === "descubrir" ? <Descubrir usuario={usuario} /> : null}
+        {mainScreen === "descubrir" ? (
+          <Descubrir
+            usuario={usuario}
+            onOpenProfile={openProfile}
+            onOpenTraining={(training) => openTraining(training, "descubrir")}
+          />
+        ) : null}
         {mainScreen === "rutinaCompartida" && sharedRoutineId != null ? (
           <RutinaCompartida
             usuario={usuario}

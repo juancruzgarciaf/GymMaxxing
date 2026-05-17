@@ -1,14 +1,17 @@
 import { useState } from "react";
 import DescubrirRutinas from "./DescubrirRutinas";
-import type { Usuario } from "../types";
+import Tendencias from "./Tendencias";
+import type { EntrenamientoResumen, Usuario } from "../types";
 
 type DescubrirProps = {
   usuario: Usuario;
+  onOpenProfile?: (userId: number) => void;
+  onOpenTraining?: (training: EntrenamientoResumen) => void;
 };
 
 type DiscoverBranch = "home" | "rutinas" | "atletas" | "tendencias";
 
-function Descubrir({ usuario }: DescubrirProps) {
+function Descubrir({ usuario, onOpenProfile, onOpenTraining }: DescubrirProps) {
   const [branch, setBranch] = useState<DiscoverBranch>("home");
 
   if (branch === "rutinas") {
@@ -46,34 +49,11 @@ function Descubrir({ usuario }: DescubrirProps) {
           <div>
             <p className="eyebrow">Tendencias</p>
             <h1>Lo que esta moviendo la comunidad</h1>
+            <p className="subtitle">Rankings vivos de rutinas, usuarios y entrenamientos.</p>
           </div>
         </section>
 
-        <section className="discover-module-grid">
-          <article className="discover-module-card is-muted">
-            <div className="discover-module-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M4 19V5" />
-                <path d="M8 19V9" />
-                <path d="M12 19V3" />
-                <path d="M16 19v-7" />
-                <path d="M20 19V8" />
-              </svg>
-            </div>
-            <h2>Top 10 rutinas</h2>
-            <p>Base preparada para ordenar rutinas por actividad reciente.</p>
-          </article>
-          <article className="discover-module-card is-muted">
-            <div className="discover-module-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2v20" />
-                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6" />
-              </svg>
-            </div>
-            <h2>Movimientos</h2>
-            <p>Base preparada para tendencias de ejercicios, volumen y grupos musculares.</p>
-          </article>
-        </section>
+        <Tendencias usuario={usuario} onOpenProfile={onOpenProfile} onOpenTraining={onOpenTraining} />
       </main>
     );
   }

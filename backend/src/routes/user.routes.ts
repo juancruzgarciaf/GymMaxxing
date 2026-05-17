@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../middleware/auth.middleware";
 import {
   searchUsers,
+  getTrends,
   getUserProfile,
   getFollowers,
   getFollowing,
@@ -16,6 +17,7 @@ import {
 const router = Router();
 
 router.get("/search", searchUsers);
+router.get("/trends", getTrends);
 router.get("/:id/profile", getUserProfile);
 router.get("/:id/followers", getFollowers);
 router.get("/:id/following", getFollowing);
