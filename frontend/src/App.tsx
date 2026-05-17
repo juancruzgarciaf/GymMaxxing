@@ -17,6 +17,7 @@ import EntrenamientoDetalle from "./pages/EntrenamientoDetalle";
 import Login from "./pages/Login";
 import Perfil from "./pages/Perfil";
 import Register from "./pages/Register";
+
 import RutinaCompartida from "./pages/RutinaCompartida";
 import Rutinas from "./pages/Rutinas";
 
