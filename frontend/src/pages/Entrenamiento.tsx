@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import bodybuilderFlexSample from "../assets/bodybuilder-flex-sample.webp";
 import siluetaStrongman from "../assets/siluetastrongman.png";
 import { saveTrainingSeedAsRoutine } from "../lib/trainingTransfer";
 import type { TrainingSeed, TrainingSetType, Usuario } from "../types";
@@ -1297,7 +1298,13 @@ function Entrenamiento({
             mientras entrenas.
           </p>
 
-          
+          <img
+            src={bodybuilderFlexSample}
+            alt=""
+            aria-hidden="true"
+            className="training-launch-figure"
+          />
+
           <div className="actions-row">
             <button
               type="button"

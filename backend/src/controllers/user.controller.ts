@@ -420,7 +420,34 @@ export const getFeed = async (req: Request, res: Response) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({
-      error: "Error obteniendo feed",
+      error: "Error obteniendo Inicio",
+    });
+  }
+};
+
+export const getSuggestedUsers = async (req: Request, res: Response) => {
+  try {
+    const userId = Number(req.params.id);
+    const limit = Number(req.query.limit ?? 5);
+
+    if (Number.isNaN(userId)) {
+      return res.status(400).json({
+        error: "id inválido",
+      });
+    }
+
+    if (!Number.isFinite(limit)) {
+      return res.status(400).json({
+        error: "limit inválido",
+      });
+    }
+
+    const suggestions = await userService.getSuggestedUsers(userId, limit);
+    return res.json(suggestions);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error obteniendo sugerencias",
     });
   }
 };

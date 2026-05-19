@@ -48,6 +48,10 @@ type TrendUserRow = BasicUserRow & {
   viewer_follows?: boolean;
 };
 
+type SuggestedUserRow = TrendUserRow & {
+  mutual_following_count: number;
+};
+
 type SessionSummaryRow = {
   id_sesion: number;
   usuario_id: number;
@@ -607,6 +611,116 @@ export const getFeed = async (userId: number, page = 1, pageSize = 10) => {
     pageSize: safePageSize,
     totalPages,
   };
+};
+
+export const getSuggestedUsers = async (userId: number, limit = 5) => {
+  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 10);
+
+  const secondDegreeResult = await pool.query<SuggestedUserRow>(
+    `WITH viewer_following AS (
+       SELECT su.id_seguido
+       FROM seguimientousuario su
+       WHERE su.id_seguidor = $1
+     ),
+     second_degree AS (
+       SELECT su.id_seguido AS user_id,
+              COUNT(DISTINCT su.id_seguidor)::int AS mutual_following_count
+       FROM seguimientousuario su
+       JOIN viewer_following vf ON vf.id_seguido = su.id_seguidor
+       WHERE su.id_seguido <> $1
+         AND su.id_seguido NOT IN (SELECT id_seguido FROM viewer_following)
+       GROUP BY su.id_seguido
+     )
+     SELECT u.id,
+            u.username,
+            u.email,
+            u.tipo_usuario,
+            (
+              SELECT COUNT(*)::int
+              FROM seguimientousuario su
+              WHERE su.id_seguido = u.id
+            ) AS followers_count,
+            (
+              SELECT COUNT(*)::int
+              FROM seguimientousuario su
+              WHERE su.id_seguidor = u.id
+            ) AS following_count,
+            (
+              SELECT COUNT(*)::int
+              FROM sesionentrenamiento se
+              WHERE se.usuario_id = u.id
+                AND se.estado = 'finalizada'
+            ) AS trainings_count,
+            FALSE AS viewer_follows,
+            sd.mutual_following_count
+     FROM second_degree sd
+     JOIN usuario u ON u.id = sd.user_id
+     ORDER BY sd.mutual_following_count DESC, followers_count DESC, trainings_count DESC, u.username ASC
+     LIMIT $2`,
+    [userId, safeLimit]
+  );
+
+  const suggestions = secondDegreeResult.rows.map((row) => ({
+    ...sanitizeUser(row),
+    followers_count: row.followers_count,
+    following_count: row.following_count,
+    trainings_count: row.trainings_count,
+    viewer_follows: row.viewer_follows ?? false,
+    mutual_following_count: row.mutual_following_count,
+  }));
+
+  if (suggestions.length >= safeLimit) {
+    return suggestions;
+  }
+
+  const excludedIds = [userId, ...suggestions.map((user) => user.id)];
+  const fallbackResult = await pool.query<SuggestedUserRow>(
+    `SELECT u.id,
+            u.username,
+            u.email,
+            u.tipo_usuario,
+            (
+              SELECT COUNT(*)::int
+              FROM seguimientousuario su
+              WHERE su.id_seguido = u.id
+            ) AS followers_count,
+            (
+              SELECT COUNT(*)::int
+              FROM seguimientousuario su
+              WHERE su.id_seguidor = u.id
+            ) AS following_count,
+            (
+              SELECT COUNT(*)::int
+              FROM sesionentrenamiento se
+              WHERE se.usuario_id = u.id
+                AND se.estado = 'finalizada'
+            ) AS trainings_count,
+            FALSE AS viewer_follows,
+            0::int AS mutual_following_count
+     FROM usuario u
+     WHERE u.id <> ALL($2::int[])
+       AND NOT EXISTS (
+         SELECT 1
+         FROM seguimientousuario su
+         WHERE su.id_seguidor = $1
+           AND su.id_seguido = u.id
+       )
+     ORDER BY trainings_count DESC, followers_count DESC, u.username ASC
+     LIMIT $3`,
+    [userId, excludedIds, safeLimit - suggestions.length]
+  );
+
+  return [
+    ...suggestions,
+    ...fallbackResult.rows.map((row) => ({
+      ...sanitizeUser(row),
+      followers_count: row.followers_count,
+      following_count: row.following_count,
+      trainings_count: row.trainings_count,
+      viewer_follows: row.viewer_follows ?? false,
+      mutual_following_count: row.mutual_following_count,
+    })),
+  ];
 };
 
 const getTrendRoutines = async (

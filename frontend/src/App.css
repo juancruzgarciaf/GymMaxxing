@@ -585,6 +585,12 @@ h2 {
   font-size: 12px;
 }
 
+.btn.compact {
+  padding: 7px 11px;
+  font-size: 13px;
+  border-radius: 999px;
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -859,6 +865,13 @@ h2 {
   align-content: start;
 }
 
+.training-launch-figure {
+  width: min(230px, 68vw);
+  height: auto;
+  display: block;
+  margin: 14px auto 2px;
+}
+
 .training-save-actions {
   justify-content: space-between;
   margin-top: 20px;
@@ -1115,8 +1128,201 @@ h2 {
   gap: 18px;
 }
 
+.feed-page-shell {
+  width: min(1240px, 100%);
+}
+
 .page-hero.compact {
   padding-top: 0;
+}
+
+.feed-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 760px) minmax(300px, 340px);
+  justify-content: center;
+  align-items: start;
+  gap: 24px;
+}
+
+.feed-main-column {
+  min-width: 0;
+  display: grid;
+  gap: 18px;
+}
+
+.feed-sidebar {
+  position: sticky;
+  top: 88px;
+  display: grid;
+  gap: 16px;
+}
+
+.feed-sidebar-card {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(126, 214, 161, 0.1), transparent 32%),
+    linear-gradient(145deg, rgba(25, 36, 45, 0.96) 0%, rgba(16, 23, 30, 0.96) 100%);
+  border: 1px solid rgba(151, 183, 202, 0.16);
+  border-radius: 24px;
+  padding: 20px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(12px);
+}
+
+.profile-summary-card {
+  display: grid;
+  gap: 18px;
+}
+
+.profile-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.profile-summary-avatar,
+.suggested-athlete-avatar {
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: linear-gradient(145deg, #7ed6a1 0%, #4fb6dd 100%);
+  color: #10221a;
+  font-weight: 800;
+  box-shadow: 0 10px 26px rgba(79, 182, 221, 0.18);
+}
+
+.profile-summary-avatar {
+  width: 62px;
+  height: 62px;
+  font-size: 1.35rem;
+}
+
+.profile-summary-head h2,
+.feed-sidebar-card-title h2 {
+  margin: 0;
+  color: #eef8fd;
+}
+
+.profile-summary-head h2 {
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+
+.profile-summary-head p {
+  margin: 5px 0 0;
+  color: #9fb3c1;
+}
+
+.profile-summary-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(151, 183, 202, 0.12);
+  border-bottom: 1px solid rgba(151, 183, 202, 0.12);
+}
+
+.profile-summary-stats div {
+  display: grid;
+  gap: 3px;
+  text-align: center;
+}
+
+.profile-summary-stats strong {
+  color: #eef8fd;
+  font-size: 1.06rem;
+}
+
+.profile-summary-stats span {
+  color: #91a8b8;
+  font-size: 12px;
+}
+
+.feed-sidebar-full-btn {
+  width: 100%;
+}
+
+.feed-sidebar-card-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.feed-sidebar-card-title h2 {
+  font-size: 1.05rem;
+}
+
+.feed-sidebar-muted {
+  margin: 0;
+  color: #9fb3c1;
+  font-size: 0.92rem;
+}
+
+.feed-sidebar-muted.error {
+  color: #ffb0b7;
+}
+
+.suggested-athlete-list {
+  display: grid;
+  gap: 6px;
+}
+
+.suggested-athlete-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 16px;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.suggested-athlete-item:hover {
+  background: rgba(255, 255, 255, 0.035);
+  transform: translateY(-1px);
+}
+
+.suggested-athlete-profile {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.suggested-athlete-avatar {
+  width: 42px;
+  height: 42px;
+  font-size: 0.95rem;
+}
+
+.suggested-athlete-profile span:last-child {
+  min-width: 0;
+}
+
+.suggested-athlete-profile strong,
+.suggested-athlete-profile small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggested-athlete-profile strong {
+  color: #e5f8ff;
+}
+
+.suggested-athlete-profile small {
+  color: #91a8b8;
+  margin-top: 3px;
+  font-size: 12px;
 }
 
 .search-panel {
@@ -1954,6 +2160,15 @@ button.discover-module-card:hover {
     grid-template-columns: 1fr;
   }
 
+  .feed-layout {
+    grid-template-columns: minmax(0, 760px);
+  }
+
+  .feed-sidebar {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .form-grid-5 {
     grid-template-columns: 1fr 1fr;
   }
@@ -2093,6 +2308,19 @@ button.discover-module-card:hover {
   .user-card {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .feed-sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .feed-sidebar-card {
+    border-radius: 20px;
+    padding: 16px;
+  }
+
+  .profile-summary-stats {
+    gap: 4px;
   }
 
   .discover-main-filters {

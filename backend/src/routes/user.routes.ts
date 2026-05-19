@@ -7,6 +7,7 @@ import {
   getUserProfileByUsername,
   getFollowers,
   getFollowing,
+  getSuggestedUsers,
   followUser,
   unfollowUser,
   getFeed,
@@ -23,6 +24,7 @@ router.get("/profile/:username", getUserProfileByUsername);
 router.get("/:id/profile", getUserProfile);
 router.get("/:id/followers", getFollowers);
 router.get("/:id/following", getFollowing);
+router.get("/:id/suggestions", getSuggestedUsers);
 router.get("/:id/feed", getFeed);
 router.post("/:id/follow", followUser);
 router.delete("/:id/follow", unfollowUser);

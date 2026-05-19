@@ -2,6 +2,7 @@ export type Usuario = {
   id: number;
   username: string;
   email: string;
+  nombre?: string | null;
   tipo_usuario: string;
   edad?: number | null;
   peso?: number | null;
@@ -121,6 +122,14 @@ export type SearchUser = Usuario & {
   followers_count: number;
   following_count: number;
   lo_sigo: boolean;
+};
+
+export type SuggestedAthlete = Usuario & {
+  followers_count: number;
+  following_count: number;
+  trainings_count: number;
+  viewer_follows: boolean;
+  mutual_following_count: number;
 };
 
 export type PerfilUsuario = {

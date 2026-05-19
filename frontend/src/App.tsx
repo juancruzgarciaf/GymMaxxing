@@ -413,7 +413,7 @@ function App() {
             className={`nav-btn ${mainScreen === "home" ? "active" : ""}`}
             onClick={() => navigateTo("home")}
           >
-            Feed
+            Inicio
           </button>
           {canTrain ? (
             <button

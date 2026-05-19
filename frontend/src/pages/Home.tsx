@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import FeedSidebar from "../components/FeedSidebar";
 import TrainingPostCard from "../components/TrainingPostCard";
-import type { EntrenamientoResumen, Usuario } from "../types";
+import type { EntrenamientoResumen, PerfilUsuario, SuggestedAthlete, Usuario } from "../types";
 
 type HomeProps = {
   usuario: Usuario;
@@ -32,6 +33,11 @@ function Home({
   const [totalItems, setTotalItems] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [profileSummary, setProfileSummary] = useState<PerfilUsuario | null>(null);
+  const [suggestedAthletes, setSuggestedAthletes] = useState<SuggestedAthlete[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(true);
+  const [suggestionsError, setSuggestionsError] = useState("");
+  const [followLoadingId, setFollowLoadingId] = useState<number | null>(null);
 
   useEffect(() => {
     setPage(1);
@@ -49,7 +55,7 @@ function Home({
         const data = (await res.json()) as EntrenamientoResumen[] | FeedResponse | { error?: string };
 
         if (!res.ok) {
-          throw new Error("error" in data ? data.error || "No se pudo cargar el feed" : "No se pudo cargar el feed");
+          throw new Error("error" in data ? data.error || "No se pudo cargar Inicio" : "No se pudo cargar Inicio");
         }
 
         if (!cancelled) {
@@ -72,7 +78,7 @@ function Home({
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "No se pudo cargar el feed");
+          setError(err instanceof Error ? err.message : "No se pudo cargar Inicio");
         }
       } finally {
         if (!cancelled) {
@@ -88,60 +94,161 @@ function Home({
     };
   }, [page, usuario.id]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSidebar = async () => {
+      try {
+        setSuggestionsLoading(true);
+        setSuggestionsError("");
+
+        const [profileRes, suggestionsRes] = await Promise.all([
+          fetch(`${API}/users/${usuario.id}/profile?viewer_id=${usuario.id}`),
+          fetch(`${API}/users/${usuario.id}/suggestions?limit=5`),
+        ]);
+
+        const profileData = (await profileRes.json()) as PerfilUsuario | { error?: string };
+        const suggestionsData = (await suggestionsRes.json()) as SuggestedAthlete[] | { error?: string };
+
+        if (!profileRes.ok) {
+          throw new Error(
+            "error" in profileData
+              ? profileData.error || "No se pudo cargar tu perfil"
+              : "No se pudo cargar tu perfil",
+          );
+        }
+
+        if (!suggestionsRes.ok) {
+          throw new Error(
+            "error" in suggestionsData
+              ? suggestionsData.error || "No se pudieron cargar sugerencias"
+              : "No se pudieron cargar sugerencias",
+          );
+        }
+
+        if (!cancelled) {
+          setProfileSummary(profileData as PerfilUsuario);
+          setSuggestedAthletes(Array.isArray(suggestionsData) ? suggestionsData : []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setSuggestionsError(err instanceof Error ? err.message : "No se pudo cargar la sidebar");
+        }
+      } finally {
+        if (!cancelled) {
+          setSuggestionsLoading(false);
+        }
+      }
+    };
+
+    void loadSidebar();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [usuario.id]);
+
   const goToPage = (nextPage: number) => {
     setPage(Math.min(Math.max(nextPage, 1), totalPages));
   };
 
+  const followSuggestedAthlete = async (athlete: SuggestedAthlete) => {
+    try {
+      setFollowLoadingId(athlete.id);
+      setSuggestionsError("");
+
+      const res = await fetch(`${API}/users/${athlete.id}/follow`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seguidor_id: usuario.id }),
+      });
+      const data = (await res.json()) as { error?: string };
+
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo seguir al atleta");
+      }
+
+      setSuggestedAthletes((prev) => prev.filter((item) => item.id !== athlete.id));
+      setProfileSummary((prev) =>
+        prev
+          ? {
+              ...prev,
+              following_count: prev.following_count + 1,
+            }
+          : prev,
+      );
+    } catch (err) {
+      setSuggestionsError(err instanceof Error ? err.message : "No se pudo seguir al atleta");
+    } finally {
+      setFollowLoadingId(null);
+    }
+  };
+
   return (
-    <main className="page-shell">
+    <main className="page-shell feed-page-shell">
       <section className="page-hero">
-        <h1>FEED</h1>
+        <h1>Inicio</h1>
       </section>
 
-      {loading ? <div className="status">Cargando feed...</div> : null}
-      {error ? <div className="status error">{error}</div> : null}
+      <div className="feed-layout">
+        <section className="feed-main-column" aria-label="Publicaciones de inicio">
+          {loading ? <div className="status">Cargando Inicio...</div> : null}
+          {error ? <div className="status error">{error}</div> : null}
 
-      {!loading && !error && feed.length === 0 ? (
-        <section className="empty-state">
-          <h2>Tu feed todavía está vacío</h2>
-          <p>
-            Finalizá una rutina, completá un entrenamiento libre o seguí a otros usuarios desde
-            Buscar para empezar a ver publicaciones acá.
-          </p>
+          {!loading && !error && feed.length === 0 ? (
+            <section className="empty-state">
+              <h2>Tu Inicio todavía está vacío</h2>
+              <p>
+                Finalizá una rutina, completá un entrenamiento libre o seguí a otros usuarios desde
+                Buscar para empezar a ver publicaciones acá.
+              </p>
+            </section>
+          ) : null}
+
+          <section className="feed-list">
+            {feed.map((item) => (
+              <TrainingPostCard
+                key={item.id_sesion}
+                item={item}
+                viewerId={usuario.id}
+                onOpenProfile={onOpenProfile}
+                onOpenTraining={onOpenTraining}
+                onSaveAsRoutine={onSaveAsRoutine}
+              />
+            ))}
+          </section>
+
+          {!loading && !error && totalItems > 0 && totalPages > 1 ? (
+            <nav className="feed-pagination" aria-label="Paginación de inicio">
+              <button type="button" className="btn secondary" onClick={() => goToPage(page - 1)} disabled={page <= 1}>
+                Anterior
+              </button>
+              <span>
+                Página {page} de {totalPages}
+              </span>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => goToPage(page + 1)}
+                disabled={page >= totalPages}
+              >
+                Siguiente
+              </button>
+            </nav>
+          ) : null}
         </section>
-      ) : null}
 
-      <section className="feed-list">
-        {feed.map((item) => (
-          <TrainingPostCard
-            key={item.id_sesion}
-            item={item}
-            viewerId={usuario.id}
-            onOpenProfile={onOpenProfile}
-            onOpenTraining={onOpenTraining}
-            onSaveAsRoutine={onSaveAsRoutine}
-          />
-        ))}
-      </section>
-
-      {!loading && !error && totalItems > 0 && totalPages > 1 ? (
-        <nav className="feed-pagination" aria-label="Paginación del feed">
-          <button type="button" className="btn secondary" onClick={() => goToPage(page - 1)} disabled={page <= 1}>
-            Anterior
-          </button>
-          <span>
-            Página {page} de {totalPages}
-          </span>
-          <button
-            type="button"
-            className="btn secondary"
-            onClick={() => goToPage(page + 1)}
-            disabled={page >= totalPages}
-          >
-            Siguiente
-          </button>
-        </nav>
-      ) : null}
+        <FeedSidebar
+          usuario={usuario}
+          profile={profileSummary}
+          suggestedAthletes={suggestedAthletes}
+          suggestionsLoading={suggestionsLoading}
+          suggestionsError={suggestionsError}
+          followLoadingId={followLoadingId}
+          onFollowSuggested={followSuggestedAthlete}
+          onOpenProfile={onOpenProfile}
+        />
+      </div>
     </main>
   );
 }
