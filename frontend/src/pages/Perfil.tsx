@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import TrainingPostCard from "../components/TrainingPostCard";
+import ProfileHeader from "../components/ProfileHeader";
+import TrainingCalendar from "../components/TrainingCalendar";
+import UserTrainingFeed from "../components/UserTrainingFeed";
 import { COUNTRY_OPTIONS } from "../lib/countries";
 import type { EntrenamientoResumen, PerfilUsuario, Usuario } from "../types";
 
@@ -183,57 +185,18 @@ function Perfil({
   };
 
   return (
-    <main className="page-shell">
+    <main className="page-shell profile-page-shell">
       {loading ? <div className="status">Cargando perfil...</div> : null}
       {error ? <div className="status error">{error}</div> : null}
 
       {!loading && perfil ? (
         <>
-          <section className="profile-banner">
-            <div className="profile-avatar">{perfil.usuario.username.slice(0, 1).toUpperCase()}</div>
-
-            <div className="profile-main">
-              <h1>{perfil.usuario.username}</h1>
-              <p className="subtitle">{perfil.usuario.email}</p>
-
-              <div className="profile-stats">
-                <div>
-                  <strong>{perfil.trainings_count}</strong>
-                  <span>Entrenamientos</span>
-                </div>
-                <div>
-                  <strong>{perfil.followers_count}</strong>
-                  <span>Seguidores</span>
-                </div>
-                <div>
-                  <strong>{perfil.following_count}</strong>
-                  <span>Siguiendo</span>
-                </div>
-              </div>
-
-              <div className="profile-meta">
-                {perfil.usuario.nivel_entrenamiento ? (
-                  <span className="tag-soft">Nivel: {perfil.usuario.nivel_entrenamiento}</span>
-                ) : null}
-                {perfil.usuario.objetivo_entrenamiento ? (
-                  <span className="tag-soft">Objetivo: {perfil.usuario.objetivo_entrenamiento}</span>
-                ) : null}
-                {perfil.usuario.nacionalidad ? (
-                  <span className="tag-soft">Nacionalidad: {perfil.usuario.nacionalidad}</span>
-                ) : null}
-              </div>
-            </div>
-
-            {!perfil.is_own_profile ? (
-              <button type="button" className={`btn ${perfil.viewer_follows ? "danger" : ""}`} onClick={() => void toggleFollow()}>
-                {perfil.viewer_follows ? "Dejar de seguir" : "Seguir"}
-              </button>
-            ) : (
-              <button type="button" className="btn secondary" onClick={() => setEditMode((prev) => !prev)}>
-                {editMode ? "Cancelar edicion" : "Editar perfil"}
-              </button>
-            )}
-          </section>
+          <ProfileHeader
+            perfil={perfil}
+            editMode={editMode}
+            onToggleEdit={() => setEditMode((prev) => !prev)}
+            onToggleFollow={toggleFollow}
+          />
 
           {perfil.is_own_profile && editMode ? (
             <section className="feed-card">
@@ -320,25 +283,21 @@ function Perfil({
             </section>
           ) : null}
 
-          {perfil.entrenamientos.length === 0 ? (
-            <section className="empty-state">
-              <h2>No hay entrenamientos finalizados todavía</h2>
-              <p>Cuando este usuario termine rutinas, van a aparecer acá.</p>
+          <section className="profile-content-layout">
+            <section className="profile-feed-column" aria-label="Entrenamientos del usuario">
+              <UserTrainingFeed
+                trainings={perfil.entrenamientos}
+                viewerId={usuario.id}
+                onOpenProfile={onOpenProfile}
+                onOpenTraining={onOpenTraining}
+                onSaveAsRoutine={onSaveAsRoutine}
+              />
             </section>
-          ) : (
-            <section className="feed-list">
-              {perfil.entrenamientos.map((item) => (
-                <TrainingPostCard
-                  key={item.id_sesion}
-                  item={item}
-                  viewerId={usuario.id}
-                  onOpenProfile={onOpenProfile}
-                  onOpenTraining={onOpenTraining}
-                  onSaveAsRoutine={onSaveAsRoutine}
-                />
-              ))}
-            </section>
-          )}
+
+            <aside className="profile-calendar-column" aria-label="Calendario de entrenamientos">
+              <TrainingCalendar trainings={perfil.entrenamientos} onOpenTraining={onOpenTraining} />
+            </aside>
+          </section>
 
           {!perfil.is_own_profile ? (
             <section className="profile-actions-row">
