@@ -239,6 +239,26 @@ function App() {
     }
   }, [currentTraining, mainScreen, navigate, usuario]);
 
+  useEffect(() => {
+    if (!usuario || canUseTrainingFeatures(usuario)) {
+      return;
+    }
+
+    if (mainScreen === "entrenamientoLibre") {
+      setTrainingSeed(null);
+      setAppToast({
+        type: "error",
+        text: "Las cuentas gimnasio no pueden iniciar entrenamientos",
+      });
+      navigate(pathForScreen("rutinas"), { replace: true });
+    }
+
+    if (activeTraining) {
+      setActiveTraining(null);
+      setDiscardTrainingModalOpen(false);
+    }
+  }, [activeTraining, mainScreen, navigate, usuario]);
+
   const dismissSharedRoutine = () => {
     if (sharedRoutineId == null) {
       return;

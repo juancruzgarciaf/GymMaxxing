@@ -271,6 +271,19 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
     );
   };
 
+  useEffect(() => {
+    if (canStartTraining || vista !== "ejecucion") {
+      return;
+    }
+
+    setSesionActiva(null);
+    setRutinaEnEjecucion(null);
+    setEjecucionEjercicios([]);
+    setDescansoActivo(null);
+    setVista("lista");
+    setError("Las cuentas gimnasio no pueden iniciar rutinas");
+  }, [canStartTraining, vista]);
+
   const cargarCarpetas = async () => {
     const res = await fetch(`${API}/rutinas/carpetas?usuario_id=${usuario.id}`);
     if (!res.ok) {

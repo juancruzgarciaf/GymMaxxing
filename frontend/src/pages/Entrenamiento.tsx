@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import bodybuilderFlexSample from "../assets/bodybuilder-flex-sample.webp";
 import siluetaStrongman from "../assets/siluetastrongman.png";
+import { canUseTrainingFeatures } from "../lib/roles";
 import { saveTrainingSeedAsRoutine } from "../lib/trainingTransfer";
 import type { TrainingSeed, TrainingSetType, Usuario } from "../types";
 
@@ -161,6 +162,7 @@ function Entrenamiento({
   const handledDiscardRequestKey = useRef(0);
   const descartarEntrenamientoRef = useRef<(() => Promise<void>) | null>(null);
   const catalogoAutoReloadTriedRef = useRef(false);
+  const canTrain = canUseTrainingFeatures(usuario);
 
   const totalSeriesEjecucion = useMemo(
     () => ejecucionEjercicios.reduce((acc, ejercicio) => acc + ejercicio.series.length, 0),
@@ -491,6 +493,12 @@ function Entrenamiento({
   };
 
   const comenzarEntrenamiento = async (nextSeed?: TrainingSeed) => {
+    if (!canTrain) {
+      setError("Las cuentas gimnasio no pueden iniciar entrenamientos");
+      onSeedConsumed?.();
+      return;
+    }
+
     try {
       setLoading(true);
       setError("");
@@ -815,10 +823,16 @@ function Entrenamiento({
       return;
     }
 
+    if (!canTrain) {
+      setError("Las cuentas gimnasio no pueden iniciar entrenamientos");
+      onSeedConsumed?.();
+      return;
+    }
+
     void comenzarEntrenamiento(seed).finally(() => {
       onSeedConsumed?.();
     });
-  }, [seed, seedKey]);
+  }, [canTrain, seed, seedKey]);
 
   useEffect(() => {
     if (!sesionActiva || vista !== "ejecucion") {

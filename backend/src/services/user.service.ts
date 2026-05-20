@@ -411,7 +411,7 @@ export const getUserRoleById = async (id: number) => {
   );
 
   const role = result.rows[0]?.tipo_usuario;
-  return role ? role.toLowerCase() : null;
+  return role ? role.trim().toLowerCase() : null;
 };
 
 export const updateUser = async (id: number, data: Partial<UsuarioRow>) => {
