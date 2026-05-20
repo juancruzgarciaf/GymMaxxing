@@ -1,4 +1,5 @@
 import { useState } from "react";
+import discoverBodySilhouette from "../assets/discover-body-silhouette.png";
 import DescubrirRutinas from "./DescubrirRutinas";
 import Tendencias from "./Tendencias";
 import type { EntrenamientoResumen, Usuario } from "../types";
@@ -105,6 +106,10 @@ function Descubrir({ usuario, onOpenProfile, onOpenTraining }: DescubrirProps) {
           <span>Tendencias</span>
           <small>Rankings y actividad del momento.</small>
         </button>
+      </section>
+
+      <section className="discover-visual-strip" aria-label="Inspiracion GymMaxxing">
+        <img src={discoverBodySilhouette} alt="Silueta atletica GymMaxxing" />
       </section>
     </main>
   );

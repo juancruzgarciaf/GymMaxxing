@@ -26,7 +26,7 @@ const base64UrlDecode = (value: string) => {
 
 const getSecret = () => process.env.AUTH_TOKEN_SECRET || "gymmaxxing-dev-secret";
 
-export const createAuthToken = (user: TokenUser, expiresInHours = 24) => {
+export const createAuthToken = (user: TokenUser, expiresInHours = 24 * 7) => {
   const header = { alg: "HS256", typ: "JWT" };
   const payload: TokenPayload = {
     ...user,

@@ -841,6 +841,18 @@ h2 {
   padding-right: 4px;
 }
 
+.library-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.library-panel-head h2 {
+  margin: 0;
+}
+
 .library-item {
   border: 1px solid #33424d;
   background: #141c23;
@@ -1017,6 +1029,23 @@ h2 {
 
 .routine-copy-insight {
   margin: 10px 0 0;
+}
+
+.routine-empty-detail {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+}
+
+.routine-empty-detail .helper-text {
+  justify-self: start;
+}
+
+.routine-empty-detail img {
+  width: min(260px, 70%);
+  max-height: 340px;
+  object-fit: contain;
+  opacity: 0.92;
 }
 
 .muscle-chips {
@@ -1501,7 +1530,8 @@ h2 {
   gap: 10px;
 }
 
-.profile-modern-stats div {
+.profile-modern-stats div,
+.profile-stat-button {
   min-width: 128px;
   border: 1px solid rgba(151, 183, 202, 0.13);
   border-radius: 16px;
@@ -1509,6 +1539,23 @@ h2 {
   padding: 11px 13px;
   display: grid;
   gap: 3px;
+}
+
+.profile-stat-button {
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    transform 0.16s ease;
+}
+
+.profile-stat-button:hover {
+  border-color: rgba(126, 214, 161, 0.46);
+  background: rgba(26, 39, 47, 0.92);
+  transform: translateY(-1px);
 }
 
 .profile-modern-stats strong {
@@ -1563,6 +1610,119 @@ h2 {
   gap: 8px;
 }
 
+.profile-social-backdrop {
+  background: rgba(2, 8, 14, 0.72);
+  z-index: 60;
+  overscroll-behavior: contain;
+}
+
+.profile-social-modal {
+  width: min(640px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 44px));
+  background: linear-gradient(145deg, #19242d 0%, #121920 100%);
+  border: 1px solid rgba(151, 183, 202, 0.18);
+  color: #d8e2ea;
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+  overflow: hidden;
+}
+
+.profile-social-modal .modal-head h2 {
+  color: #eef8fd;
+}
+
+.profile-social-modal .modal-close {
+  color: #d8e2ea;
+}
+
+.profile-social-modal .modal-close:hover {
+  color: #ffffff;
+}
+
+.profile-social-search,
+.profile-social-modal .field {
+  background: #111920;
+  color: #d8e2ea;
+  border-color: #32424f;
+}
+
+.profile-social-divider {
+  height: 1px;
+  background: rgba(151, 183, 202, 0.14);
+}
+
+.profile-social-list {
+  min-height: 260px;
+  max-height: min(520px, 58vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.profile-social-user {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid rgba(151, 183, 202, 0.12);
+  border-radius: 12px;
+  background: rgba(15, 23, 29, 0.72);
+  padding: 10px;
+}
+
+.profile-social-user-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.profile-social-user-main span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.profile-social-user-main strong,
+.profile-social-user-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-social-user-main strong {
+  color: #eef8fd;
+}
+
+.profile-social-user-main small,
+.profile-social-status {
+  color: #9fb3c1;
+}
+
+.profile-social-status {
+  margin: 18px 0;
+  text-align: center;
+}
+
+.profile-social-status.error {
+  color: #ffb0b7;
+}
+
+.profile-social-avatar {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, #7ed6a1 0%, #4fb6dd 100%);
+  color: #10221a;
+  font-weight: 800;
+}
+
 .profile-content-layout {
   display: grid;
   grid-template-columns: minmax(0, 760px) minmax(300px, 340px);
@@ -1575,6 +1735,8 @@ h2 {
 .profile-feed-column {
   grid-area: feed;
   min-width: 0;
+  display: grid;
+  gap: 16px;
 }
 
 .profile-calendar-column {
@@ -1782,6 +1944,49 @@ h2 {
 
 .calendar-training-link:hover {
   color: #a4f0bf;
+}
+
+.profile-training-search {
+  display: grid;
+  gap: 14px;
+}
+
+.profile-training-search-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+}
+
+.profile-training-search-head h2,
+.profile-training-search-head p {
+  margin: 0;
+}
+
+.profile-training-search-head h2 {
+  color: #eef8fd;
+  font-size: 1.2rem;
+}
+
+.profile-training-search-head span {
+  border: 1px solid rgba(151, 183, 202, 0.13);
+  border-radius: 999px;
+  background: rgba(20, 28, 35, 0.72);
+  color: #9fb3c1;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.profile-training-search-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(130px, 160px) minmax(130px, 160px) auto auto;
+  gap: 10px;
+}
+
+.profile-training-muscles {
+  margin-top: 2px;
 }
 
 .tag-soft {
@@ -2182,6 +2387,19 @@ button.discover-module-card:hover {
   height: 26px;
 }
 
+.discover-visual-strip {
+  display: flex;
+  justify-content: center;
+  padding: 0;
+}
+
+.discover-visual-strip img {
+  width: min(220px, 48vw);
+  max-height: 300px;
+  object-fit: contain;
+  filter: drop-shadow(0 28px 48px rgba(0, 0, 0, 0.42));
+}
+
 .discover-branch-hero {
   display: block;
   position: relative;
@@ -2507,6 +2725,14 @@ button.discover-module-card:hover {
     position: static;
   }
 
+  .profile-training-search-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .profile-training-search-grid .field:first-child {
+    grid-column: 1 / -1;
+  }
+
   .metrics-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2575,6 +2801,32 @@ button.discover-module-card:hover {
   .profile-modern-stats {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .profile-social-modal {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 28px);
+    padding: 18px;
+  }
+
+  .profile-social-list {
+    max-height: 62vh;
+  }
+
+  .profile-social-user {
+    align-items: stretch;
+  }
+
+  .profile-training-search-head {
+    display: grid;
+  }
+
+  .profile-training-search-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-training-search-grid .field:first-child {
+    grid-column: auto;
   }
 
   .training-calendar-card {

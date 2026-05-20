@@ -40,6 +40,10 @@ type StoredAuth = {
   token: string;
 };
 
+type StoredTokenPayload = {
+  exp?: number;
+};
+
 type RoutedMainScreen = Exclude<MainScreen, "entrenamiento" | "rutinaCompartida">;
 
 type TrainingRouteState = {
@@ -116,6 +120,23 @@ const getMainScreenFromPath = (pathname: string): MainScreen => {
   return "home";
 };
 
+const isStoredTokenUsable = (token: string) => {
+  try {
+    const payloadPart = token.split(".")[1];
+    if (!payloadPart) {
+      return false;
+    }
+
+    const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+    const payload = JSON.parse(window.atob(padded)) as StoredTokenPayload;
+
+    return typeof payload.exp === "number" && payload.exp > Math.floor(Date.now() / 1000);
+  } catch {
+    return false;
+  }
+};
+
 const readStoredAuth = (): StoredAuth | null => {
   try {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -125,6 +146,11 @@ const readStoredAuth = (): StoredAuth | null => {
 
     const parsed = JSON.parse(raw) as Partial<StoredAuth>;
     if (!parsed.usuario || !parsed.token) {
+      return null;
+    }
+
+    if (!isStoredTokenUsable(parsed.token)) {
+      persistAuth(null);
       return null;
     }
 
@@ -356,6 +382,10 @@ function App() {
     navigate("/login", { replace: true });
   };
 
+  const handleAuthExpired = () => {
+    handleLogout();
+  };
+
   if (!usuario) {
     if (authScreen === "register") {
       return <Register goToLogin={() => navigate("/login")} />;
@@ -520,6 +550,7 @@ function App() {
             onOpenTraining={(training) => openTraining(training, "perfil")}
             onSaveAsRoutine={handleSaveTrainingAsRoutine}
             authToken={authToken}
+            onAuthExpired={handleAuthExpired}
             onUserUpdated={(nextUser) => {
               setUsuario(nextUser);
               if (authToken) {

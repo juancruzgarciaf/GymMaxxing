@@ -7,6 +7,7 @@ export type Usuario = {
   edad?: number | null;
   peso?: number | null;
   altura?: number | null;
+  genero?: "hombre" | "mujer" | null;
   nacionalidad?: string | null;
   nivel_entrenamiento?: string | null;
   objetivo_entrenamiento?: string | null;
@@ -122,6 +123,11 @@ export type SearchUser = Usuario & {
   followers_count: number;
   following_count: number;
   lo_sigo: boolean;
+};
+
+export type SocialUser = Usuario & {
+  fecha_seguimiento: string;
+  viewer_follows: boolean;
 };
 
 export type SuggestedAthlete = Usuario & {

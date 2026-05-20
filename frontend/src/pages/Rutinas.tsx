@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import routineEmptyFlex from "../assets/routine-empty-flex.png";
 import { createRoutineShareUrl } from "../lib/trainingTransfer";
 import { canUseTrainingFeatures } from "../lib/roles";
 import type { TrainingSeed, Usuario } from "../types";
@@ -2165,7 +2166,10 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
               </div>
             </div>
           ) : (
-            <p className="helper-text">Selecciona una rutina para ver sus detalles.</p>
+            <div className="routine-empty-detail">
+              <p className="helper-text">Selecciona una rutina para ver sus detalles.</p>
+              <img src={routineEmptyFlex} alt="Silueta de fuerza" />
+            </div>
           )}
         </article>
       </section>

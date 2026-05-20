@@ -140,6 +140,8 @@ function Entrenamiento({
   const [error, setError] = useState("");
 
   const [catalogoEjercicios, setCatalogoEjercicios] = useState<Ejercicio[]>([]);
+  const [catalogoLoading, setCatalogoLoading] = useState(false);
+  const [catalogoError, setCatalogoError] = useState("");
   const [carpetas, setCarpetas] = useState<CarpetaRutina[]>([]);
   const [filtroEquipo, setFiltroEquipo] = useState("");
   const [filtroMusculo, setFiltroMusculo] = useState("");
@@ -158,6 +160,7 @@ function Entrenamiento({
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
   const handledDiscardRequestKey = useRef(0);
   const descartarEntrenamientoRef = useRef<(() => Promise<void>) | null>(null);
+  const catalogoAutoReloadTriedRef = useRef(false);
 
   const totalSeriesEjecucion = useMemo(
     () => ejecucionEjercicios.reduce((acc, ejercicio) => acc + ejercicio.series.length, 0),
@@ -210,14 +213,32 @@ function Entrenamiento({
     return nextExercise?.nombre ?? null;
   }, [ejecucionEjercicios]);
 
-  const cargarCatalogoEjercicios = async () => {
-    const res = await fetch(`${API}/ejercicios`);
-    if (!res.ok) {
-      throw new Error(await parseError(res, "No se pudo obtener el catalogo de ejercicios"));
-    }
+  const cargarCatalogoEjercicios = async ({ silent = false }: { silent?: boolean } = {}) => {
+    try {
+      setCatalogoLoading(true);
+      setCatalogoError("");
 
-    const data = (await res.json()) as Ejercicio[];
-    setCatalogoEjercicios(data);
+      const res = await fetch(`${API}/ejercicios`);
+      if (!res.ok) {
+        throw new Error(await parseError(res, "No se pudo obtener el catalogo de ejercicios"));
+      }
+
+      const data = (await res.json()) as Ejercicio[] | { items?: Ejercicio[] };
+      const nextCatalogo = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : [];
+      setCatalogoEjercicios(nextCatalogo);
+
+      if (nextCatalogo.length === 0) {
+        setCatalogoError("El catalogo de ejercicios esta vacio.");
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo obtener el catalogo de ejercicios";
+      setCatalogoError(message);
+      if (!silent) {
+        setError(message);
+      }
+    } finally {
+      setCatalogoLoading(false);
+    }
   };
 
   const cargarCarpetas = async () => {
@@ -236,7 +257,7 @@ function Entrenamiento({
       try {
         setLoading(true);
         setError("");
-        await Promise.all([cargarCatalogoEjercicios(), cargarCarpetas()]);
+        await Promise.all([cargarCatalogoEjercicios({ silent: true }), cargarCarpetas()]);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error cargando entrenamiento");
       } finally {
@@ -246,6 +267,25 @@ function Entrenamiento({
 
     void init();
   }, [usuario.id]);
+
+  useEffect(() => {
+    if (vista !== "ejecucion") {
+      catalogoAutoReloadTriedRef.current = false;
+      return;
+    }
+
+    if (catalogoEjercicios.length > 0) {
+      catalogoAutoReloadTriedRef.current = false;
+      return;
+    }
+
+    if (catalogoLoading || catalogoAutoReloadTriedRef.current) {
+      return;
+    }
+
+    catalogoAutoReloadTriedRef.current = true;
+    void cargarCatalogoEjercicios({ silent: true });
+  }, [catalogoEjercicios.length, catalogoLoading, vista]);
 
   useEffect(() => {
     if (!descansoActivo || descansoActivo.finalizado) {
@@ -1207,12 +1247,23 @@ function Entrenamiento({
           </article>
 
           <aside className="box">
-            <h2>Agregar ejercicios</h2>
+            <div className="library-panel-head">
+              <h2>Agregar ejercicios</h2>
+              <button
+                type="button"
+                className="btn tiny secondary"
+                onClick={() => void cargarCatalogoEjercicios()}
+                disabled={catalogoLoading}
+              >
+                {catalogoLoading ? "Cargando..." : "Recargar"}
+              </button>
+            </div>
             <div className="form-grid">
               <select
                 className="field"
                 value={filtroEquipo}
                 onChange={(event) => setFiltroEquipo(event.target.value)}
+                disabled={catalogoLoading}
               >
                 <option value="">Todo equipamiento</option>
                 {equipos.map((equipo) => (
@@ -1226,6 +1277,7 @@ function Entrenamiento({
                 className="field"
                 value={filtroMusculo}
                 onChange={(event) => setFiltroMusculo(event.target.value)}
+                disabled={catalogoLoading}
               >
                 <option value="">Todos musculos</option>
                 {musculos.map((musculo) => (
@@ -1240,11 +1292,16 @@ function Entrenamiento({
                 placeholder="Buscar ejercicios"
                 value={busquedaEjercicio}
                 onChange={(event) => setBusquedaEjercicio(event.target.value)}
+                disabled={catalogoLoading}
               />
             </div>
 
             <div className="library-list">
-              {catalogoFiltrado.map((ejercicio) => {
+              {catalogoLoading ? <p className="helper-text">Cargando ejercicios...</p> : null}
+              {!catalogoLoading && catalogoError ? (
+                <p className="helper-text">{catalogoError}</p>
+              ) : null}
+              {!catalogoLoading && catalogoFiltrado.map((ejercicio) => {
                 const yaAgregado = ejecucionEjercicios.some(
                   (item) => item.id_ejercicio === ejercicio.id_ejercicio,
                 );
@@ -1266,7 +1323,7 @@ function Entrenamiento({
                   </div>
                 );
               })}
-              {catalogoFiltrado.length === 0 ? (
+              {!catalogoLoading && !catalogoError && catalogoFiltrado.length === 0 ? (
                 <p className="helper-text">No hay ejercicios para ese filtro.</p>
               ) : null}
             </div>

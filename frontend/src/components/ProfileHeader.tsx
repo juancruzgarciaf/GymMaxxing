@@ -5,14 +5,29 @@ type ProfileHeaderProps = {
   editMode: boolean;
   onToggleEdit: () => void;
   onToggleFollow: () => void | Promise<void>;
+  onOpenFollowers: () => void;
+  onOpenFollowing: () => void;
 };
 
 const formatNumber = (value: number) =>
   new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(value);
 
-function ProfileHeader({ perfil, editMode, onToggleEdit, onToggleFollow }: ProfileHeaderProps) {
+const GENDER_LABELS: Record<string, string> = {
+  hombre: "Hombre",
+  mujer: "Mujer",
+};
+
+function ProfileHeader({
+  perfil,
+  editMode,
+  onToggleEdit,
+  onToggleFollow,
+  onOpenFollowers,
+  onOpenFollowing,
+}: ProfileHeaderProps) {
   const realName = perfil.usuario.nombre?.trim();
   const bio = perfil.usuario.objetivo_entrenamiento?.trim();
+  const genderLabel = perfil.usuario.genero ? GENDER_LABELS[perfil.usuario.genero] ?? perfil.usuario.genero : "";
 
   return (
     <section className="profile-modern-header">
@@ -45,19 +60,22 @@ function ProfileHeader({ perfil, editMode, onToggleEdit, onToggleFollow }: Profi
             <strong>{formatNumber(perfil.trainings_count)}</strong>
             <span>Entrenamientos</span>
           </div>
-          <div>
+          <button type="button" className="profile-stat-button" onClick={onOpenFollowers}>
             <strong>{formatNumber(perfil.followers_count)}</strong>
             <span>Seguidores</span>
-          </div>
-          <div>
+          </button>
+          <button type="button" className="profile-stat-button" onClick={onOpenFollowing}>
             <strong>{formatNumber(perfil.following_count)}</strong>
             <span>Siguiendo</span>
-          </div>
+          </button>
         </div>
 
         {bio ? <p className="profile-bio">{bio}</p> : null}
 
         <div className="profile-meta">
+          {genderLabel ? (
+            <span className="tag-soft">Genero: {genderLabel}</span>
+          ) : null}
           {perfil.usuario.nivel_entrenamiento ? (
             <span className="tag-soft">Nivel: {perfil.usuario.nivel_entrenamiento}</span>
           ) : null}

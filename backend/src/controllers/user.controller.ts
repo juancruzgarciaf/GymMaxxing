@@ -45,6 +45,7 @@ export const updateUser = async (req: Request, res: Response) => {
       edad,
       peso,
       altura,
+      genero,
       nacionalidad,
       nivel_entrenamiento,
       objetivo_entrenamiento,
@@ -72,12 +73,24 @@ export const updateUser = async (req: Request, res: Response) => {
       });
     }
 
+    const cleanGenero =
+      typeof genero === "string" && genero.trim()
+        ? genero.trim().toLowerCase()
+        : null;
+
+    if (cleanGenero != null && !["hombre", "mujer"].includes(cleanGenero)) {
+      return res.status(400).json({
+        error: "genero debe ser hombre o mujer",
+      });
+    }
+
     const usuario = await userService.updateUser(id, {
       username: cleanUsername,
       email: cleanEmail,
       edad,
       peso,
       altura,
+      genero: cleanGenero,
       nacionalidad,
       nivel_entrenamiento,
       objetivo_entrenamiento,
@@ -288,7 +301,19 @@ export const getFollowers = async (req: Request, res: Response) => {
       });
     }
 
-    const followers = await userService.getFollowers(userId);
+    const viewerIdRaw = req.query.viewer_id;
+    const viewerId =
+      typeof viewerIdRaw === "string" && viewerIdRaw.trim()
+        ? Number(viewerIdRaw)
+        : undefined;
+
+    if (viewerIdRaw != null && (viewerId == null || Number.isNaN(viewerId))) {
+      return res.status(400).json({
+        error: "viewer_id inválido",
+      });
+    }
+
+    const followers = await userService.getFollowers(userId, viewerId);
     return res.json(followers);
   } catch (error) {
     console.error(error);
@@ -308,7 +333,19 @@ export const getFollowing = async (req: Request, res: Response) => {
       });
     }
 
-    const following = await userService.getFollowing(userId);
+    const viewerIdRaw = req.query.viewer_id;
+    const viewerId =
+      typeof viewerIdRaw === "string" && viewerIdRaw.trim()
+        ? Number(viewerIdRaw)
+        : undefined;
+
+    if (viewerIdRaw != null && (viewerId == null || Number.isNaN(viewerId))) {
+      return res.status(400).json({
+        error: "viewer_id inválido",
+      });
+    }
+
+    const following = await userService.getFollowing(userId, viewerId);
     return res.json(following);
   } catch (error) {
     console.error(error);
@@ -421,6 +458,92 @@ export const getFeed = async (req: Request, res: Response) => {
     console.error(error);
     return res.status(500).json({
       error: "Error obteniendo Inicio",
+    });
+  }
+};
+
+export const searchUserTrainings = async (req: Request, res: Response) => {
+  try {
+    const userId = Number(req.params.id);
+
+    if (Number.isNaN(userId)) {
+      return res.status(400).json({
+        error: "id inválido",
+      });
+    }
+
+    const viewerIdRaw = req.query.viewer_id;
+    const viewerId =
+      typeof viewerIdRaw === "string" && viewerIdRaw.trim()
+        ? Number(viewerIdRaw)
+        : undefined;
+
+    if (viewerIdRaw != null && (viewerId == null || Number.isNaN(viewerId))) {
+      return res.status(400).json({
+        error: "viewer_id inválido",
+      });
+    }
+
+    const queryRaw = req.query.q;
+    const q =
+      typeof queryRaw === "string" && queryRaw.trim()
+        ? queryRaw.trim()
+        : undefined;
+
+    const grupoRaw = req.query.grupo_muscular;
+    const gruposMusculares =
+      typeof grupoRaw === "string" && grupoRaw.trim()
+        ? grupoRaw
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean)
+        : undefined;
+
+    const minDurationRaw = req.query.duracion_min;
+    const maxDurationRaw = req.query.duracion_max;
+    const minDurationMinutes =
+      typeof minDurationRaw === "string" && minDurationRaw.trim()
+        ? Number(minDurationRaw)
+        : undefined;
+    const maxDurationMinutes =
+      typeof maxDurationRaw === "string" && maxDurationRaw.trim()
+        ? Number(maxDurationRaw)
+        : undefined;
+
+    if (
+      (minDurationRaw != null && (minDurationMinutes == null || Number.isNaN(minDurationMinutes))) ||
+      (maxDurationRaw != null && (maxDurationMinutes == null || Number.isNaN(maxDurationMinutes)))
+    ) {
+      return res.status(400).json({
+        error: "duración inválida",
+      });
+    }
+
+    const filters: Parameters<typeof userService.searchUserTrainings>[2] = {};
+
+    if (q != null) {
+      filters.q = q;
+    }
+
+    if (gruposMusculares != null) {
+      filters.gruposMusculares = gruposMusculares;
+    }
+
+    if (minDurationMinutes != null) {
+      filters.minDurationSeconds = Math.max(0, Math.floor(minDurationMinutes * 60));
+    }
+
+    if (maxDurationMinutes != null) {
+      filters.maxDurationSeconds = Math.max(0, Math.floor(maxDurationMinutes * 60));
+    }
+
+    const result = await userService.searchUserTrainings(userId, viewerId, filters);
+
+    return res.json(result);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error buscando entrenamientos",
     });
   }
 };

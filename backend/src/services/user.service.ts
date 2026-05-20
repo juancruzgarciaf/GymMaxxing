@@ -8,6 +8,7 @@ type UsuarioRow = {
   edad: number | null;
   peso: number | null;
   altura: number | null;
+  genero: string | null;
   nacionalidad: string | null;
   nivel_entrenamiento: string | null;
   objetivo_entrenamiento: string | null;
@@ -50,6 +51,13 @@ type TrendUserRow = BasicUserRow & {
 
 type SuggestedUserRow = TrendUserRow & {
   mutual_following_count: number;
+};
+
+type UserTrainingSearchFilters = {
+  q?: string;
+  gruposMusculares?: string[];
+  minDurationSeconds?: number;
+  maxDurationSeconds?: number;
 };
 
 type SessionSummaryRow = {
@@ -156,7 +164,7 @@ const buildSessionsWithPreview = async (sessions: SessionSummaryRow[]) => {
 
 const getSessionSummaries = async (
   whereClause: string,
-  params: Array<number | string>,
+  params: Array<number | string | string[]>,
   limit: number,
   viewerId?: number,
   offset = 0,
@@ -237,6 +245,96 @@ const getSessionSummaries = async (
   );
 
   return buildSessionsWithPreview(result.rows);
+};
+
+const SESSION_DURATION_SQL = `COALESCE(
+  se.duracion_segundos,
+  CASE
+    WHEN se.fecha_inicio IS NOT NULL AND se.fecha_fin IS NOT NULL
+      THEN GREATEST(EXTRACT(EPOCH FROM (se.fecha_fin - se.fecha_inicio))::int, 0)
+    ELSE NULL
+  END
+)`;
+
+const getUserTrainingGroups = async (userId: number) => {
+  const result = await pool.query<{ grupo_muscular: string }>(
+    `SELECT DISTINCT e.grupo_muscular
+     FROM sesionentrenamiento se
+     JOIN serie s ON s.sesion_id = se.id_sesion
+     JOIN ejercicio e ON e.id_ejercicio = s.ejercicio_id
+     WHERE se.usuario_id = $1
+       AND se.estado = 'finalizada'
+       AND e.grupo_muscular IS NOT NULL
+       AND e.grupo_muscular <> ''
+     ORDER BY e.grupo_muscular ASC`,
+    [userId]
+  );
+
+  return result.rows.map((row) => row.grupo_muscular);
+};
+
+export const searchUserTrainings = async (
+  userId: number,
+  viewerId: number | undefined,
+  filters: UserTrainingSearchFilters
+) => {
+  const params: Array<number | string | string[]> = [userId];
+  const whereClauses = [
+    `se.usuario_id = $1`,
+    `se.estado = 'finalizada'`,
+  ];
+
+  if (filters.q) {
+    params.push(`%${filters.q}%`);
+    whereClauses.push(`(
+      COALESCE(se.nombre_rutina_snapshot, r.nombre, se.descripcion, 'Entrenamiento') ILIKE $${params.length}
+      OR se.descripcion ILIKE $${params.length}
+      OR EXISTS (
+        SELECT 1
+        FROM serie s
+        JOIN ejercicio e ON e.id_ejercicio = s.ejercicio_id
+        WHERE s.sesion_id = se.id_sesion
+          AND e.nombre ILIKE $${params.length}
+      )
+    )`);
+  }
+
+  if (filters.gruposMusculares && filters.gruposMusculares.length > 0) {
+    params.push(filters.gruposMusculares);
+    whereClauses.push(`EXISTS (
+      SELECT 1
+      FROM serie s
+      JOIN ejercicio e ON e.id_ejercicio = s.ejercicio_id
+      WHERE s.sesion_id = se.id_sesion
+        AND e.grupo_muscular = ANY($${params.length}::text[])
+    )`);
+  }
+
+  if (filters.minDurationSeconds != null) {
+    params.push(filters.minDurationSeconds);
+    whereClauses.push(`${SESSION_DURATION_SQL} >= $${params.length}`);
+  }
+
+  if (filters.maxDurationSeconds != null) {
+    params.push(filters.maxDurationSeconds);
+    whereClauses.push(`${SESSION_DURATION_SQL} <= $${params.length}`);
+  }
+
+  const [items, gruposMusculares] = await Promise.all([
+    getSessionSummaries(
+      whereClauses.join(" AND "),
+      params,
+      100,
+      viewerId,
+      0
+    ),
+    getUserTrainingGroups(userId),
+  ]);
+
+  return {
+    items,
+    grupos_musculares: gruposMusculares,
+  };
 };
 
 export const getUsuarios = async () => {
@@ -323,6 +421,7 @@ export const updateUser = async (id: number, data: Partial<UsuarioRow>) => {
     edad,
     peso,
     altura,
+    genero,
     nacionalidad,
     nivel_entrenamiento,
     objetivo_entrenamiento,
@@ -336,11 +435,12 @@ export const updateUser = async (id: number, data: Partial<UsuarioRow>) => {
        edad = $3,
        peso = $4,
        altura = $5,
-       nacionalidad = $6,
-       nivel_entrenamiento = $7,
-       objetivo_entrenamiento = $8,
-       tipo_usuario = $9
-     WHERE id = $10
+       genero = $6,
+       nacionalidad = $7,
+       nivel_entrenamiento = $8,
+       objetivo_entrenamiento = $9,
+       tipo_usuario = $10
+     WHERE id = $11
      RETURNING *`,
     [
       username,
@@ -348,6 +448,7 @@ export const updateUser = async (id: number, data: Partial<UsuarioRow>) => {
       edad ?? null,
       peso ?? null,
       altura ?? null,
+      genero ?? null,
       nacionalidad ?? null,
       nivel_entrenamiento ?? null,
       objetivo_entrenamiento ?? null,
@@ -461,36 +562,51 @@ export const unfollowUser = async (seguidorId: number, seguidoId: number) => {
 const getSocialList = async (
   joinColumn: "id_seguidor" | "id_seguido",
   targetColumn: "id_seguidor" | "id_seguido",
-  userId: number
+  userId: number,
+  viewerId?: number
 ) => {
+  const params: number[] = [userId];
+  const viewerFollowsSql =
+    viewerId == null
+      ? `FALSE AS viewer_follows`
+      : (() => {
+          params.push(viewerId);
+          return `EXISTS (
+            SELECT 1
+            FROM seguimientousuario viewer_su
+            WHERE viewer_su.id_seguidor = $${params.length}
+              AND viewer_su.id_seguido = u.id
+          ) AS viewer_follows`;
+        })();
+
   const result = await pool.query<
-    BasicUserRow & {
+    UsuarioRow & {
       fecha_seguimiento: string;
+      viewer_follows: boolean;
     }
   >(
-    `SELECT u.id,
-            u.username,
-            u.email,
-            u.tipo_usuario,
-            su.fecha::text AS fecha_seguimiento
+    `SELECT u.*,
+            su.fecha::text AS fecha_seguimiento,
+            ${viewerFollowsSql}
      FROM seguimientousuario su
      JOIN usuario u ON u.id = su.${targetColumn}
      WHERE su.${joinColumn} = $1
      ORDER BY su.fecha DESC, u.username ASC`,
-    [userId]
+    params
   );
 
   return result.rows.map((row) => ({
     ...sanitizeUser(row),
     fecha_seguimiento: row.fecha_seguimiento,
+    viewer_follows: row.viewer_follows,
   }));
 };
 
-export const getFollowers = async (userId: number) =>
-  getSocialList("id_seguido", "id_seguidor", userId);
+export const getFollowers = async (userId: number, viewerId?: number) =>
+  getSocialList("id_seguido", "id_seguidor", userId, viewerId);
 
-export const getFollowing = async (userId: number) =>
-  getSocialList("id_seguidor", "id_seguido", userId);
+export const getFollowing = async (userId: number, viewerId?: number) =>
+  getSocialList("id_seguidor", "id_seguido", userId, viewerId);
 
 export const getUserProfile = async (profileId: number, viewerId?: number) => {
   const userResult = await pool.query<

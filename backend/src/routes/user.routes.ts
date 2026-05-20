@@ -11,6 +11,7 @@ import {
   followUser,
   unfollowUser,
   getFeed,
+  searchUserTrainings,
   updateUser,
   getUsuarios,
   getUsuarioPorId
@@ -25,6 +26,7 @@ router.get("/:id/profile", getUserProfile);
 router.get("/:id/followers", getFollowers);
 router.get("/:id/following", getFollowing);
 router.get("/:id/suggestions", getSuggestedUsers);
+router.get("/:id/trainings/search", searchUserTrainings);
 router.get("/:id/feed", getFeed);
 router.post("/:id/follow", followUser);
 router.delete("/:id/follow", unfollowUser);
