@@ -104,6 +104,23 @@ function TrashIcon() {
   );
 }
 
+function TrophyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 4H16V8.5C16 11 14.2 13 12 13C9.8 13 8 11 8 8.5V4Z" fill="currentColor" />
+      <path
+        d="M8 6H5.5C5.5 8.8 6.8 10.5 9 10.8M16 6H18.5C18.5 8.8 17.2 10.5 15 10.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M11 13H13V17H16.5V20H7.5V17H11V13Z" fill="currentColor" />
+    </svg>
+  );
+}
+
 function TrainingPostCard({
   item,
   viewerId,
@@ -366,6 +383,15 @@ function TrainingPostCard({
           <span>Ejercicios</span>
           <strong>{item.total_ejercicios}</strong>
         </div>
+        {(item.total_trofeos ?? 0) > 0 ? (
+          <div className="metric-box trophy-metric">
+            <span>Trofeos</span>
+            <strong>
+              <TrophyIcon />
+              {item.total_trofeos}
+            </strong>
+          </div>
+        ) : null}
       </div>
 
       <div className="exercise-preview-list">

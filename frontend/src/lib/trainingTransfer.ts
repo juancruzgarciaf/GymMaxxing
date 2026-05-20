@@ -34,6 +34,9 @@ const parseError = async (res: Response, fallback: string) => {
   }
 };
 
+const isTrainingSetType = (value: string | null | undefined): value is TrainingSetType =>
+  value === "warmup" || value === "serie" || value === "dropset" || value === "failure";
+
 const readRutinaPrefs = () => {
   try {
     const raw = localStorage.getItem(RUTINA_PREFS_KEY);
@@ -223,7 +226,9 @@ export const fetchSessionSeed = async (training: EntrenamientoResumen): Promise<
           .map((serie) => ({
             kg: serie.peso == null ? "" : String(serie.peso),
             reps: String(serie.repeticiones),
-            tipo: "serie" as const,
+            km: serie.distancia_km == null ? "" : String(serie.distancia_km),
+            tiempoSegundos: serie.tiempo_segundos ?? 0,
+            tipo: isTrainingSetType(serie.tipo_serie) ? serie.tipo_serie : "serie",
           })),
       })),
   };
@@ -291,6 +296,8 @@ export const saveTrainingSeedAsRoutine = async (
       series: exercise.series.map((serie) => ({
         kg: serie.kg,
         reps: serie.reps,
+        km: serie.km,
+        tiempoSegundos: serie.tiempoSegundos,
         tipo: serie.tipo,
       })),
     })),

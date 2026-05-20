@@ -34,6 +34,329 @@ type CommentDeleteResult =
   | { ok: true; summary: SessionInteractionSummaryRow }
   | { ok: false; reason: "not_found" | "forbidden" };
 
+type Queryable = {
+  query: <T = any>(text: string, params?: unknown[]) => Promise<{ rows: T[] }>;
+};
+
+export type SerieAnteriorRow = {
+  orden: number;
+  repeticiones: number;
+  peso: number | null;
+  distancia_km: number | null;
+  tiempo_segundos: number | null;
+  tipo_serie: string;
+};
+
+type SerieRecordInputRow = {
+  ejercicio_id: number;
+  orden: number;
+  repeticiones: number;
+  peso: number;
+};
+
+type ExerciseRecordRow = {
+  mejor_volumen: number;
+  mejor_peso: number;
+  mejor_1rm: number;
+};
+
+type HistoricalExerciseRecordRow = {
+  mejor_volumen: number | null;
+  mejor_peso: number | null;
+  mejor_1rm: number | null;
+};
+
+let serieTipoSerieColumnReady = false;
+let recordTablesReady = false;
+
+const ensureSerieTipoSerieColumn = async (queryable: Queryable) => {
+  if (serieTipoSerieColumnReady) {
+    return;
+  }
+
+  await queryable.query(
+    `ALTER TABLE serie
+     ADD COLUMN IF NOT EXISTS tipo_serie VARCHAR(20) NOT NULL DEFAULT 'serie'`
+  );
+  await queryable.query(
+    `ALTER TABLE serie
+     ADD COLUMN IF NOT EXISTS distancia_km DOUBLE PRECISION`
+  );
+  await queryable.query(
+    `ALTER TABLE serie
+     ADD COLUMN IF NOT EXISTS tiempo_segundos INT`
+  );
+  await queryable.query(
+    `DO $$
+     BEGIN
+       IF NOT EXISTS (
+         SELECT 1
+         FROM pg_constraint
+         WHERE conname = 'serie_tipo_serie_check'
+           AND conrelid = 'serie'::regclass
+       ) THEN
+         ALTER TABLE serie
+         ADD CONSTRAINT serie_tipo_serie_check
+         CHECK (tipo_serie IN ('warmup', 'serie', 'dropset', 'failure'));
+       END IF;
+     END $$`
+  );
+
+  serieTipoSerieColumnReady = true;
+};
+
+const ensureRecordTables = async (queryable: Queryable) => {
+  if (recordTablesReady) {
+    return;
+  }
+
+  await queryable.query(
+    `CREATE TABLE IF NOT EXISTS usuario_ejercicio_record (
+       usuario_id INT NOT NULL,
+       ejercicio_id INT NOT NULL,
+       mejor_volumen DOUBLE PRECISION NOT NULL DEFAULT 0,
+       mejor_peso DOUBLE PRECISION NOT NULL DEFAULT 0,
+       mejor_1rm DOUBLE PRECISION NOT NULL DEFAULT 0,
+       fecha_actualizacion TIMESTAMP DEFAULT NOW(),
+       PRIMARY KEY (usuario_id, ejercicio_id)
+     )`
+  );
+  await queryable.query(
+    `CREATE TABLE IF NOT EXISTS sesion_record_evaluacion (
+       sesion_id INT PRIMARY KEY,
+       usuario_id INT NOT NULL,
+       fecha TIMESTAMP DEFAULT NOW()
+     )`
+  );
+  await queryable.query(
+    `CREATE TABLE IF NOT EXISTS serie_record_trofeo (
+       id_trofeo SERIAL PRIMARY KEY,
+       sesion_id INT NOT NULL,
+       usuario_id INT NOT NULL,
+       ejercicio_id INT NOT NULL,
+       orden INT NOT NULL,
+       tipo_record VARCHAR(20) NOT NULL,
+       valor_anterior DOUBLE PRECISION NOT NULL DEFAULT 0,
+       valor_nuevo DOUBLE PRECISION NOT NULL,
+       fecha TIMESTAMP DEFAULT NOW(),
+       UNIQUE (sesion_id, ejercicio_id, orden, tipo_record)
+     )`
+  );
+  await queryable.query(
+    `DO $$
+     BEGIN
+       IF NOT EXISTS (
+         SELECT 1
+         FROM pg_constraint
+         WHERE conname = 'serie_record_trofeo_tipo_record_check'
+           AND conrelid = 'serie_record_trofeo'::regclass
+       ) THEN
+         ALTER TABLE serie_record_trofeo
+         ADD CONSTRAINT serie_record_trofeo_tipo_record_check
+         CHECK (tipo_record IN ('volumen', 'peso', '1rm'));
+       END IF;
+     END $$`
+  );
+
+  recordTablesReady = true;
+};
+
+const estimateOneRm = (peso: number, repeticiones: number) =>
+  peso * (1 + repeticiones / 30);
+
+const countTrophiesForSession = async (sesion_id: string, queryable: Queryable = pool) => {
+  await ensureRecordTables(pool);
+  const result = await queryable.query<{ total_trofeos: number }>(
+    `SELECT COUNT(*)::int AS total_trofeos
+     FROM serie_record_trofeo
+     WHERE sesion_id = $1`,
+    [sesion_id]
+  );
+
+  return result.rows[0]?.total_trofeos ?? 0;
+};
+
+const evaluarRecordsDeSesion = async (sesion: SesionEntrenamientoRow) => {
+  await ensureRecordTables(pool);
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const alreadyEvaluated = await client.query(
+      `SELECT 1
+       FROM sesion_record_evaluacion
+       WHERE sesion_id = $1`,
+      [sesion.id_sesion]
+    );
+
+    if (alreadyEvaluated.rows.length > 0) {
+      const total = await countTrophiesForSession(String(sesion.id_sesion), client);
+      await client.query("COMMIT");
+      return total;
+    }
+
+    const seriesResult = await client.query<SerieRecordInputRow>(
+      `SELECT ejercicio_id,
+              orden,
+              repeticiones,
+              COALESCE(peso, 0)::float AS peso
+       FROM serie
+       WHERE sesion_id = $1
+       ORDER BY ejercicio_id ASC, orden ASC`,
+      [sesion.id_sesion]
+    );
+
+    const records = new Map<number, ExerciseRecordRow>();
+    let totalTrofeos = 0;
+
+    for (const serie of seriesResult.rows) {
+      const peso = Number(serie.peso);
+      const repeticiones = Number(serie.repeticiones);
+
+      if (!Number.isFinite(peso) || !Number.isFinite(repeticiones) || peso <= 0 || repeticiones <= 0) {
+        continue;
+      }
+
+      let current = records.get(serie.ejercicio_id);
+      if (!current) {
+        await client.query(
+          `SELECT 1
+           FROM usuario_ejercicio_record
+           WHERE usuario_id = $1
+             AND ejercicio_id = $2
+           FOR UPDATE`,
+          [sesion.usuario_id, serie.ejercicio_id]
+        );
+        const historicalResult = await client.query<HistoricalExerciseRecordRow>(
+          `SELECT
+             COALESCE(MAX(COALESCE(s.peso, 0) * COALESCE(s.repeticiones, 0)), 0)::float AS mejor_volumen,
+             COALESCE(MAX(COALESCE(s.peso, 0)), 0)::float AS mejor_peso,
+             COALESCE(MAX(COALESCE(s.peso, 0) * (1 + COALESCE(s.repeticiones, 0)::float / 30)), 0)::float AS mejor_1rm
+           FROM serie s
+           JOIN sesionentrenamiento se ON se.id_sesion = s.sesion_id
+           WHERE se.usuario_id = $1
+             AND s.ejercicio_id = $2
+             AND se.estado = 'finalizada'
+             AND se.id_sesion <> $3`,
+          [sesion.usuario_id, serie.ejercicio_id, sesion.id_sesion]
+        );
+
+        current = {
+          mejor_volumen: Number(historicalResult.rows[0]?.mejor_volumen ?? 0),
+          mejor_peso: Number(historicalResult.rows[0]?.mejor_peso ?? 0),
+          mejor_1rm: Number(historicalResult.rows[0]?.mejor_1rm ?? 0),
+        };
+
+        records.set(serie.ejercicio_id, current);
+      }
+
+      const volumen = peso * repeticiones;
+      const oneRm = estimateOneRm(peso, repeticiones);
+      const mejoras: Array<{
+        tipo: "volumen" | "peso" | "1rm";
+        anterior: number;
+        nuevo: number;
+      }> = [];
+
+      if (volumen > current.mejor_volumen) {
+        mejoras.push({ tipo: "volumen", anterior: current.mejor_volumen, nuevo: volumen });
+        current.mejor_volumen = volumen;
+      }
+
+      if (peso > current.mejor_peso) {
+        mejoras.push({ tipo: "peso", anterior: current.mejor_peso, nuevo: peso });
+        current.mejor_peso = peso;
+      }
+
+      if (oneRm > current.mejor_1rm) {
+        mejoras.push({ tipo: "1rm", anterior: current.mejor_1rm, nuevo: oneRm });
+        current.mejor_1rm = oneRm;
+      }
+
+      for (const mejora of mejoras) {
+        await client.query(
+          `INSERT INTO serie_record_trofeo
+           (sesion_id, usuario_id, ejercicio_id, orden, tipo_record, valor_anterior, valor_nuevo)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (sesion_id, ejercicio_id, orden, tipo_record) DO NOTHING`,
+          [
+            sesion.id_sesion,
+            sesion.usuario_id,
+            serie.ejercicio_id,
+            serie.orden,
+            mejora.tipo,
+            mejora.anterior,
+            mejora.nuevo,
+          ]
+        );
+        totalTrofeos += 1;
+      }
+    }
+
+    for (const [ejercicioId, record] of records) {
+      await client.query(
+        `INSERT INTO usuario_ejercicio_record
+         (usuario_id, ejercicio_id, mejor_volumen, mejor_peso, mejor_1rm, fecha_actualizacion)
+         VALUES ($1, $2, $3, $4, $5, NOW())
+         ON CONFLICT (usuario_id, ejercicio_id)
+         DO UPDATE SET
+           mejor_volumen = EXCLUDED.mejor_volumen,
+           mejor_peso = EXCLUDED.mejor_peso,
+           mejor_1rm = EXCLUDED.mejor_1rm,
+           fecha_actualizacion = NOW()`,
+        [
+          sesion.usuario_id,
+          ejercicioId,
+          record.mejor_volumen,
+          record.mejor_peso,
+          record.mejor_1rm,
+        ]
+      );
+    }
+
+    await client.query(
+      `INSERT INTO sesion_record_evaluacion (sesion_id, usuario_id)
+       VALUES ($1, $2)
+       ON CONFLICT (sesion_id) DO NOTHING`,
+      [sesion.id_sesion, sesion.usuario_id]
+    );
+
+    await client.query("COMMIT");
+    return totalTrofeos;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+const reconstruirRecordsDeUsuario = async (usuario_id: number, queryable: Queryable) => {
+  await queryable.query(
+    `DELETE FROM usuario_ejercicio_record
+     WHERE usuario_id = $1`,
+    [usuario_id]
+  );
+
+  await queryable.query(
+    `INSERT INTO usuario_ejercicio_record
+     (usuario_id, ejercicio_id, mejor_volumen, mejor_peso, mejor_1rm, fecha_actualizacion)
+     SELECT se.usuario_id,
+            s.ejercicio_id,
+            COALESCE(MAX(COALESCE(s.peso, 0) * COALESCE(s.repeticiones, 0)), 0)::float AS mejor_volumen,
+            COALESCE(MAX(COALESCE(s.peso, 0)), 0)::float AS mejor_peso,
+            COALESCE(MAX(COALESCE(s.peso, 0) * (1 + COALESCE(s.repeticiones, 0)::float / 30)), 0)::float AS mejor_1rm,
+            NOW()
+     FROM sesionentrenamiento se
+     JOIN serie s ON s.sesion_id = se.id_sesion
+     WHERE se.usuario_id = $1
+       AND se.estado = 'finalizada'
+     GROUP BY se.usuario_id, s.ejercicio_id`,
+    [usuario_id]
+  );
+};
+
 // =========================
 // SESION_ENTRENAMIENTO
 // =========================
@@ -164,20 +487,27 @@ export const registrarSerie = async (data: any) => {
     orden,
     ejercicio_id,
     sesion_id,
+    tipo_serie,
+    distancia_km,
+    tiempo_segundos,
   } = data;
 
+  await ensureSerieTipoSerieColumn(pool);
   const result = await pool.query(
     `INSERT INTO serie
-     (repeticiones, peso, descanso, orden, ejercicio_id, sesion_id)
-     VALUES ($1, $2, $3, $4, $5, $6)
+     (repeticiones, peso, descanso, orden, ejercicio_id, sesion_id, tipo_serie, distancia_km, tiempo_segundos)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
     [
-      repeticiones,
+      repeticiones ?? 0,
       peso ?? null,
       descanso ?? null,
       orden,
       ejercicio_id,
       sesion_id,
+      tipo_serie ?? "serie",
+      distancia_km ?? null,
+      tiempo_segundos ?? null,
     ]
   );
 
@@ -185,12 +515,30 @@ export const registrarSerie = async (data: any) => {
 };
 
 export const getSeriesDeSesion = async (sesion_id: string) => {
+  await ensureSerieTipoSerieColumn(pool);
+  await ensureRecordTables(pool);
   const result = await pool.query(
     `SELECT s.*,
             e.nombre,
             e.descripcion,
             e.grupo_muscular,
             e.tipo_disciplina,
+            COALESCE(
+              ARRAY(
+                SELECT srt.tipo_record
+                FROM serie_record_trofeo srt
+                WHERE srt.sesion_id = s.sesion_id
+                  AND srt.ejercicio_id = s.ejercicio_id
+                  AND srt.orden = s.orden
+                ORDER BY CASE srt.tipo_record
+                  WHEN 'peso' THEN 1
+                  WHEN 'volumen' THEN 2
+                  WHEN '1rm' THEN 3
+                  ELSE 4
+                END
+              ),
+              ARRAY[]::text[]
+            ) AS trofeos,
             COALESCE(re.orden, 9999) AS orden_ejercicio
      FROM serie s
      JOIN ejercicio e ON e.id_ejercicio = s.ejercicio_id
@@ -201,6 +549,39 @@ export const getSeriesDeSesion = async (sesion_id: string) => {
      WHERE s.sesion_id = $1
      ORDER BY COALESCE(re.orden, 9999) ASC, s.orden ASC, e.nombre ASC`,
     [sesion_id]
+  );
+
+  return result.rows;
+};
+
+export const getSeriesAnterioresDeEjercicio = async (
+  usuario_id: number,
+  ejercicio_id: number
+) => {
+  await ensureSerieTipoSerieColumn(pool);
+  const result = await pool.query<SerieAnteriorRow>(
+    `WITH ultima_sesion AS (
+       SELECT se.id_sesion
+       FROM sesionentrenamiento se
+       JOIN serie s ON s.sesion_id = se.id_sesion
+       WHERE se.usuario_id = $1
+         AND s.ejercicio_id = $2
+         AND se.estado = 'finalizada'
+       ORDER BY COALESCE(se.fecha_fin, se.fecha_inicio, se.fecha) DESC,
+                se.id_sesion DESC
+       LIMIT 1
+     )
+     SELECT s.orden,
+            s.repeticiones,
+            s.peso,
+            s.distancia_km,
+            s.tiempo_segundos,
+            COALESCE(s.tipo_serie, 'serie') AS tipo_serie
+     FROM serie s
+     JOIN ultima_sesion us ON us.id_sesion = s.sesion_id
+     WHERE s.ejercicio_id = $2
+     ORDER BY s.orden ASC`,
+    [usuario_id, ejercicio_id]
   );
 
   return result.rows;
@@ -314,26 +695,36 @@ export const replaceSeriesDeSesion = async (
     descanso?: number | null;
     orden: number;
     ejercicio_id: number;
+    tipo_serie?: string | null;
+    distancia_km?: number | null;
+    tiempo_segundos?: number | null;
   }>
 ) => {
+  await ensureSerieTipoSerieColumn(pool);
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
+    await ensureRecordTables(pool);
+    await client.query(`DELETE FROM serie_record_trofeo WHERE sesion_id = $1`, [sesion_id]);
+    await client.query(`DELETE FROM sesion_record_evaluacion WHERE sesion_id = $1`, [sesion_id]);
     await client.query(`DELETE FROM serie WHERE sesion_id = $1`, [sesion_id]);
 
     for (const serie of series) {
       await client.query(
         `INSERT INTO serie
-         (repeticiones, peso, descanso, orden, ejercicio_id, sesion_id)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+         (repeticiones, peso, descanso, orden, ejercicio_id, sesion_id, tipo_serie, distancia_km, tiempo_segundos)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
-          serie.repeticiones,
+          serie.repeticiones ?? 0,
           serie.peso ?? null,
           serie.descanso ?? null,
           serie.orden,
           serie.ejercicio_id,
           sesion_id,
+          serie.tipo_serie ?? "serie",
+          serie.distancia_km ?? null,
+          serie.tiempo_segundos ?? null,
         ]
       );
     }
@@ -382,20 +773,33 @@ export const finalizarSesion = async (sesion_id: string) => {
     [sesion_id, volumenResult.rows[0]?.volumen_total ?? 0]
   );
 
+  const totalTrofeos = await evaluarRecordsDeSesion(sesionActualizada.rows[0] ?? sesion);
   const series = await getSeriesDeSesion(sesion_id);
 
   return {
     sesion: sesionActualizada.rows[0] ?? sesion,
     series,
+    total_trofeos: totalTrofeos,
     estado: "finalizada" as const,
   };
 };
 
 export const deleteSesionEntrenamiento = async (sesion_id: string) => {
+  await ensureRecordTables(pool);
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
+    const sesionActual = await client.query<{ usuario_id: number }>(
+      `SELECT usuario_id
+       FROM sesionentrenamiento
+       WHERE id_sesion = $1`,
+      [sesion_id]
+    );
+    const usuarioId = sesionActual.rows[0]?.usuario_id ?? null;
+
+    await client.query(`DELETE FROM serie_record_trofeo WHERE sesion_id = $1`, [sesion_id]);
+    await client.query(`DELETE FROM sesion_record_evaluacion WHERE sesion_id = $1`, [sesion_id]);
     await client.query(`DELETE FROM serie WHERE sesion_id = $1`, [sesion_id]);
     const result = await client.query<SesionEntrenamientoRow>(
       `DELETE FROM sesionentrenamiento
@@ -403,6 +807,11 @@ export const deleteSesionEntrenamiento = async (sesion_id: string) => {
        RETURNING *`,
       [sesion_id]
     );
+
+    if (usuarioId != null) {
+      await reconstruirRecordsDeUsuario(usuarioId, client);
+    }
+
     await client.query("COMMIT");
     return result.rows[0] ?? null;
   } catch (error) {

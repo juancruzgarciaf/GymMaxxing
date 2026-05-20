@@ -60,6 +60,73 @@ const formatRest = (value: number | null) => {
   return `${value}s`;
 };
 
+const formatDistance = (value: number | null | undefined) => {
+  if (value == null) {
+    return "-";
+  }
+
+  return `${value} km`;
+};
+
+type ExerciseInputMode = "strength" | "repsOnly" | "timed" | "cardio";
+
+const normalizeText = (value: string | null) =>
+  (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+const getExerciseInputMode = (ejercicio: {
+  nombre: string;
+  grupo_muscular: string | null;
+}): ExerciseInputMode => {
+  const nombre = normalizeText(ejercicio.nombre);
+  const grupo = normalizeText(ejercicio.grupo_muscular);
+
+  if (grupo === "cardio") {
+    return "cardio";
+  }
+
+  if (grupo === "core" && nombre === "plancha") {
+    return "timed";
+  }
+
+  if (
+    grupo === "core" &&
+    (nombre === "crunch abdominal" || nombre === "elevaciones de piernas")
+  ) {
+    return "repsOnly";
+  }
+
+  return "strength";
+};
+
+const TROPHY_LABELS: Record<NonNullable<SerieSesionDetalle["trofeos"]>[number], string> = {
+  peso: "Peso",
+  volumen: "Volumen",
+  "1rm": "1RM",
+};
+
+const TROPHY_ORDER: NonNullable<SerieSesionDetalle["trofeos"]> = ["peso", "volumen", "1rm"];
+
+const getOrderedTrophies = (trofeos: SerieSesionDetalle["trofeos"]) =>
+  TROPHY_ORDER.filter((trofeo) => trofeos?.includes(trofeo));
+
+const getSerieDisplay = (serie: SerieSesionDetalle, serieNumber: number) => {
+  switch (serie.tipo_serie) {
+    case "failure":
+      return { label: "F", className: "failure" };
+    case "dropset":
+      return { label: "D", className: "dropset" };
+    case "warmup":
+      return { label: "W", className: "warmup" };
+    default:
+      return { label: String(serieNumber), className: "normal" };
+  }
+};
+
+
 function CopyIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -81,6 +148,23 @@ function CopyIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+function TrophyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 4H16V8.5C16 11 14.2 13 12 13C9.8 13 8 11 8 8.5V4Z" fill="currentColor" />
+      <path
+        d="M8 6H5.5C5.5 8.8 6.8 10.5 9 10.8M16 6H18.5C18.5 8.8 17.2 10.5 15 10.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M11 13H13V17H16.5V20H7.5V17H11V13Z" fill="currentColor" />
     </svg>
   );
 }
@@ -210,23 +294,32 @@ function EntrenamientoDetalle({
           <h1>{entrenamiento.titulo}</h1>
           <p className="subtitle">{entrenamiento.descripcion || "Rutina finalizada y guardada."}</p>
 
-          <div className="metrics-row">
-            <div className="metric-box">
+          <div className="metrics-row detail-metrics-row">
+            <div className="metric-box detail-metric">
               <span>Duracion</span>
               <strong>{formatDuration(entrenamiento.duracion_segundos)}</strong>
             </div>
-            <div className="metric-box">
+            <div className="metric-box detail-metric">
               <span>Volumen</span>
               <strong>{formatVolume(entrenamiento.volumen_total)}</strong>
             </div>
-            <div className="metric-box">
+            <div className="metric-box detail-metric">
               <span>Series</span>
               <strong>{entrenamiento.total_series}</strong>
             </div>
-            <div className="metric-box">
+            <div className="metric-box detail-metric">
               <span>Ejercicios</span>
               <strong>{entrenamiento.total_ejercicios}</strong>
             </div>
+            {(entrenamiento.total_trofeos ?? 0) > 0 ? (
+              <div className="metric-box detail-metric trophy-metric">
+                <span>Trofeos</span>
+                <strong>
+                  <TrophyIcon />
+                  {entrenamiento.total_trofeos}
+                </strong>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
@@ -243,7 +336,10 @@ function EntrenamientoDetalle({
 
       <section className="detail-exercises">
         {!loading && !error
-          ? groupedExercises.map((ejercicio) => (
+          ? groupedExercises.map((ejercicio) => {
+              const inputMode = getExerciseInputMode(ejercicio);
+
+              return (
               <article key={`${entrenamiento.id_sesion}-${ejercicio.id_ejercicio}`} className="exercise-card readonly detail-exercise-card">
                 <div className="exercise-card-head">
                   <div>
@@ -252,33 +348,61 @@ function EntrenamientoDetalle({
                       {ejercicio.grupo_muscular || "Sin grupo"} · {ejercicio.tipo_disciplina || "Sin disciplina"}
                     </small>
                   </div>
-                  <span className="tag-soft">{ejercicio.series.length} series</span>
+                  <span className="detail-series-count">{ejercicio.series.length} series</span>
                 </div>
 
                 {ejercicio.descripcion ? <p className="feed-description">{ejercicio.descripcion}</p> : null}
 
-                <div className="set-table readonly-table">
-                  <div className="set-table-head readonly-grid">
+                <div className="set-table readonly-table detail-readonly-table">
+                  <div className={`set-table-head readonly-grid detail-series-grid ${inputMode}`}>
                     <span>Serie</span>
-                    <span>Peso</span>
-                    <span>Reps</span>
+                    {inputMode === "strength" ? <span>Peso</span> : null}
+                    {inputMode === "strength" || inputMode === "repsOnly" ? <span>Reps</span> : null}
+                    {inputMode === "cardio" ? <span>KM</span> : null}
+                    {inputMode === "cardio" || inputMode === "timed" ? <span>Tiempo</span> : null}
                     <span>Descanso</span>
+                    <span>Trofeos</span>
                   </div>
 
-                  {ejercicio.series.map((serie) => (
-                    <div
-                      key={`${entrenamiento.id_sesion}-${ejercicio.id_ejercicio}-${serie.orden}`}
-                      className="set-row readonly-grid"
-                    >
-                      <div className="readonly-cell">{serie.orden}</div>
-                      <div className="readonly-cell">{formatWeight(serie.peso)}</div>
-                      <div className="readonly-cell">{serie.repeticiones}</div>
-                      <div className="readonly-cell">{formatRest(serie.descanso)}</div>
-                    </div>
-                  ))}
+                  {ejercicio.series.map((serie, index) => {
+                    const serieDisplay = getSerieDisplay(serie, index + 1);
+
+                    return (
+                      <div
+                        key={`${entrenamiento.id_sesion}-${ejercicio.id_ejercicio}-${serie.orden}`}
+                        className={`set-row readonly-grid detail-series-grid ${inputMode}`}
+                      >
+                        <div className={`readonly-cell serie-code ${serieDisplay.className}`}>
+                          {serieDisplay.label}
+                        </div>
+                        {inputMode === "strength" ? (
+                          <div className="readonly-cell">{formatWeight(serie.peso)}</div>
+                        ) : null}
+                        {inputMode === "strength" || inputMode === "repsOnly" ? (
+                          <div className="readonly-cell">{serie.repeticiones}</div>
+                        ) : null}
+                        {inputMode === "cardio" ? (
+                          <div className="readonly-cell">{formatDistance(serie.distancia_km)}</div>
+                        ) : null}
+                        {inputMode === "cardio" || inputMode === "timed" ? (
+                          <div className="readonly-cell">{formatDuration(serie.tiempo_segundos ?? 0)}</div>
+                        ) : null}
+                        <div className="readonly-cell">{formatRest(serie.descanso)}</div>
+                        <div className="readonly-cell series-trophy-cell">
+                          {getOrderedTrophies(serie.trofeos).map((trofeo) => (
+                            <span key={trofeo} className="series-trophy-badge">
+                              <TrophyIcon />
+                              {TROPHY_LABELS[trofeo]}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </article>
-            ))
+              );
+            })
           : null}
       </section>
     </main>

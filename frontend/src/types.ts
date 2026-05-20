@@ -32,6 +32,7 @@ export type EntrenamientoResumen = {
   volumen_total: number | null;
   total_series: number;
   total_ejercicios: number;
+  total_trofeos: number;
   likes_count: number;
   comments_count: number;
   viewer_liked: boolean;
@@ -54,7 +55,11 @@ export type SerieSesionDetalle = {
   orden_ejercicio?: number;
   repeticiones: number;
   peso: number | null;
+  distancia_km?: number | null;
+  tiempo_segundos?: number | null;
   descanso: number | null;
+  tipo_serie?: TrainingSetType | null;
+  trofeos?: Array<"peso" | "volumen" | "1rm">;
   nombre: string;
   descripcion: string | null;
   grupo_muscular: string | null;
@@ -97,6 +102,8 @@ export type TrainingSetType = "warmup" | "serie" | "dropset" | "failure";
 export type TrainingSeedSerie = {
   kg: string;
   reps: string;
+  km?: string;
+  tiempoSegundos?: number;
   tipo: TrainingSetType;
 };
 

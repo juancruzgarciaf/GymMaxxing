@@ -28,6 +28,7 @@ const GENDER_OPTIONS = [
 type UserTrainingSearchResponse = {
   items: EntrenamientoResumen[];
   grupos_musculares: string[];
+  tipos_disciplina: string[];
 };
 
 type SocialModalMode = "followers" | "following";
@@ -52,6 +53,8 @@ function Perfil({
   const [trainingMaxDuration, setTrainingMaxDuration] = useState("");
   const [selectedTrainingGroups, setSelectedTrainingGroups] = useState<string[]>([]);
   const [availableTrainingGroups, setAvailableTrainingGroups] = useState<string[]>([]);
+  const [selectedTrainingDisciplines, setSelectedTrainingDisciplines] = useState<string[]>([]);
+  const [availableTrainingDisciplines, setAvailableTrainingDisciplines] = useState<string[]>([]);
   const [trainingResults, setTrainingResults] = useState<EntrenamientoResumen[]>([]);
   const [trainingSearchLoading, setTrainingSearchLoading] = useState(false);
   const [trainingSearchError, setTrainingSearchError] = useState("");
@@ -143,6 +146,7 @@ function Perfil({
     minDuration?: string;
     maxDuration?: string;
     selectedGroups?: string[];
+    selectedDisciplines?: string[];
   }) => {
     if (!perfil?.is_own_profile) {
       return;
@@ -152,6 +156,8 @@ function Perfil({
     const nextMinDuration = options?.minDuration ?? trainingMinDuration;
     const nextMaxDuration = options?.maxDuration ?? trainingMaxDuration;
     const nextSelectedGroups = options?.selectedGroups ?? selectedTrainingGroups;
+    const nextSelectedDisciplines =
+      options?.selectedDisciplines ?? selectedTrainingDisciplines;
 
     try {
       setTrainingSearchLoading(true);
@@ -166,6 +172,10 @@ function Perfil({
 
       if (nextSelectedGroups.length > 0) {
         params.set("grupo_muscular", nextSelectedGroups.join(","));
+      }
+
+      if (nextSelectedDisciplines.length > 0) {
+        params.set("tipo_disciplina", nextSelectedDisciplines.join(","));
       }
 
       if (nextMinDuration.trim()) {
@@ -190,6 +200,7 @@ function Perfil({
       if ("items" in data) {
         setTrainingResults(data.items);
         setAvailableTrainingGroups(data.grupos_musculares);
+        setAvailableTrainingDisciplines(data.tipos_disciplina);
       }
     } catch (err) {
       setTrainingSearchError(err instanceof Error ? err.message : "No se pudieron buscar entrenamientos");
@@ -205,6 +216,8 @@ function Perfil({
     setTrainingMaxDuration("");
     setSelectedTrainingGroups([]);
     setAvailableTrainingGroups([]);
+    setSelectedTrainingDisciplines([]);
+    setAvailableTrainingDisciplines([]);
     setTrainingResults(perfil?.entrenamientos ?? []);
     setTrainingSearchError("");
 
@@ -214,6 +227,7 @@ function Perfil({
         minDuration: "",
         maxDuration: "",
         selectedGroups: [],
+        selectedDisciplines: [],
       });
     }
   }, [perfil?.usuario.id, perfil?.is_own_profile]);
@@ -441,16 +455,26 @@ function Perfil({
     );
   };
 
+  const toggleTrainingDiscipline = (discipline: string) => {
+    setSelectedTrainingDisciplines((prev) =>
+      prev.includes(discipline)
+        ? prev.filter((item) => item !== discipline)
+        : [...prev, discipline],
+    );
+  };
+
   const clearTrainingSearch = async () => {
     setTrainingSearchQuery("");
     setTrainingMinDuration("");
     setTrainingMaxDuration("");
     setSelectedTrainingGroups([]);
+    setSelectedTrainingDisciplines([]);
     await buscarEntrenamientos({
       query: "",
       minDuration: "",
       maxDuration: "",
       selectedGroups: [],
+      selectedDisciplines: [],
     });
   };
 
@@ -581,13 +605,16 @@ function Perfil({
                     minDuration={trainingMinDuration}
                     maxDuration={trainingMaxDuration}
                     availableGroups={availableTrainingGroups}
+                    availableDisciplines={availableTrainingDisciplines}
                     selectedGroups={selectedTrainingGroups}
+                    selectedDisciplines={selectedTrainingDisciplines}
                     loading={trainingSearchLoading}
                     resultsCount={trainingResults.length}
                     onQueryChange={setTrainingSearchQuery}
                     onMinDurationChange={setTrainingMinDuration}
                     onMaxDurationChange={setTrainingMaxDuration}
                     onToggleGroup={toggleTrainingGroup}
+                    onToggleDiscipline={toggleTrainingDiscipline}
                     onApply={buscarEntrenamientos}
                     onClear={clearTrainingSearch}
                   />

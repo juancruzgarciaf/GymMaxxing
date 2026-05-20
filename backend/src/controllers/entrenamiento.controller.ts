@@ -198,17 +198,16 @@ export const registrarSerie = async (req: Request, res: Response) => {
     Si eso está, el service la registra y devuelve el resultado.
   */
   try {
-    const { repeticiones, orden, ejercicio_id, sesion_id } = req.body;
+    const { orden, ejercicio_id, sesion_id } = req.body;
 
     if (
-      repeticiones == null ||
       orden == null ||
       !ejercicio_id ||
       !sesion_id
     ) {
       return res.status(400).json({
         error:
-          "repeticiones, orden, ejercicio_id y sesion_id son obligatorios",
+          "orden, ejercicio_id y sesion_id son obligatorios",
       });
     }
 
@@ -255,6 +254,35 @@ export const getSeriesDeSesion = async (req: Request, res: Response) => {
     console.error(error);
     return res.status(500).json({
       error: "Error obteniendo series de la sesión",
+    });
+  }
+};
+
+export const getSeriesAnterioresDeEjercicio = async (req: Request, res: Response) => {
+  try {
+    const usuarioId = Number(req.query.usuario_id);
+    const ejercicioId = Number(req.query.ejercicio_id);
+
+    if (Number.isNaN(usuarioId) || Number.isNaN(ejercicioId)) {
+      return res.status(400).json({
+        error: "usuario_id y ejercicio_id son obligatorios",
+      });
+    }
+
+    const allowed = await ensureTrainingAllowed(res, usuarioId);
+    if (!allowed) {
+      return;
+    }
+
+    const series = await entrenamientoService.getSeriesAnterioresDeEjercicio(
+      usuarioId,
+      ejercicioId
+    );
+    return res.json(series);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error obteniendo series anteriores del ejercicio",
     });
   }
 };
@@ -424,7 +452,6 @@ export const replaceSeriesDeSesion = async (req: Request, res: Response) => {
     const nextSeries = series.filter(
       (serie) =>
         serie &&
-        serie.repeticiones != null &&
         serie.orden != null &&
         serie.ejercicio_id != null
     );

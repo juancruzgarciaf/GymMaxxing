@@ -6,6 +6,7 @@ import {
   updateSesionEntrenamiento,
   registrarSerie,
   getSeriesDeSesion,
+  getSeriesAnterioresDeEjercicio,
   addLikeToSesion,
   removeLikeFromSesion,
   getComentariosDeSesion,
@@ -34,6 +35,7 @@ router.delete("/:id/comentarios/:commentId", deleteComentarioDeSesion);
 router.delete("/:id", deleteSesionEntrenamiento);
 
 // series
+router.get("/series/anteriores", getSeriesAnterioresDeEjercicio);
 router.post("/serie", registrarSerie);
 router.get("/sesion/:id/series", getSeriesDeSesion);
 

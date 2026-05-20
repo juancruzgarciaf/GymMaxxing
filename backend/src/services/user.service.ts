@@ -56,6 +56,7 @@ type SuggestedUserRow = TrendUserRow & {
 type UserTrainingSearchFilters = {
   q?: string;
   gruposMusculares?: string[];
+  tiposDisciplina?: string[];
   minDurationSeconds?: number;
   maxDurationSeconds?: number;
 };
@@ -74,6 +75,7 @@ type SessionSummaryRow = {
   volumen_total: number | null;
   total_series: number;
   total_ejercicios: number;
+  total_trofeos: number;
   likes_count: number;
   comments_count: number;
   viewer_liked: boolean;
@@ -88,6 +90,31 @@ type ExercisePreviewRow = {
 const sanitizeUser = (user: UsuarioRow | BasicUserRow) => {
   const { password: _password, ...safeUser } = user as UsuarioRow;
   return safeUser;
+};
+
+let trophyTablesReady = false;
+
+const ensureTrophyTables = async () => {
+  if (trophyTablesReady) {
+    return;
+  }
+
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS serie_record_trofeo (
+       id_trofeo SERIAL PRIMARY KEY,
+       sesion_id INT NOT NULL,
+       usuario_id INT NOT NULL,
+       ejercicio_id INT NOT NULL,
+       orden INT NOT NULL,
+       tipo_record VARCHAR(20) NOT NULL,
+       valor_anterior DOUBLE PRECISION NOT NULL DEFAULT 0,
+       valor_nuevo DOUBLE PRECISION NOT NULL,
+       fecha TIMESTAMP DEFAULT NOW(),
+       UNIQUE (sesion_id, ejercicio_id, orden, tipo_record)
+     )`
+  );
+
+  trophyTablesReady = true;
 };
 
 const getRutinaMetricsSupport = async (): Promise<RutinaMetricSupport> => {
@@ -170,6 +197,7 @@ const getSessionSummaries = async (
   offset = 0,
   orderBySql = "COALESCE(se.fecha_fin, se.fecha_inicio, se.fecha) DESC, se.id_sesion DESC"
 ) => {
+  await ensureTrophyTables();
   const queryParams = [...params];
   const viewerLikedSql =
     viewerId == null
@@ -225,6 +253,11 @@ const getSessionSummaries = async (
             ) AS total_ejercicios,
             (
               SELECT COUNT(*)::int
+              FROM serie_record_trofeo srt
+              WHERE srt.sesion_id = se.id_sesion
+            ) AS total_trofeos,
+            (
+              SELECT COUNT(*)::int
               FROM sesion_like sl
               WHERE sl.sesion_id = se.id_sesion
             ) AS likes_count,
@@ -256,21 +289,28 @@ const SESSION_DURATION_SQL = `COALESCE(
   END
 )`;
 
-const getUserTrainingGroups = async (userId: number) => {
-  const result = await pool.query<{ grupo_muscular: string }>(
-    `SELECT DISTINCT e.grupo_muscular
-     FROM sesionentrenamiento se
-     JOIN serie s ON s.sesion_id = se.id_sesion
-     JOIN ejercicio e ON e.id_ejercicio = s.ejercicio_id
-     WHERE se.usuario_id = $1
-       AND se.estado = 'finalizada'
-       AND e.grupo_muscular IS NOT NULL
-       AND e.grupo_muscular <> ''
-     ORDER BY e.grupo_muscular ASC`,
-    [userId]
-  );
+const getTrainingCatalogFilters = async () => {
+  const [groupsResult, disciplinesResult] = await Promise.all([
+    pool.query<{ grupo_muscular: string }>(
+      `SELECT DISTINCT grupo_muscular
+       FROM ejercicio
+       WHERE grupo_muscular IS NOT NULL
+         AND grupo_muscular <> ''
+       ORDER BY grupo_muscular ASC`
+    ),
+    pool.query<{ tipo_disciplina: string }>(
+      `SELECT DISTINCT tipo_disciplina
+       FROM ejercicio
+       WHERE tipo_disciplina IS NOT NULL
+         AND tipo_disciplina <> ''
+       ORDER BY tipo_disciplina ASC`
+    ),
+  ]);
 
-  return result.rows.map((row) => row.grupo_muscular);
+  return {
+    gruposMusculares: groupsResult.rows.map((row) => row.grupo_muscular),
+    tiposDisciplina: disciplinesResult.rows.map((row) => row.tipo_disciplina),
+  };
 };
 
 export const searchUserTrainings = async (
@@ -310,6 +350,17 @@ export const searchUserTrainings = async (
     )`);
   }
 
+  if (filters.tiposDisciplina && filters.tiposDisciplina.length > 0) {
+    params.push(filters.tiposDisciplina);
+    whereClauses.push(`EXISTS (
+      SELECT 1
+      FROM serie s
+      JOIN ejercicio e ON e.id_ejercicio = s.ejercicio_id
+      WHERE s.sesion_id = se.id_sesion
+        AND e.tipo_disciplina = ANY($${params.length}::text[])
+    )`);
+  }
+
   if (filters.minDurationSeconds != null) {
     params.push(filters.minDurationSeconds);
     whereClauses.push(`${SESSION_DURATION_SQL} >= $${params.length}`);
@@ -320,7 +371,7 @@ export const searchUserTrainings = async (
     whereClauses.push(`${SESSION_DURATION_SQL} <= $${params.length}`);
   }
 
-  const [items, gruposMusculares] = await Promise.all([
+  const [items, catalogFilters] = await Promise.all([
     getSessionSummaries(
       whereClauses.join(" AND "),
       params,
@@ -328,12 +379,13 @@ export const searchUserTrainings = async (
       viewerId,
       0
     ),
-    getUserTrainingGroups(userId),
+    getTrainingCatalogFilters(),
   ]);
 
   return {
     items,
-    grupos_musculares: gruposMusculares,
+    grupos_musculares: catalogFilters.gruposMusculares,
+    tipos_disciplina: catalogFilters.tiposDisciplina,
   };
 };
 

@@ -24,9 +24,21 @@ type EjecucionSerie = {
   numero: number;
   kg: string;
   reps: string;
+  km: string;
+  tiempoSegundos: number;
+  timerActivo: boolean;
   tipo: TrainingSetType;
   completada: boolean;
   registrada: boolean;
+};
+
+type SerieAnterior = {
+  orden: number;
+  repeticiones: number;
+  peso: number | null;
+  distancia_km: number | null;
+  tiempo_segundos: number | null;
+  tipo_serie: TrainingSetType;
 };
 
 type EjecucionEjercicio = {
@@ -122,10 +134,85 @@ const crearSerieEjecucion = (): EjecucionSerie => ({
   numero: 1,
   kg: "",
   reps: "",
+  km: "",
+  tiempoSegundos: 0,
+  timerActivo: false,
   tipo: "serie",
   completada: false,
   registrada: false,
 });
+
+const isTrainingSetType = (value: string): value is TrainingSetType =>
+  SET_TIPO_OPTIONS.some((option) => option.value === value);
+
+type ExerciseInputMode = "strength" | "repsOnly" | "timed" | "cardio";
+
+const normalizeText = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+const getExerciseInputMode = (ejercicio: Pick<EjecucionEjercicio, "nombre" | "grupo_muscular">): ExerciseInputMode => {
+  const nombre = normalizeText(ejercicio.nombre);
+  const grupo = normalizeText(ejercicio.grupo_muscular);
+
+  if (grupo === "cardio") {
+    return "cardio";
+  }
+
+  if (grupo === "core" && nombre === "plancha") {
+    return "timed";
+  }
+
+  if (
+    grupo === "core" &&
+    (nombre === "crunch abdominal" || nombre === "elevaciones de piernas")
+  ) {
+    return "repsOnly";
+  }
+
+  return "strength";
+};
+
+const formatSerieAnterior = (serie: SerieAnterior, mode: ExerciseInputMode) => {
+  if (mode === "repsOnly") {
+    return `${serie.repeticiones} reps`;
+  }
+
+  if (mode === "timed") {
+    return formatDuration(serie.tiempo_segundos ?? 0);
+  }
+
+  if (mode === "cardio") {
+    const km = serie.distancia_km == null ? "-" : `${serie.distancia_km} km`;
+    return `${km} en ${formatDuration(serie.tiempo_segundos ?? 0)}`;
+  }
+
+  const peso = serie.peso == null ? "-" : `${serie.peso}KG`;
+  return `${peso}x${serie.repeticiones}`;
+};
+
+function TrophyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M8 4H16V8.5C16 11 14.2 13 12 13C9.8 13 8 11 8 8.5V4Z"
+        fill="currentColor"
+      />
+      <path
+        d="M8 6H5.5C5.5 8.8 6.8 10.5 9 10.8M16 6H18.5C18.5 8.8 17.2 10.5 15 10.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M11 13H13V17H16.5V20H7.5V17H11V13Z" fill="currentColor" />
+    </svg>
+  );
+}
 
 function Entrenamiento({
   usuario,
@@ -151,8 +238,12 @@ function Entrenamiento({
   const [sesionActiva, setSesionActiva] = useState<SesionEntrenamiento | null>(null);
   const [sourceRoutineIdContext, setSourceRoutineIdContext] = useState<number | null>(null);
   const [ejecucionEjercicios, setEjecucionEjercicios] = useState<EjecucionEjercicio[]>([]);
+  const [seriesAnterioresPorEjercicio, setSeriesAnterioresPorEjercicio] = useState<
+    Record<number, SerieAnterior[]>
+  >({});
   const [descansoActivo, setDescansoActivo] = useState<DescansoActivo | null>(null);
   const [elapsedSesionSegundos, setElapsedSesionSegundos] = useState(0);
+  const [totalTrofeosEntrenamiento, setTotalTrofeosEntrenamiento] = useState(0);
 
   const [guardarNombre, setGuardarNombre] = useState("");
   const [guardarDescripcion, setGuardarDescripcion] = useState("");
@@ -322,6 +413,35 @@ function Entrenamiento({
   }, [sesionActiva, vista]);
 
   useEffect(() => {
+    if (vista !== "ejecucion") {
+      return;
+    }
+
+    const hasRunningTimer = ejecucionEjercicios.some((ejercicio) =>
+      ejercicio.series.some((serie) => serie.timerActivo),
+    );
+
+    if (!hasRunningTimer) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setEjecucionEjercicios((prev) =>
+        prev.map((ejercicio) => ({
+          ...ejercicio,
+          series: ejercicio.series.map((serie) =>
+            serie.timerActivo
+              ? { ...serie, tiempoSegundos: serie.tiempoSegundos + 1 }
+              : serie,
+          ),
+        })),
+      );
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [ejecucionEjercicios, vista]);
+
+  useEffect(() => {
     if (!mensaje) {
       return;
     }
@@ -346,8 +466,10 @@ function Entrenamiento({
     setSesionActiva(null);
     setSourceRoutineIdContext(null);
     setEjecucionEjercicios([]);
+    setSeriesAnterioresPorEjercicio({});
     setDescansoActivo(null);
     setElapsedSesionSegundos(0);
+    setTotalTrofeosEntrenamiento(0);
     setGuardarNombre("");
     setGuardarDescripcion("");
     setGuardarCarpetaId("");
@@ -402,15 +524,32 @@ function Entrenamiento({
     serie: EjecucionSerie,
     sesionId: number,
   ) => {
+    const mode = getExerciseInputMode(ejercicio);
     const reps = Number(serie.reps || "0");
     const kg = Number(serie.kg || "0");
+    const km = Number(serie.km || "0");
     const payload = {
-      repeticiones: Number.isNaN(reps) ? 1 : Math.max(1, reps),
-      peso: Number.isNaN(kg) || !serie.kg.trim() ? null : Math.max(0, kg),
+      repeticiones:
+        mode === "strength" || mode === "repsOnly"
+          ? Number.isNaN(reps)
+            ? 1
+            : Math.max(1, reps)
+          : 0,
+      peso:
+        mode === "strength" && !Number.isNaN(kg) && serie.kg.trim()
+          ? Math.max(0, kg)
+          : null,
+      distancia_km:
+        mode === "cardio" && !Number.isNaN(km) && serie.km.trim()
+          ? Math.max(0, km)
+          : null,
+      tiempo_segundos:
+        mode === "cardio" || mode === "timed" ? Math.max(0, serie.tiempoSegundos) : null,
       descanso: ejercicio.descansoSegundos,
       orden: serie.numero,
       ejercicio_id: ejercicio.id_ejercicio,
       sesion_id: sesionId,
+      tipo_serie: serie.tipo,
     };
 
     const res = await fetch(`${API}/entrenamientos/serie`, {
@@ -429,14 +568,31 @@ function Entrenamiento({
       ejercicio.series
         .filter((serie) => serie.completada)
         .map((serie) => {
+          const mode = getExerciseInputMode(ejercicio);
           const reps = Number(serie.reps || "0");
           const kg = Number(serie.kg || "0");
+          const km = Number(serie.km || "0");
           return {
-            repeticiones: Number.isNaN(reps) ? 1 : Math.max(1, reps),
-            peso: Number.isNaN(kg) || !serie.kg.trim() ? null : Math.max(0, kg),
+            repeticiones:
+              mode === "strength" || mode === "repsOnly"
+                ? Number.isNaN(reps)
+                  ? 1
+                  : Math.max(1, reps)
+                : 0,
+            peso:
+              mode === "strength" && !Number.isNaN(kg) && serie.kg.trim()
+                ? Math.max(0, kg)
+                : null,
+            distancia_km:
+              mode === "cardio" && !Number.isNaN(km) && serie.km.trim()
+                ? Math.max(0, km)
+                : null,
+            tiempo_segundos:
+              mode === "cardio" || mode === "timed" ? Math.max(0, serie.tiempoSegundos) : null,
             descanso: ejercicio.descansoSegundos,
             orden: serie.numero,
             ejercicio_id: ejercicio.id_ejercicio,
+            tipo_serie: serie.tipo,
           };
         }),
     );
@@ -468,6 +624,8 @@ function Entrenamiento({
       series: ejercicio.series.map((serie) => ({
         kg: serie.kg,
         reps: serie.reps,
+        km: serie.km,
+        tiempoSegundos: serie.tiempoSegundos,
         tipo: serie.tipo,
       })),
     })),
@@ -485,6 +643,9 @@ function Entrenamiento({
         numero: index + 1,
         kg: serie.kg,
         reps: serie.reps,
+        km: serie.km ?? "",
+        tiempoSegundos: serie.tiempoSegundos ?? 0,
+        timerActivo: false,
         tipo: serie.tipo,
         completada: false,
         registrada: false,
@@ -505,6 +666,7 @@ function Entrenamiento({
       setMensaje("");
       setDescansoActivo(null);
       setElapsedSesionSegundos(0);
+      setTotalTrofeosEntrenamiento(0);
       setGuardarNombre("");
       setGuardarDescripcion("");
       setGuardarCarpetaId("");
@@ -528,7 +690,9 @@ function Entrenamiento({
       const sesion = (await startRes.json()) as SesionEntrenamiento;
       setSesionActiva(sesion);
       setSourceRoutineIdContext(sourceRoutineId);
-      setEjecucionEjercicios(nextSeed ? seedToExecution(nextSeed) : []);
+      const nextEjecucion = nextSeed ? seedToExecution(nextSeed) : [];
+      setEjecucionEjercicios(nextEjecucion);
+      setSeriesAnterioresPorEjercicio({});
       setGuardarNombre(nextSeed?.title ?? "");
       setGuardarDescripcion(nextSeed?.description ?? "");
       setVista("ejecucion");
@@ -562,6 +726,78 @@ function Entrenamiento({
         },
       ];
     });
+    void cargarSeriesAnterioresEjercicio(ejercicio.id_ejercicio);
+  };
+
+  const cargarSeriesAnterioresEjercicio = async (idEjercicio: number) => {
+    if (seriesAnterioresPorEjercicio[idEjercicio]) {
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams({
+        usuario_id: String(usuario.id),
+        ejercicio_id: String(idEjercicio),
+      });
+      const res = await fetch(`${API}/entrenamientos/series/anteriores?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error(await parseError(res, "No se pudo cargar el historial del ejercicio"));
+      }
+      const data = (await res.json()) as Array<{
+        orden: number;
+        repeticiones: number;
+        peso: number | null;
+        distancia_km?: number | null;
+        tiempo_segundos?: number | null;
+        tipo_serie?: string | null;
+      }>;
+      setSeriesAnterioresPorEjercicio((prev) => ({
+        ...prev,
+        [idEjercicio]: data.map((serie) => ({
+          orden: serie.orden,
+          repeticiones: serie.repeticiones,
+          peso: serie.peso,
+          distancia_km: serie.distancia_km ?? null,
+          tiempo_segundos: serie.tiempo_segundos ?? null,
+          tipo_serie:
+            serie.tipo_serie && isTrainingSetType(serie.tipo_serie) ? serie.tipo_serie : "serie",
+        })),
+      }));
+    } catch (err) {
+      setSeriesAnterioresPorEjercicio((prev) => ({ ...prev, [idEjercicio]: [] }));
+      setError(err instanceof Error ? err.message : "No se pudo cargar el historial del ejercicio");
+    }
+  };
+
+  const aplicarSerieAnterior = (
+    idEjercicio: number,
+    serieId: string,
+    serieAnterior: SerieAnterior,
+  ) => {
+    setEjecucionEjercicios((prev) =>
+      prev.map((ejercicio) =>
+        ejercicio.id_ejercicio === idEjercicio
+          ? {
+              ...ejercicio,
+              series: ejercicio.series.map((serie) =>
+                serie.id === serieId
+                  ? {
+                      ...serie,
+                      kg: serieAnterior.peso == null ? serie.kg : String(serieAnterior.peso),
+                      reps: String(serieAnterior.repeticiones),
+                      km:
+                        serieAnterior.distancia_km == null
+                          ? serie.km
+                          : String(serieAnterior.distancia_km),
+                      tiempoSegundos: serieAnterior.tiempo_segundos ?? serie.tiempoSegundos,
+                      tipo: serieAnterior.tipo_serie,
+                    }
+                  : serie,
+              ),
+            }
+          : ejercicio,
+      ),
+    );
   };
 
   const quitarEjercicio = (idEjercicio: number) => {
@@ -571,7 +807,7 @@ function Entrenamiento({
   const updateSerieEjecucion = (
     idEjercicio: number,
     serieId: string,
-    field: "kg" | "reps" | "tipo",
+    field: "kg" | "reps" | "km" | "tipo",
     value: string,
   ) => {
     setEjecucionEjercicios((prev) =>
@@ -588,6 +824,52 @@ function Entrenamiento({
                 }
                 return { ...serie, [field]: value };
               }),
+            }
+          : ejercicio,
+      ),
+    );
+  };
+
+  const updateSerieTiempo = (
+    idEjercicio: number,
+    serieId: string,
+    field: "min" | "seg",
+    value: string,
+  ) => {
+    setEjecucionEjercicios((prev) =>
+      prev.map((ejercicio) =>
+        ejercicio.id_ejercicio === idEjercicio
+          ? {
+              ...ejercicio,
+              series: ejercicio.series.map((serie) => {
+                if (serie.id !== serieId) {
+                  return serie;
+                }
+                const current = descansoToInputs(serie.tiempoSegundos);
+                const minRaw = field === "min" ? value : current.min;
+                const segRaw = field === "seg" ? value : current.sec;
+                return {
+                  ...serie,
+                  tiempoSegundos: descansoDesdeInputs(minRaw, segRaw),
+                };
+              }),
+            }
+          : ejercicio,
+      ),
+    );
+  };
+
+  const toggleSerieTimer = (idEjercicio: number, serieId: string) => {
+    setEjecucionEjercicios((prev) =>
+      prev.map((ejercicio) =>
+        ejercicio.id_ejercicio === idEjercicio
+          ? {
+              ...ejercicio,
+              series: ejercicio.series.map((serie) =>
+                serie.id === serieId
+                  ? { ...serie, timerActivo: !serie.timerActivo }
+                  : serie,
+              ),
             }
           : ejercicio,
       ),
@@ -619,6 +901,7 @@ function Entrenamiento({
         }
         const nextNumber = ejercicio.series.length + 1;
         const ultimaSerie = ejercicio.series[ejercicio.series.length - 1];
+        const serieAnterior = seriesAnterioresPorEjercicio[idEjercicio]?.[nextNumber - 1];
         return {
           ...ejercicio,
           series: [
@@ -628,7 +911,10 @@ function Entrenamiento({
               numero: nextNumber,
               kg: ultimaSerie?.kg ?? "",
               reps: ultimaSerie?.reps ?? "",
-              tipo: ultimaSerie?.tipo ?? "serie",
+              km: ultimaSerie?.km ?? "",
+              tiempoSegundos: 0,
+              timerActivo: false,
+              tipo: serieAnterior?.tipo_serie ?? ultimaSerie?.tipo ?? "serie",
               completada: false,
               registrada: false,
             },
@@ -637,6 +923,41 @@ function Entrenamiento({
       }),
     );
   };
+
+  useEffect(() => {
+    if (vista !== "ejecucion") {
+      return;
+    }
+
+    ejecucionEjercicios.forEach((ejercicio) => {
+      if (!seriesAnterioresPorEjercicio[ejercicio.id_ejercicio]) {
+        void cargarSeriesAnterioresEjercicio(ejercicio.id_ejercicio);
+      }
+    });
+  }, [ejecucionEjercicios, seriesAnterioresPorEjercicio, vista]);
+
+  useEffect(() => {
+    setEjecucionEjercicios((prev) =>
+      prev.map((ejercicio) => {
+        const anteriores = seriesAnterioresPorEjercicio[ejercicio.id_ejercicio];
+        if (!anteriores?.length) {
+          return ejercicio;
+        }
+
+        let changed = false;
+        const nextSeries = ejercicio.series.map((serie, index) => {
+          const anterior = anteriores[index];
+          if (!anterior || serie.completada || serie.registrada || serie.tipo === anterior.tipo_serie) {
+            return serie;
+          }
+          changed = true;
+          return { ...serie, tipo: anterior.tipo_serie };
+        });
+
+        return changed ? { ...ejercicio, series: nextSeries } : ejercicio;
+      }),
+    );
+  }, [seriesAnterioresPorEjercicio]);
 
   const eliminarSerieEjecucion = (idEjercicio: number, serieId: string) => {
     setEjecucionEjercicios((prev) =>
@@ -668,7 +989,9 @@ function Entrenamiento({
           ? {
               ...item,
               series: item.series.map((set) =>
-                set.id === serieId ? { ...set, completada: nuevaCompletada } : set,
+                set.id === serieId
+                  ? { ...set, completada: nuevaCompletada, timerActivo: false }
+                  : set,
               ),
             }
           : item,
@@ -724,6 +1047,8 @@ function Entrenamiento({
         throw new Error(await parseError(res, "No se pudo completar el entrenamiento"));
       }
 
+      const data = (await res.json()) as { total_trofeos?: number };
+      setTotalTrofeosEntrenamiento(data.total_trofeos ?? 0);
       setDescansoActivo(null);
       setVista("guardar");
       setMensaje("Entrenamiento completado");
@@ -769,6 +1094,11 @@ function Entrenamiento({
       return;
     }
     setConfirmDiscardOpen(true);
+  };
+
+  const volverAEjecucion = () => {
+    setDescansoActivo(null);
+    setVista("ejecucion");
   };
 
   const guardarEntrenamiento = async () => {
@@ -958,6 +1288,10 @@ function Entrenamiento({
               Series completas: {seriesCompletadasEjecucion}/{totalSeriesEjecucion}
             </p>
             <p className="helper-text">Ejercicios usados: {ejecucionEjercicios.length}</p>
+            <div className="trophy-summary">
+              <TrophyIcon />
+              <strong>{totalTrofeosEntrenamiento}</strong>
+            </div>
           </article>
           <article className="box">
             <h2>Que pasa al guardar</h2>
@@ -1012,15 +1346,25 @@ function Entrenamiento({
             <div className="actions-row training-save-actions">
               <button
                 type="button"
-                className="btn danger"
+                className="btn danger training-discard-btn"
                 onClick={requestDescartarEntrenamiento}
                 disabled={loading}
               >
                 Descartar entrenamiento
               </button>
-              <button type="button" className="btn" onClick={guardarEntrenamiento} disabled={loading}>
-                Guardar
-              </button>
+              <div className="training-save-primary-actions">
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={volverAEjecucion}
+                  disabled={loading}
+                >
+                  Volver al entrenamiento
+                </button>
+                <button type="button" className="btn" onClick={guardarEntrenamiento} disabled={loading}>
+                  Guardar
+                </button>
+              </div>
             </div>
           </article>
         </section>
@@ -1112,7 +1456,10 @@ function Entrenamiento({
                   <small>Agrega ejercicios desde la libreria de la derecha.</small>
                 </div>
               ) : (
-                ejecucionEjercicios.map((ejercicio) => (
+                ejecucionEjercicios.map((ejercicio) => {
+                  const inputMode = getExerciseInputMode(ejercicio);
+
+                  return (
                   <article key={ejercicio.id_ejercicio} className="exercise-card">
                     <div className="exercise-card-head">
                       <div>
@@ -1155,11 +1502,14 @@ function Entrenamiento({
                       />
                     </div>
 
-                    <div className="set-table execution-mode">
+                    <div className={`set-table execution-mode ${inputMode}`}>
                       <div className="set-table-head">
                         <span>Set</span>
-                        <span>KG</span>
-                        <span>Reps</span>
+                        <span>Anterior</span>
+                        {inputMode === "strength" ? <span>KG</span> : null}
+                        {inputMode === "strength" || inputMode === "repsOnly" ? <span>Reps</span> : null}
+                        {inputMode === "cardio" ? <span>KM</span> : null}
+                        {inputMode === "cardio" || inputMode === "timed" ? <span>Tiempo</span> : null}
                         <span />
                         <span>OK</span>
                       </div>
@@ -1168,6 +1518,8 @@ function Entrenamiento({
                         const numeroSerie = ejercicio.series
                           .slice(0, index + 1)
                           .filter((item) => item.tipo === "serie").length;
+                        const serieAnterior =
+                          seriesAnterioresPorEjercicio[ejercicio.id_ejercicio]?.[index] ?? null;
 
                         return (
                           <div
@@ -1197,36 +1549,124 @@ function Entrenamiento({
                                 <span className="set-order-badge">{numeroSerie}</span>
                               ) : null}
                             </div>
-                            <input
-                              className="field compact"
-                              type="number"
-                              min="0"
-                              placeholder="-"
-                              value={serie.kg}
-                              onChange={(event) =>
-                                updateSerieEjecucion(
-                                  ejercicio.id_ejercicio,
-                                  serie.id,
-                                  "kg",
-                                  event.target.value,
-                                )
-                              }
-                            />
-                            <input
-                              className="field compact"
-                              type="number"
-                              min="1"
-                              placeholder="-"
-                              value={serie.reps}
-                              onChange={(event) =>
-                                updateSerieEjecucion(
-                                  ejercicio.id_ejercicio,
-                                  serie.id,
-                                  "reps",
-                                  event.target.value,
-                                )
-                              }
-                            />
+                            {serieAnterior ? (
+                              <button
+                                type="button"
+                                className="previous-set-chip"
+                                title="Autocompletar con la serie anterior"
+                                onClick={() =>
+                                  aplicarSerieAnterior(
+                                    ejercicio.id_ejercicio,
+                                    serie.id,
+                                    serieAnterior,
+                                  )
+                                }
+                              >
+                                {formatSerieAnterior(serieAnterior, inputMode)}
+                              </button>
+                            ) : (
+                              <span className="previous-set-empty" aria-label="Sin serie anterior" />
+                            )}
+                            {inputMode === "strength" ? (
+                              <input
+                                className="field compact"
+                                type="number"
+                                min="0"
+                                placeholder="-"
+                                value={serie.kg}
+                                onChange={(event) =>
+                                  updateSerieEjecucion(
+                                    ejercicio.id_ejercicio,
+                                    serie.id,
+                                    "kg",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                            ) : null}
+                            {inputMode === "strength" || inputMode === "repsOnly" ? (
+                              <input
+                                className="field compact"
+                                type="number"
+                                min="1"
+                                placeholder="-"
+                                value={serie.reps}
+                                onChange={(event) =>
+                                  updateSerieEjecucion(
+                                    ejercicio.id_ejercicio,
+                                    serie.id,
+                                    "reps",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                            ) : null}
+                            {inputMode === "cardio" ? (
+                              <input
+                                className="field compact"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="KM"
+                                value={serie.km}
+                                onChange={(event) =>
+                                  updateSerieEjecucion(
+                                    ejercicio.id_ejercicio,
+                                    serie.id,
+                                    "km",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                            ) : null}
+                            {inputMode === "cardio" ? (
+                              <div className="serie-time-inputs">
+                                <input
+                                  className="field compact"
+                                  type="number"
+                                  min="0"
+                                  placeholder="Min"
+                                  value={descansoToInputs(serie.tiempoSegundos).min}
+                                  onChange={(event) =>
+                                    updateSerieTiempo(
+                                      ejercicio.id_ejercicio,
+                                      serie.id,
+                                      "min",
+                                      event.target.value,
+                                    )
+                                  }
+                                />
+                                <input
+                                  className="field compact"
+                                  type="number"
+                                  min="0"
+                                  max="59"
+                                  placeholder="Seg"
+                                  value={descansoToInputs(serie.tiempoSegundos).sec}
+                                  onChange={(event) =>
+                                    updateSerieTiempo(
+                                      ejercicio.id_ejercicio,
+                                      serie.id,
+                                      "seg",
+                                      event.target.value,
+                                    )
+                                  }
+                                />
+                              </div>
+                            ) : null}
+                            {inputMode === "timed" ? (
+                              <div className="serie-timer-control">
+                                <span>{formatDuration(serie.tiempoSegundos)}</span>
+                                <button
+                                  type="button"
+                                  className={`btn tiny ${serie.timerActivo ? "danger" : "secondary"}`}
+                                  onClick={() => toggleSerieTimer(ejercicio.id_ejercicio, serie.id)}
+                                  disabled={serie.completada}
+                                >
+                                  {serie.timerActivo ? "Stop" : "Play"}
+                                </button>
+                              </div>
+                            ) : null}
                             <button
                               type="button"
                               className="btn tiny secondary"
@@ -1255,7 +1695,8 @@ function Entrenamiento({
                       + Add serie
                     </button>
                   </article>
-                ))
+                  );
+                })
               )}
             </div>
           </article>

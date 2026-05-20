@@ -498,6 +498,14 @@ export const searchUserTrainings = async (req: Request, res: Response) => {
             .map((value) => value.trim())
             .filter(Boolean)
         : undefined;
+    const tipoDisciplinaRaw = req.query.tipo_disciplina;
+    const tiposDisciplina =
+      typeof tipoDisciplinaRaw === "string" && tipoDisciplinaRaw.trim()
+        ? tipoDisciplinaRaw
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean)
+        : undefined;
 
     const minDurationRaw = req.query.duracion_min;
     const maxDurationRaw = req.query.duracion_max;
@@ -527,6 +535,10 @@ export const searchUserTrainings = async (req: Request, res: Response) => {
 
     if (gruposMusculares != null) {
       filters.gruposMusculares = gruposMusculares;
+    }
+
+    if (tiposDisciplina != null) {
+      filters.tiposDisciplina = tiposDisciplina;
     }
 
     if (minDurationMinutes != null) {
