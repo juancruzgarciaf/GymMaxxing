@@ -54,7 +54,11 @@ const parseError = async (res: Response, fallback: string) => {
   }
 };
 
-function Gimnasios() {
+type GimnasiosProps = {
+  onBack?: () => void;
+};
+
+function Gimnasios({ onBack }: GimnasiosProps) {
   const [userPosition, setUserPosition] = useState<Position | null>(null);
   const [searchCenter, setSearchCenter] = useState<Position | null>(null);
   const [mapCenter, setMapCenter] = useState<Position | null>(null);
@@ -135,21 +139,27 @@ function Gimnasios() {
 
   return (
     <main className="page-shell gyms-page">
-      <section className="profile-banner gyms-hero">
-        <div className="profile-main">
-          <p className="eyebrow">Mapa</p>
-          <h1>Gimnasios cercanos</h1>
-          <p className="subtitle">Encuentra gimnasios cerca de tu ubicacion actual.</p>
-        </div>
-        <div className="gyms-actions">
-          <button
-            type="button"
-            className="btn"
-            onClick={handleBuscarEnZona}
-            disabled={!mapCenter || loading}
-          >
-            {loadingGyms ? "Buscando..." : "Buscar en esta zona"}
+      <section className="page-hero compact discover-branch-hero">
+        {onBack ? (
+          <button type="button" className="btn secondary" onClick={onBack}>
+            Volver
           </button>
+        ) : null}
+        <div className="gyms-title-row">
+          <div>
+            <h1>Gimnasios cercanos</h1>
+            <p className="subtitle">Encuentra gimnasios cerca de tu ubicacion actual.</p>
+          </div>
+          <div className="gyms-actions">
+            <button
+              type="button"
+              className="btn"
+              onClick={handleBuscarEnZona}
+              disabled={!mapCenter || loading}
+            >
+              {loadingGyms ? "Buscando..." : "Buscar en esta zona"}
+            </button>
+          </div>
         </div>
       </section>
 
@@ -184,7 +194,7 @@ function Gimnasios() {
                     <div className="gym-popup">
                       <strong>{gym.nombre}</strong>
                       {gym.direccion ? <span>{gym.direccion}</span> : null}
-                      <small>{gym.origen === "local" ? "GymMaxxing" : "Google Places"}</small>
+                      <small>GymMaxxing</small>
                       <button type="button" className="btn compact">
                         Ver gimnasio
                       </button>
@@ -209,7 +219,7 @@ function Gimnasios() {
                   <strong>{gym.nombre}</strong>
                   <span>{gym.direccion || "Sin direccion disponible"}</span>
                 </div>
-                <small>{gym.origen === "local" ? "Local" : "Google"}</small>
+                <small>Local</small>
               </article>
             ))}
           </aside>

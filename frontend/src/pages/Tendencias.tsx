@@ -204,7 +204,6 @@ function Tendencias({ usuario, onOpenProfile, onOpenTraining }: TendenciasProps)
         <section className="trend-panel">
           <div className="trend-panel-head">
             <div>
-              <p className="eyebrow">Ranking activo</p>
               <h2>{selectedConfig.title}</h2>
               <p>{selectedConfig.subtitle}</p>
             </div>

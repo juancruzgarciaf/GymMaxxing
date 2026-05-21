@@ -23,12 +23,6 @@ export const getGimnasiosCercanos = async (req: Request, res: Response) => {
   } catch (error) {
     console.error(error);
 
-    if (error instanceof Error && error.name === "MissingGooglePlacesApiKey") {
-      return res.status(500).json({
-        error: error.message,
-      });
-    }
-
     return res.status(500).json({
       error: "Error obteniendo gimnasios cercanos",
     });

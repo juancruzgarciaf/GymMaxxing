@@ -15,7 +15,6 @@ import Home from "./pages/Home";
 import Buscar from "./pages/Buscar";
 import Descubrir from "./pages/Descubrir";
 import EntrenamientoDetalle from "./pages/EntrenamientoDetalle";
-import Gimnasios from "./pages/Gimnasios";
 import Login from "./pages/Login";
 import Perfil from "./pages/Perfil";
 import Register from "./pages/Register";
@@ -30,7 +29,6 @@ type MainScreen =
   | "rutinaCompartida"
   | "buscar"
   | "descubrir"
-  | "gimnasios"
   | "perfil"
   | "entrenamientoLibre"
   | "entrenamiento";
@@ -71,7 +69,6 @@ const pathForScreen = (screen: RoutedMainScreen) => {
     rutinas: "/rutinas",
     buscar: "/buscar",
     descubrir: "/descubrir",
-    gimnasios: "/gimnasios",
     perfil: "/perfil",
     entrenamientoLibre: "/entrenamiento",
   };
@@ -104,11 +101,8 @@ const getMainScreenFromPath = (pathname: string): MainScreen => {
   if (pathname === "/buscar") {
     return "buscar";
   }
-  if (pathname === "/descubrir") {
+  if (pathname === "/descubrir" || pathname.startsWith("/descubrir/")) {
     return "descubrir";
-  }
-  if (pathname === "/gimnasios") {
-    return "gimnasios";
   }
   if (pathname === "/entrenamiento") {
     return "entrenamientoLibre";
@@ -469,6 +463,20 @@ function App() {
             className={`nav-btn ${mainScreen === "home" ? "active" : ""}`}
             onClick={() => navigateTo("home")}
           >
+            <svg
+              className="nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 10.5 12 3l9 7.5" />
+              <path d="M5 10v10h14V10" />
+              <path d="M9 20v-6h6v6" />
+            </svg>
             Inicio
           </button>
           {canTrain ? (
@@ -477,6 +485,24 @@ function App() {
               className={`nav-btn ${mainScreen === "entrenamientoLibre" ? "active" : ""}`}
               onClick={() => navigateTo("entrenamientoLibre")}
             >
+              <svg
+                className="nav-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 8h18" />
+                <path d="M6 6v4" />
+                <path d="M18 6v4" />
+                <circle cx="12" cy="6" r="2" />
+                <path d="M12 8v5" />
+                <path d="M8 13h8" />
+                <path d="M9 18l3-5 3 5" />
+              </svg>
               Entrenamiento
             </button>
           ) : null}
@@ -485,6 +511,22 @@ function App() {
             className={`nav-btn ${mainScreen === "rutinas" ? "active" : ""}`}
             onClick={() => navigateTo("rutinas")}
           >
+            <svg
+              className="nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M8 3h8" />
+              <path d="M9 3v3h6V3" />
+              <path d="M6 5h12v16H6z" />
+              <path d="M9 11h6" />
+              <path d="M9 15h6" />
+            </svg>
             Rutinas
           </button>
           <button
@@ -492,20 +534,43 @@ function App() {
             className={`nav-btn ${mainScreen === "descubrir" ? "active" : ""}`}
             onClick={() => navigateTo("descubrir")}
           >
+            <svg
+              className="nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M3 12h18" />
+              <path d="M12 3c2.5 2.4 3.8 5.4 3.8 9S14.5 18.6 12 21" />
+              <path d="M12 3C9.5 5.4 8.2 8.4 8.2 12S9.5 18.6 12 21" />
+            </svg>
             Descubrir
-          </button>
-          <button
-            type="button"
-            className={`nav-btn ${mainScreen === "gimnasios" ? "active" : ""}`}
-            onClick={() => navigateTo("gimnasios")}
-          >
-            Gimnasios
           </button>
           <button
             type="button"
             className={`nav-btn ${mainScreen === "perfil" ? "active" : ""}`}
             onClick={() => openProfile(usuario.username)}
           >
+            <svg
+              className="nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="6" r="3" />
+              <path d="M12 9v6" />
+              <path d="M8 12h8" />
+              <path d="M9 21l3-6 3 6" />
+            </svg>
             Perfil
           </button>
         </nav>
@@ -575,7 +640,6 @@ function App() {
           />
         ) : null}
         {mainScreen === "buscar" ? <Buscar usuario={usuario} onOpenProfile={openProfile} /> : null}
-        {mainScreen === "gimnasios" ? <Gimnasios /> : null}
         {mainScreen === "perfil" ? (
           <Perfil
             usuario={usuario}

@@ -220,7 +220,6 @@ function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
           </button>
         ) : null}
         <div>
-          <p className="eyebrow">Descubrir Rutinas</p>
           <h1>Explora rutinas nuevas</h1>
           <p className="subtitle">
             Aqui aparecen rutinas publicas de otros usuarios para descubrir, ver y copiar.

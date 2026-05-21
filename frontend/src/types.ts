@@ -153,7 +153,8 @@ export type Gimnasio = {
   longitud: number;
   descripcion?: string | null;
   imagenUrl?: string | null;
-  origen: "local" | "google";
+  origen: "local";
+  distanciaMetros?: number;
 };
 
 export type PerfilUsuario = {

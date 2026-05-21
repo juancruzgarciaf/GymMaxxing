@@ -8,8 +8,8 @@ export type GimnasioMapa = {
   longitud: number;
   descripcion: string | null;
   imagenUrl: string | null;
-  origen: "local" | "google";
-  placeId?: string | null;
+  origen: "local";
+  distanciaMetros: number;
 };
 
 type LocalGymRow = {
@@ -20,24 +20,66 @@ type LocalGymRow = {
   longitud: number;
   descripcion: string | null;
   imagen_url: string | null;
-  google_place_id: string | null;
+  distancia_metros: number;
 };
 
-type GooglePlace = {
-  id?: string;
-  displayName?: {
-    text?: string;
-  };
-  formattedAddress?: string;
-  location?: {
-    latitude?: number;
-    longitude?: number;
-  };
-};
-
-const DEFAULT_RADIUS_METERS = 3000;
+const DEFAULT_RADIUS_METERS = 15000;
+const LEGACY_SPORTCLUB_PILAR_ADDRESS = "Av. Lagomarsino 905, Ruta 8 y Guido, Pilar, Buenos Aires";
 
 let gimnasioTableReady = false;
+let gimnasioSeedReady = false;
+
+const seedGimnasios = [
+  {
+    nombre: "SportClub Pilar",
+    direccion: "Shopping Las Palmas del Pilar Ruta Panamericana Km 50, Pilar",
+    latitud: -34.4462642,
+    longitud: -58.868823,
+    descripcion: "Gimnasio en Pilar.",
+  },
+  {
+    nombre: "SportClub Paseo Champagnat",
+    direccion: "Shopping Paseo Champagnat, Panamericana Km 54, Pilar, Buenos Aires",
+    latitud: -34.4495113,
+    longitud: -58.9156222,
+    descripcion: "Gimnasio en Paseo Champagnat, Pilar.",
+  },
+  {
+    nombre: "Megatlon Pilar",
+    direccion: "Panamericana Km 49,5, Pilar, Buenos Aires",
+    latitud: -34.4492,
+    longitud: -58.8725,
+    descripcion: "Gimnasio en Pilar.",
+  },
+  {
+    nombre: "Atlas Gym Pilar",
+    direccion: "11 de Septiembre 529, Pilar, Buenos Aires",
+    latitud: -34.4583,
+    longitud: -58.9136,
+    descripcion: "Gimnasio en Pilar Centro.",
+  },
+  {
+    nombre: "Pilar Fitness",
+    direccion: "B1629GNI El Rincón 699-799, GNI, B1629 Pilar Centro, Provincia de Buenos Aires",
+    latitud: -34.4595,
+    longitud: -58.9129,
+    descripcion: "Gimnasio en Pilar Centro.",
+  },
+  {
+    nombre: "Megatlon Distrito Arcos",
+    direccion: "Godoy Cruz 2626, Palermo, Ciudad Autonoma de Buenos Aires",
+    latitud: -34.5793909,
+    longitud: -58.4260635,
+    descripcion: "Gimnasio en Palermo.",
+  },
+  {
+    nombre: "SportClub Unicenter",
+    direccion: "Parana 3745, Martinez, Buenos Aires",
+    latitud: -34.5081,
+    longitud: -58.5239,
+    descripcion: "Gimnasio en Unicenter, zona norte.",
+  },
+];
 
 export const ensureGimnasioTable = async () => {
   if (gimnasioTableReady) {
@@ -53,7 +95,6 @@ export const ensureGimnasioTable = async () => {
        longitud DOUBLE PRECISION NOT NULL,
        descripcion TEXT,
        imagen_url TEXT,
-       google_place_id TEXT UNIQUE,
        fecha_creacion TIMESTAMP DEFAULT NOW()
      )`
   );
@@ -63,41 +104,100 @@ export const ensureGimnasioTable = async () => {
 
 const toNumber = (value: number) => Number(value);
 
-const getLocalGymsNearby = async (
+export const seedGimnasiosIfMissing = async () => {
+  if (gimnasioSeedReady) {
+    return;
+  }
+
+  await ensureGimnasioTable();
+
+  await pool.query(
+    `DELETE FROM gimnasio
+     WHERE LOWER(nombre) = LOWER($1)
+       AND direccion = $2`,
+    ["SportClub Pilar", LEGACY_SPORTCLUB_PILAR_ADDRESS]
+  );
+
+  const sportClubPilarSeed = seedGimnasios.find((gym) => gym.nombre === "SportClub Pilar");
+
+  if (sportClubPilarSeed) {
+    await pool.query(
+      `UPDATE gimnasio
+       SET direccion = $2,
+           latitud = $3,
+           longitud = $4,
+           descripcion = COALESCE(descripcion, $5)
+       WHERE LOWER(nombre) = LOWER($1)`,
+      [
+        sportClubPilarSeed.nombre,
+        sportClubPilarSeed.direccion,
+        sportClubPilarSeed.latitud,
+        sportClubPilarSeed.longitud,
+        sportClubPilarSeed.descripcion,
+      ]
+    );
+  }
+
+  for (const gym of seedGimnasios) {
+    await pool.query(
+      `INSERT INTO gimnasio (nombre, direccion, latitud, longitud, descripcion)
+       SELECT $1, $2, $3, $4, $5
+       WHERE NOT EXISTS (
+         SELECT 1
+         FROM gimnasio
+         WHERE LOWER(nombre) = LOWER($1)
+       )`,
+      [
+        gym.nombre,
+        gym.direccion,
+        gym.latitud,
+        gym.longitud,
+        gym.descripcion,
+      ]
+    );
+  }
+
+  gimnasioSeedReady = true;
+};
+
+export const getGimnasiosCercanos = async (
   lat: number,
   lng: number,
   radiusMeters = DEFAULT_RADIUS_METERS
 ): Promise<GimnasioMapa[]> => {
-  await ensureGimnasioTable();
+  await seedGimnasiosIfMissing();
 
   const result = await pool.query<LocalGymRow>(
-    `SELECT id_gimnasio,
+    `WITH gimnasios_con_distancia AS (
+       SELECT id_gimnasio,
+              nombre,
+              direccion,
+              latitud,
+              longitud,
+              descripcion,
+              imagen_url,
+              (
+                6371000 * 2 * ASIN(
+                  SQRT(
+                    POWER(SIN(RADIANS((latitud - $1) / 2)), 2) +
+                    COS(RADIANS($1)) * COS(RADIANS(latitud)) *
+                    POWER(SIN(RADIANS((longitud - $2) / 2)), 2)
+                  )
+                )
+              ) AS distancia_metros
+       FROM gimnasio
+     )
+     SELECT id_gimnasio,
             nombre,
             direccion,
             latitud,
             longitud,
             descripcion,
             imagen_url,
-            google_place_id
-     FROM gimnasio
-     WHERE (
-       6371000 * 2 * ASIN(
-         SQRT(
-           POWER(SIN(RADIANS((latitud - $1) / 2)), 2) +
-           COS(RADIANS($1)) * COS(RADIANS(latitud)) *
-           POWER(SIN(RADIANS((longitud - $2) / 2)), 2)
-         )
-       )
-     ) <= $3
-     ORDER BY (
-       6371000 * 2 * ASIN(
-         SQRT(
-           POWER(SIN(RADIANS((latitud - $1) / 2)), 2) +
-           COS(RADIANS($1)) * COS(RADIANS(latitud)) *
-           POWER(SIN(RADIANS((longitud - $2) / 2)), 2)
-         )
-       )
-     ) ASC`,
+            distancia_metros
+     FROM gimnasios_con_distancia
+     WHERE distancia_metros <= $3
+     ORDER BY distancia_metros ASC`,
     [lat, lng, radiusMeters]
   );
 
@@ -110,88 +210,6 @@ const getLocalGymsNearby = async (
     descripcion: row.descripcion,
     imagenUrl: row.imagen_url,
     origen: "local",
-    placeId: row.google_place_id,
+    distanciaMetros: toNumber(row.distancia_metros),
   }));
-};
-
-const getGoogleGymsNearby = async (
-  lat: number,
-  lng: number,
-  apiKey: string,
-  radiusMeters = DEFAULT_RADIUS_METERS
-): Promise<GimnasioMapa[]> => {
-  const response = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location",
-    },
-    body: JSON.stringify({
-      includedTypes: ["gym"],
-      maxResultCount: 20,
-      locationRestriction: {
-        circle: {
-          center: {
-            latitude: lat,
-            longitude: lng,
-          },
-          radius: radiusMeters,
-        },
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || "Google Places no pudo buscar gimnasios cercanos");
-  }
-
-  const data = (await response.json()) as { places?: GooglePlace[] };
-
-  return (data.places ?? [])
-    .map((place): GimnasioMapa | null => {
-      const latitude = place.location?.latitude;
-      const longitude = place.location?.longitude;
-      const id = place.id;
-
-      if (!id || latitude == null || longitude == null) {
-        return null;
-      }
-
-      return {
-        id,
-        nombre: place.displayName?.text ?? "Gimnasio",
-        direccion: place.formattedAddress ?? null,
-        latitud: latitude,
-        longitud: longitude,
-        descripcion: null,
-        imagenUrl: null,
-        origen: "google",
-        placeId: id,
-      };
-    })
-    .filter((gym): gym is GimnasioMapa => gym != null);
-};
-
-export const getGimnasiosCercanos = async (lat: number, lng: number) => {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-
-  if (!apiKey) {
-    const error = new Error("Falta configurar GOOGLE_PLACES_API_KEY en backend/.env");
-    error.name = "MissingGooglePlacesApiKey";
-    throw error;
-  }
-
-  const [localGyms, googleGyms] = await Promise.all([
-    getLocalGymsNearby(lat, lng),
-    getGoogleGymsNearby(lat, lng, apiKey),
-  ]);
-
-  const localPlaceIds = new Set(
-    localGyms.map((gym) => gym.placeId).filter((placeId): placeId is string => Boolean(placeId))
-  );
-  const filteredGoogleGyms = googleGyms.filter((gym) => !localPlaceIds.has(gym.placeId ?? ""));
-
-  return [...localGyms, ...filteredGoogleGyms];
 };

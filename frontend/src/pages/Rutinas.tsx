@@ -708,10 +708,6 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
     }
   };
 
-  const handleBuscarRutinas = () => {
-    setBusquedaRutina((prev) => prev.trim());
-  };
-
   const compartirRutina = async () => {
     if (!rutinaSeleccionada) {
       return;
@@ -2033,13 +2029,12 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
     <main className="app">
       {renderToast()}
       <section className="hero">
-        <p className="eyebrow">Rutinas</p>
         <h1>Tus rutinas</h1>
       </section>
 
       {loading && <p className="status">Cargando datos...</p>}
       <section className="panel two-cols rutinas-main-panels">
-        <article className="box">
+        <article className="box rutinas-list-box">
           <div className="actions-row">
             <input
               className="field"
@@ -2064,9 +2059,6 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
             </button>
             <button className="btn secondary" type="button" onClick={handlePegarRutina}>
               Pegar rutina
-            </button>
-            <button className="btn secondary" type="button" onClick={handleBuscarRutinas}>
-              Buscar
             </button>
             <button
               className="btn secondary"
@@ -2097,22 +2089,18 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
           </div>
         </article>
 
-        <article className="box">
+        <article className="box rutinas-detail-box">
           <h2>Detalle</h2>
           {rutinaSeleccionada ? (
             <div className="routine-detail detail-rich">
               <h3 className="routine-title-xl">{rutinaSeleccionada.nombre}</h3>
-              <p>{rutinaSeleccionada.descripcion || "Sin descripcion"}</p>
+              <p className="routine-detail-description">{rutinaSeleccionada.descripcion || "Sin descripcion"}</p>
               <div className="detail-meta">
                 <span>Duracion: {rutinaSeleccionada.duracion_estimada ?? "-"} min</span>
                 <span>ID {rutinaSeleccionada.id_rutina}</span>
                 <span>Guardados: {rutinaSeleccionada.save_count}</span>
                 <span>Copias: {rutinaSeleccionada.copy_count}</span>
               </div>
-
-              <p className="helper-text routine-copy-insight">
-                Cantidad de veces copiadas: {rutinaSeleccionada.copy_count}
-              </p>
 
               <h3 className="detail-subtitle">Grupos musculares</h3>
               {resumenLoading ? (
