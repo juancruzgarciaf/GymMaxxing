@@ -15,6 +15,7 @@ import Home from "./pages/Home";
 import Buscar from "./pages/Buscar";
 import Descubrir from "./pages/Descubrir";
 import EntrenamientoDetalle from "./pages/EntrenamientoDetalle";
+import Gimnasios from "./pages/Gimnasios";
 import Login from "./pages/Login";
 import Perfil from "./pages/Perfil";
 import Register from "./pages/Register";
@@ -29,6 +30,7 @@ type MainScreen =
   | "rutinaCompartida"
   | "buscar"
   | "descubrir"
+  | "gimnasios"
   | "perfil"
   | "entrenamientoLibre"
   | "entrenamiento";
@@ -69,6 +71,7 @@ const pathForScreen = (screen: RoutedMainScreen) => {
     rutinas: "/rutinas",
     buscar: "/buscar",
     descubrir: "/descubrir",
+    gimnasios: "/gimnasios",
     perfil: "/perfil",
     entrenamientoLibre: "/entrenamiento",
   };
@@ -103,6 +106,9 @@ const getMainScreenFromPath = (pathname: string): MainScreen => {
   }
   if (pathname === "/descubrir") {
     return "descubrir";
+  }
+  if (pathname === "/gimnasios") {
+    return "gimnasios";
   }
   if (pathname === "/entrenamiento") {
     return "entrenamientoLibre";
@@ -490,6 +496,13 @@ function App() {
           </button>
           <button
             type="button"
+            className={`nav-btn ${mainScreen === "gimnasios" ? "active" : ""}`}
+            onClick={() => navigateTo("gimnasios")}
+          >
+            Gimnasios
+          </button>
+          <button
+            type="button"
             className={`nav-btn ${mainScreen === "perfil" ? "active" : ""}`}
             onClick={() => openProfile(usuario.username)}
           >
@@ -562,6 +575,7 @@ function App() {
           />
         ) : null}
         {mainScreen === "buscar" ? <Buscar usuario={usuario} onOpenProfile={openProfile} /> : null}
+        {mainScreen === "gimnasios" ? <Gimnasios /> : null}
         {mainScreen === "perfil" ? (
           <Perfil
             usuario={usuario}

@@ -145,6 +145,17 @@ export type SuggestedAthlete = Usuario & {
   mutual_following_count: number;
 };
 
+export type Gimnasio = {
+  id: string;
+  nombre: string;
+  direccion: string | null;
+  latitud: number;
+  longitud: number;
+  descripcion?: string | null;
+  imagenUrl?: string | null;
+  origen: "local" | "google";
+};
+
 export type PerfilUsuario = {
   usuario: Usuario;
   followers_count: number;

@@ -7,6 +7,7 @@ import userRoutes from "./routes/user.routes";
 import rutinaRoutes from "./routes/rutina.routes";
 import entrenamientoRoutes from "./routes/entrenamiento.routes";
 import ejercicioRoutes from "./routes/ejercicio.routes";
+import gimnasioRoutes from "./routes/gimnasio.routes";
 
 
 const app = express();
@@ -20,6 +21,7 @@ app.use("/users", userRoutes);
 app.use("/rutinas", rutinaRoutes);
 app.use("/entrenamientos", entrenamientoRoutes);
 app.use("/ejercicios", ejercicioRoutes);
+app.use("/gimnasios", gimnasioRoutes);
 
 // test DB
 pool.query("SELECT NOW()")
