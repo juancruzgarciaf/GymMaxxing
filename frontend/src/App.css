@@ -2977,6 +2977,29 @@ button.discover-module-card:hover {
   width: 100%;
 }
 
+.gym-avatar-marker {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 999px;
+  border: 2px solid rgba(229, 248, 255, 0.92);
+  background: linear-gradient(145deg, #7ed6a1 0%, #4fb6dd 100%);
+  box-shadow: 0 10px 20px rgba(2, 8, 14, 0.32);
+  color: #10221a;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+.gym-avatar-marker span {
+  display: block;
+  line-height: 1;
+  margin: 0;
+  transform: translateY(-0.5px);
+}
+
 .gym-popup {
   display: grid;
   gap: 6px;

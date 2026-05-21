@@ -2,18 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
-import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
-import markerIcon from "leaflet/dist/images/marker-icon.png";
-import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import type { Gimnasio } from "../types";
 
 const API = "http://localhost:3000";
-
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-});
 
 type Position = {
   lat: number;
@@ -53,6 +44,17 @@ const parseError = async (res: Response, fallback: string) => {
     return fallback;
   }
 };
+
+const getGymInitial = (name: string) => name.trim().charAt(0).toUpperCase() || "G";
+
+const createGymIcon = (name: string) =>
+  L.divIcon({
+    className: "gym-avatar-marker",
+    html: `<span>${getGymInitial(name)}</span>`,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+    popupAnchor: [0, -22],
+  });
 
 type GimnasiosProps = {
   onBack?: () => void;
@@ -189,7 +191,7 @@ function Gimnasios({ onBack }: GimnasiosProps) {
                 <Popup>Tu ubicacion</Popup>
               </CircleMarker>
               {gimnasios.map((gym) => (
-                <Marker key={gym.id} position={[gym.latitud, gym.longitud]}>
+                <Marker key={gym.id} position={[gym.latitud, gym.longitud]} icon={createGymIcon(gym.nombre)}>
                   <Popup>
                     <div className="gym-popup">
                       <strong>{gym.nombre}</strong>
