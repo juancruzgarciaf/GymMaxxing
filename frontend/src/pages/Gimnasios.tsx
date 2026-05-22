@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { useNavigate } from "react-router-dom";
 import type { Gimnasio } from "../types";
 
 const API = "http://localhost:3000";
@@ -61,6 +62,8 @@ type GimnasiosProps = {
 };
 
 function Gimnasios({ onBack }: GimnasiosProps) {
+  const navigate = useNavigate();
+  const markerRefs = useRef<Record<string, L.Marker | null>>({});
   const [userPosition, setUserPosition] = useState<Position | null>(null);
   const [searchCenter, setSearchCenter] = useState<Position | null>(null);
   const [mapCenter, setMapCenter] = useState<Position | null>(null);
@@ -139,6 +142,23 @@ function Gimnasios({ onBack }: GimnasiosProps) {
     void buscarGimnasios(mapCenter);
   };
 
+  const openGymProfile = (gym: Gimnasio) => {
+    if (!gym.perfil?.username) {
+      return;
+    }
+
+    navigate(`/perfil/${encodeURIComponent(gym.perfil.username)}`);
+  };
+
+  const focusGymOnMap = (gym: Gimnasio) => {
+    setSearchCenter({ lat: gym.latitud, lng: gym.longitud });
+    setMapCenter({ lat: gym.latitud, lng: gym.longitud });
+
+    window.setTimeout(() => {
+      markerRefs.current[gym.id]?.openPopup();
+    }, 250);
+  };
+
   return (
     <main className="page-shell gyms-page">
       <section className="page-hero compact discover-branch-hero">
@@ -191,14 +211,26 @@ function Gimnasios({ onBack }: GimnasiosProps) {
                 <Popup>Tu ubicacion</Popup>
               </CircleMarker>
               {gimnasios.map((gym) => (
-                <Marker key={gym.id} position={[gym.latitud, gym.longitud]} icon={createGymIcon(gym.nombre)}>
+                <Marker
+                  key={gym.id}
+                  position={[gym.latitud, gym.longitud]}
+                  icon={createGymIcon(gym.nombre)}
+                  ref={(marker) => {
+                    markerRefs.current[gym.id] = marker;
+                  }}
+                >
                   <Popup>
                     <div className="gym-popup">
                       <strong>{gym.nombre}</strong>
                       {gym.direccion ? <span>{gym.direccion}</span> : null}
-                      <small>GymMaxxing</small>
-                      <button type="button" className="btn compact">
-                        Ver gimnasio
+                      <small>{gym.perfil ? `@${gym.perfil.username}` : "Sin perfil vinculado"}</small>
+                      <button
+                        type="button"
+                        className="btn compact"
+                        onClick={() => openGymProfile(gym)}
+                        disabled={!gym.perfil}
+                      >
+                        {gym.perfil ? "Ver gimnasio" : "Sin perfil"}
                       </button>
                     </div>
                   </Popup>
@@ -216,13 +248,18 @@ function Gimnasios({ onBack }: GimnasiosProps) {
               <p className="helper-text">No hay gimnasios para mostrar en esta zona.</p>
             ) : null}
             {sortedGimnasios.map((gym) => (
-              <article key={gym.id} className="gym-list-item">
+              <button
+                key={gym.id}
+                type="button"
+                className="gym-list-item"
+                onClick={() => focusGymOnMap(gym)}
+              >
                 <div>
                   <strong>{gym.nombre}</strong>
                   <span>{gym.direccion || "Sin direccion disponible"}</span>
                 </div>
                 <small>Local</small>
-              </article>
+              </button>
             ))}
           </aside>
         </section>

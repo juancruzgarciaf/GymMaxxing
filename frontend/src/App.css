@@ -3042,10 +3042,21 @@ button.discover-module-card:hover {
 
 .gym-list-item {
   border-top: 1px solid rgba(151, 183, 202, 0.12);
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
   padding-top: 12px;
+  background: transparent;
+  color: inherit;
   display: flex;
   justify-content: space-between;
   gap: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gym-list-item:hover strong {
+  color: #7ed6a1;
 }
 
 .gym-list-item div {

@@ -155,6 +155,11 @@ export type Gimnasio = {
   imagenUrl?: string | null;
   origen: "local";
   distanciaMetros?: number;
+  perfil?: {
+    username: string;
+    email: string;
+    tipoUsuario: string;
+  } | null;
 };
 
 export type PerfilUsuario = {

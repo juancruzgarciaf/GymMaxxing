@@ -10,6 +10,11 @@ export type GimnasioMapa = {
   imagenUrl: string | null;
   origen: "local";
   distanciaMetros: number;
+  perfil: {
+    username: string;
+    email: string;
+    tipoUsuario: string;
+  } | null;
 };
 
 type LocalGymRow = {
@@ -21,6 +26,10 @@ type LocalGymRow = {
   descripcion: string | null;
   imagen_url: string | null;
   distancia_metros: number;
+  usuario_id: number | null;
+  perfil_username: string | null;
+  perfil_email: string | null;
+  perfil_tipo_usuario: string | null;
 };
 
 const DEFAULT_RADIUS_METERS = 15000;
@@ -81,6 +90,19 @@ const seedGimnasios = [
   },
 ];
 
+const linkedGymProfiles = [
+  {
+    gimnasioNombre: "SportClub Pilar",
+    username: "SPORTCLUB PILAR",
+    email: "sportclubpilar@gmail.com",
+  },
+  {
+    gimnasioNombre: "Megatlon Pilar",
+    username: "MEGATLON",
+    email: "megatlon@gmail.com",
+  },
+];
+
 export const ensureGimnasioTable = async () => {
   if (gimnasioTableReady) {
     return;
@@ -99,10 +121,65 @@ export const ensureGimnasioTable = async () => {
      )`
   );
 
+  await pool.query(
+    `ALTER TABLE gimnasio
+     ADD COLUMN IF NOT EXISTS usuario_id INT`
+  );
+
+  await pool.query(
+    `DO $$
+     BEGIN
+       IF NOT EXISTS (
+         SELECT 1
+         FROM pg_constraint
+         WHERE conname = 'gimnasio_usuario_id_fkey'
+       ) THEN
+         ALTER TABLE gimnasio
+         ADD CONSTRAINT gimnasio_usuario_id_fkey
+         FOREIGN KEY (usuario_id) REFERENCES usuario(id)
+         ON DELETE SET NULL;
+       END IF;
+     END $$`
+  );
+
   gimnasioTableReady = true;
 };
 
 const toNumber = (value: number) => Number(value);
+
+const ensureGymProfile = async (profile: (typeof linkedGymProfiles)[number]) => {
+  const existing = await pool.query<{ id: number }>(
+    `SELECT id
+     FROM usuario
+     WHERE LOWER(email) = LOWER($1)
+        OR LOWER(username) = LOWER($2)
+     ORDER BY CASE WHEN LOWER(email) = LOWER($1) THEN 0 ELSE 1 END
+     LIMIT 1`,
+    [profile.email, profile.username]
+  );
+
+  const existingId = existing.rows[0]?.id;
+
+  if (existingId != null) {
+    await pool.query(
+      `UPDATE usuario
+       SET tipo_usuario = 'gimnasio'
+       WHERE id = $1`,
+      [existingId]
+    );
+
+    return existingId;
+  }
+
+  const created = await pool.query<{ id: number }>(
+    `INSERT INTO usuario (username, email, password, tipo_usuario)
+     VALUES ($1, $2, $3, 'gimnasio')
+     RETURNING id`,
+    [profile.username, profile.email, "gymmaxxing"]
+  );
+
+  return created.rows[0]?.id ?? null;
+};
 
 export const seedGimnasiosIfMissing = async () => {
   if (gimnasioSeedReady) {
@@ -157,6 +234,19 @@ export const seedGimnasiosIfMissing = async () => {
     );
   }
 
+  for (const profile of linkedGymProfiles) {
+    const userId = await ensureGymProfile(profile);
+
+    if (userId != null) {
+      await pool.query(
+        `UPDATE gimnasio
+         SET usuario_id = $2
+         WHERE LOWER(nombre) = LOWER($1)`,
+        [profile.gimnasioNombre, userId]
+      );
+    }
+  }
+
   gimnasioSeedReady = true;
 };
 
@@ -176,6 +266,7 @@ export const getGimnasiosCercanos = async (
               longitud,
               descripcion,
               imagen_url,
+              usuario_id,
               (
                 6371000 * 2 * ASIN(
                   SQRT(
@@ -188,16 +279,21 @@ export const getGimnasiosCercanos = async (
        FROM gimnasio
      )
      SELECT id_gimnasio,
-            nombre,
-            direccion,
-            latitud,
-            longitud,
-            descripcion,
-            imagen_url,
-            distancia_metros
-     FROM gimnasios_con_distancia
-     WHERE distancia_metros <= $3
-     ORDER BY distancia_metros ASC`,
+            g.nombre,
+            g.direccion,
+            g.latitud,
+            g.longitud,
+            g.descripcion,
+            g.imagen_url,
+            g.usuario_id,
+            g.distancia_metros,
+            u.username AS perfil_username,
+            u.email AS perfil_email,
+            u.tipo_usuario AS perfil_tipo_usuario
+     FROM gimnasios_con_distancia g
+     LEFT JOIN usuario u ON u.id = g.usuario_id
+     WHERE g.distancia_metros <= $3
+     ORDER BY g.distancia_metros ASC`,
     [lat, lng, radiusMeters]
   );
 
@@ -211,5 +307,13 @@ export const getGimnasiosCercanos = async (
     imagenUrl: row.imagen_url,
     origen: "local",
     distanciaMetros: toNumber(row.distancia_metros),
+    perfil:
+      row.perfil_username && row.perfil_email && row.perfil_tipo_usuario === "gimnasio"
+        ? {
+            username: row.perfil_username,
+            email: row.perfil_email,
+            tipoUsuario: row.perfil_tipo_usuario,
+          }
+        : null,
   }));
 };
