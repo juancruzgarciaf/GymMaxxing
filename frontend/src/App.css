@@ -1575,6 +1575,15 @@ h2 {
   width: min(1240px, 100%);
 }
 
+.profile-back-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.profile-back-button {
+  min-width: 108px;
+}
+
 .profile-modern-header,
 .training-calendar-card {
   background:
@@ -1725,6 +1734,19 @@ h2 {
   gap: 8px;
 }
 
+.profile-map-link {
+  text-decoration: none;
+  border-color: rgba(126, 214, 161, 0.56);
+  background: rgba(126, 214, 161, 0.1);
+  color: #b8f0d0;
+  font-weight: 800;
+}
+
+.profile-map-link:hover {
+  border-color: rgba(126, 214, 161, 0.82);
+  background: rgba(126, 214, 161, 0.16);
+}
+
 .profile-social-backdrop {
   background: rgba(2, 8, 14, 0.72);
   z-index: 60;
@@ -1845,6 +1867,304 @@ h2 {
   justify-content: center;
   align-items: start;
   gap: 24px;
+}
+
+.gym-profile-editor,
+.gym-public-profile {
+  display: grid;
+  gap: 16px;
+}
+
+.gym-editor-section,
+.gym-public-card {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(126, 214, 161, 0.08), transparent 34%),
+    linear-gradient(145deg, rgba(25, 36, 45, 0.96) 0%, rgba(18, 25, 32, 0.96) 100%);
+  border: 1px solid rgba(151, 183, 202, 0.16);
+  border-radius: 24px;
+  padding: 20px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.22);
+}
+
+.gym-editor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.gym-editor-head h2,
+.gym-public-card h2 {
+  margin: 0;
+  color: #eef8fd;
+}
+
+.gym-public-card.collapsible {
+  padding: 0;
+  overflow: hidden;
+}
+
+.gym-section-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 18px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.gym-section-toggle span {
+  color: #eef8fd;
+  font-size: 1.2rem;
+  font-weight: 850;
+}
+
+.gym-section-toggle strong {
+  border: 1px solid rgba(151, 183, 202, 0.16);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #9fb3c1;
+  font-size: 0.78rem;
+}
+
+.gym-public-card.open .gym-section-toggle strong {
+  color: #b8f0d0;
+  border-color: rgba(126, 214, 161, 0.42);
+  background: rgba(126, 214, 161, 0.08);
+}
+
+.gym-section-content {
+  display: grid;
+  gap: 12px;
+  padding: 0 20px 20px;
+}
+
+.gym-editor-head span {
+  color: #91a8b8;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.gym-textarea {
+  min-height: 108px;
+  resize: vertical;
+}
+
+.wide-field {
+  grid-column: 1 / -1;
+}
+
+.gym-schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.gym-day-card,
+.gym-holiday-card {
+  border: 1px solid rgba(151, 183, 202, 0.14);
+  border-radius: 18px;
+  background: rgba(17, 25, 32, 0.78);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.gym-day-card.closed {
+  opacity: 0.68;
+}
+
+.gym-day-head,
+.gym-time-row,
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gym-day-head {
+  justify-content: space-between;
+}
+
+.gym-day-head strong {
+  color: #e5f8ff;
+}
+
+.switch-row {
+  color: #c1d0da;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.switch-row input {
+  accent-color: #7ed6a1;
+}
+
+.gym-time-row .field {
+  margin: 0;
+}
+
+.gym-holiday-card {
+  margin-top: 12px;
+}
+
+.gym-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.gym-chip {
+  border: 1px solid rgba(151, 183, 202, 0.18);
+  border-radius: 999px;
+  padding: 9px 13px;
+  background: rgba(17, 25, 32, 0.76);
+  color: #c1d0da;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.gym-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(126, 214, 161, 0.45);
+}
+
+.gym-chip.active {
+  border-color: rgba(126, 214, 161, 0.72);
+  background: rgba(126, 214, 161, 0.12);
+  color: #b8f0d0;
+}
+
+.gym-chip-grid.readonly .gym-chip {
+  cursor: default;
+}
+
+.gym-editor-actions {
+  justify-content: flex-end;
+}
+
+.gym-public-profile {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.gym-public-combined-card {
+  grid-column: 2;
+  display: grid;
+  gap: 14px;
+}
+
+.gym-section-tabs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.gym-section-tabs button {
+  border: 1px solid rgba(151, 183, 202, 0.16);
+  border-radius: 999px;
+  background: rgba(17, 25, 32, 0.72);
+  color: #9fb3c1;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 850;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.gym-section-tabs button:hover {
+  border-color: rgba(126, 214, 161, 0.42);
+  color: #d8e2ea;
+}
+
+.gym-section-tabs button.active {
+  border-color: rgba(126, 214, 161, 0.72);
+  background: rgba(126, 214, 161, 0.12);
+  color: #b8f0d0;
+}
+
+.gym-public-combined-card .gym-section-content {
+  padding: 0;
+}
+
+.gym-public-card p {
+  color: #b7cad8;
+  line-height: 1.5;
+}
+
+.gym-info-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gym-info-grid span {
+  border: 1px solid rgba(151, 183, 202, 0.14);
+  border-radius: 14px;
+  background: rgba(17, 25, 32, 0.72);
+  padding: 9px 11px;
+  color: #d8e2ea;
+}
+
+.gym-public-hours {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(58px, 1fr));
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.gym-hour-calendar-day {
+  display: grid;
+  gap: 6px;
+  min-width: 58px;
+}
+
+.gym-hour-calendar-label {
+  color: #9fb3c1;
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.gym-hour-calendar-capsule {
+  aspect-ratio: 1;
+  border: 1px solid rgba(151, 183, 202, 0.15);
+  border-radius: 14px;
+  background: rgba(17, 25, 32, 0.72);
+  color: #d8e2ea;
+  padding: 7px 5px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.gym-hour-calendar-capsule strong {
+  color: #eef8fd;
+  font-size: 0.84rem;
+  line-height: 1;
+}
+
+.gym-hour-calendar-capsule small {
+  color: #9fb3c1;
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.gym-hour-calendar-day.closed .gym-hour-calendar-capsule {
+  opacity: 0.68;
 }
 
 .profile-feed-column {
@@ -2590,8 +2910,7 @@ h2 {
   margin: 4px 0 0;
 }
 
-.user-card-actions,
-.profile-actions-row {
+.user-card-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -3213,6 +3532,25 @@ button.discover-module-card:hover {
   .profile-modern-stats {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .gym-schedule-grid,
+  .gym-public-profile {
+    grid-template-columns: 1fr;
+  }
+
+  .gym-public-combined-card {
+    grid-column: auto;
+  }
+
+  .gym-editor-head,
+  .gym-day-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .wide-field {
+    grid-column: auto;
   }
 
   .profile-social-modal {

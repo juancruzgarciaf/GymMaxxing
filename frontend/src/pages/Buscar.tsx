@@ -3,21 +3,30 @@ import type { SearchUser, Usuario } from "../types";
 
 type BuscarProps = {
   usuario: Usuario;
+  query: string;
+  resultados: SearchUser[];
+  onQueryChange: (query: string) => void;
+  onResultadosChange: (resultados: SearchUser[] | ((prev: SearchUser[]) => SearchUser[])) => void;
   onOpenProfile: (username: string) => void;
 };
 
 const API = "http://localhost:3000";
 
-function Buscar({ usuario, onOpenProfile }: BuscarProps) {
-  const [query, setQuery] = useState("");
-  const [resultados, setResultados] = useState<SearchUser[]>([]);
+function Buscar({
+  usuario,
+  query,
+  resultados,
+  onQueryChange,
+  onResultadosChange,
+  onOpenProfile,
+}: BuscarProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const buscarUsuarios = async () => {
     const cleanQuery = query.trim();
     if (!cleanQuery) {
-      setResultados([]);
+      onResultadosChange([]);
       setError("Escribí un username para buscar.");
       return;
     }
@@ -35,7 +44,7 @@ function Buscar({ usuario, onOpenProfile }: BuscarProps) {
         throw new Error("error" in data ? data.error || "No se pudo buscar usuarios" : "No se pudo buscar usuarios");
       }
 
-      setResultados(Array.isArray(data) ? data : []);
+      onResultadosChange(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo buscar usuarios");
     } finally {
@@ -59,7 +68,7 @@ function Buscar({ usuario, onOpenProfile }: BuscarProps) {
         throw new Error(data.error || "No se pudo actualizar el seguimiento");
       }
 
-      setResultados((prev) =>
+      onResultadosChange((prev) =>
         prev.map((item) =>
           item.id === target.id
             ? {
@@ -86,7 +95,7 @@ function Buscar({ usuario, onOpenProfile }: BuscarProps) {
           className="field"
           placeholder="Buscar por username"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => onQueryChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               void buscarUsuarios();

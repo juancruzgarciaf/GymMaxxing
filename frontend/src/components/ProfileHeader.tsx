@@ -25,19 +25,32 @@ function ProfileHeader({
   onOpenFollowers,
   onOpenFollowing,
 }: ProfileHeaderProps) {
+  const isGym = perfil.usuario.tipo_usuario.trim().toLowerCase() === "gimnasio";
+  const gymProfile = perfil.gimnasio_perfil;
   const realName = perfil.usuario.nombre?.trim();
-  const bio = perfil.usuario.objetivo_entrenamiento?.trim();
+  const bio = isGym
+    ? gymProfile?.descripcion_corta?.trim()
+    : perfil.usuario.objetivo_entrenamiento?.trim();
   const genderLabel = perfil.usuario.genero ? GENDER_LABELS[perfil.usuario.genero] ?? perfil.usuario.genero : "";
+  const displayName = isGym
+    ? gymProfile?.nombre_gimnasio?.trim() || perfil.usuario.username
+    : perfil.usuario.username;
+  const location = [gymProfile?.ciudad, gymProfile?.provincia].filter(Boolean).join(", ");
+  const gymInstagram = gymProfile?.instagram?.trim().replace(/^@/, "");
 
   return (
     <section className="profile-modern-header">
-      <div className="profile-modern-avatar">{perfil.usuario.username.slice(0, 1).toUpperCase()}</div>
+      <div className="profile-modern-avatar">{displayName.slice(0, 1).toUpperCase()}</div>
 
       <div className="profile-modern-main">
         <div className="profile-modern-topline">
           <div>
-            <h1>{perfil.usuario.username}</h1>
-            {realName ? <p className="profile-real-name">{realName}</p> : null}
+            <h1>{displayName}</h1>
+            {isGym ? (
+              <p className="profile-real-name">@{perfil.usuario.username}</p>
+            ) : realName ? (
+              <p className="profile-real-name">{realName}</p>
+            ) : null}
           </div>
 
           {!perfil.is_own_profile ? (
@@ -56,10 +69,12 @@ function ProfileHeader({
         </div>
 
         <div className="profile-modern-stats">
-          <div>
-            <strong>{formatNumber(perfil.trainings_count)}</strong>
-            <span>Entrenamientos</span>
-          </div>
+          {!isGym ? (
+            <div>
+              <strong>{formatNumber(perfil.trainings_count)}</strong>
+              <span>Entrenamientos</span>
+            </div>
+          ) : null}
           <button type="button" className="profile-stat-button" onClick={onOpenFollowers}>
             <strong>{formatNumber(perfil.followers_count)}</strong>
             <span>Seguidores</span>
@@ -73,13 +88,25 @@ function ProfileHeader({
         {bio ? <p className="profile-bio">{bio}</p> : null}
 
         <div className="profile-meta">
-          {genderLabel ? (
+          {isGym && gymProfile?.tipo_gimnasio ? (
+            <span className="tag-soft">{gymProfile.tipo_gimnasio}</span>
+          ) : null}
+          {isGym && location ? <span className="tag-soft">{location}</span> : null}
+          {isGym && gymProfile?.telefono ? <span className="tag-soft">{gymProfile.telefono}</span> : null}
+          {isGym && gymInstagram ? <span className="tag-soft">@{gymInstagram}</span> : null}
+          {isGym && gymProfile?.sitio_web ? <span className="tag-soft">{gymProfile.sitio_web}</span> : null}
+          {isGym && gymProfile?.google_maps_url ? (
+            <a className="tag-soft profile-map-link" href={gymProfile.google_maps_url} target="_blank" rel="noreferrer">
+              Abrir mapa
+            </a>
+          ) : null}
+          {!isGym && genderLabel ? (
             <span className="tag-soft">Genero: {genderLabel}</span>
           ) : null}
-          {perfil.usuario.nivel_entrenamiento ? (
+          {!isGym && perfil.usuario.nivel_entrenamiento ? (
             <span className="tag-soft">Nivel: {perfil.usuario.nivel_entrenamiento}</span>
           ) : null}
-          {perfil.usuario.nacionalidad ? (
+          {!isGym && perfil.usuario.nacionalidad ? (
             <span className="tag-soft">Nacionalidad: {perfil.usuario.nacionalidad}</span>
           ) : null}
         </div>

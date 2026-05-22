@@ -22,6 +22,41 @@ type BasicUserRow = {
   tipo_usuario: string;
 };
 
+type GymDaySchedule = {
+  abierto: boolean;
+  apertura: string;
+  cierre: string;
+};
+
+type GymHolidaySchedule = {
+  activo: boolean;
+  nota: string;
+  apertura: string;
+  cierre: string;
+};
+
+export type GymProfileData = {
+  nombre_gimnasio: string | null;
+  telefono: string | null;
+  sitio_web: string | null;
+  instagram: string | null;
+  descripcion_corta: string | null;
+  tipo_gimnasio: string | null;
+  direccion: string | null;
+  ciudad: string | null;
+  provincia: string | null;
+  pais: string | null;
+  google_maps_url: string | null;
+  horarios: Record<string, GymDaySchedule>;
+  horarios_feriados: GymHolidaySchedule;
+  servicios: string[];
+};
+
+type GymProfileRow = Omit<GymProfileData, "horarios" | "horarios_feriados"> & {
+  horarios: Record<string, GymDaySchedule> | null;
+  horarios_feriados: GymHolidaySchedule | null;
+};
+
 type RutinaMetricSupport = {
   has_save: boolean;
   has_copy: boolean;
@@ -93,6 +128,7 @@ const sanitizeUser = (user: UsuarioRow | BasicUserRow) => {
 };
 
 let trophyTablesReady = false;
+let gymProfileTableReady = false;
 
 const ensureTrophyTables = async () => {
   if (trophyTablesReady) {
@@ -115,6 +151,168 @@ const ensureTrophyTables = async () => {
   );
 
   trophyTablesReady = true;
+};
+
+const DEFAULT_GYM_SCHEDULE: Record<string, GymDaySchedule> = {
+  lunes: { abierto: true, apertura: "07:00", cierre: "22:00" },
+  martes: { abierto: true, apertura: "07:00", cierre: "22:00" },
+  miercoles: { abierto: true, apertura: "07:00", cierre: "22:00" },
+  jueves: { abierto: true, apertura: "07:00", cierre: "22:00" },
+  viernes: { abierto: true, apertura: "07:00", cierre: "22:00" },
+  sabado: { abierto: true, apertura: "09:00", cierre: "18:00" },
+  domingo: { abierto: false, apertura: "09:00", cierre: "14:00" },
+};
+
+const DEFAULT_GYM_HOLIDAYS: GymHolidaySchedule = {
+  activo: false,
+  nota: "",
+  apertura: "09:00",
+  cierre: "14:00",
+};
+
+const ensureGymProfileTable = async () => {
+  if (gymProfileTableReady) {
+    return;
+  }
+
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS gimnasio_perfil (
+       usuario_id INT PRIMARY KEY REFERENCES usuario(id) ON DELETE CASCADE,
+       nombre_gimnasio TEXT,
+       telefono TEXT,
+       sitio_web TEXT,
+       instagram TEXT,
+       descripcion_corta TEXT,
+       tipo_gimnasio TEXT,
+       direccion TEXT,
+       ciudad TEXT,
+       provincia TEXT,
+       pais TEXT,
+       google_maps_url TEXT,
+       horarios JSONB NOT NULL DEFAULT '{}'::jsonb,
+       horarios_feriados JSONB NOT NULL DEFAULT '{}'::jsonb,
+       servicios TEXT[] NOT NULL DEFAULT '{}',
+       fecha_actualizacion TIMESTAMP DEFAULT NOW()
+     )`
+  );
+
+  gymProfileTableReady = true;
+};
+
+const isGymRole = (role: string | null | undefined) =>
+  (role ?? "").trim().toLowerCase() === "gimnasio";
+
+const normalizeGymProfile = (
+  row: GymProfileRow | null | undefined,
+  fallbackName: string
+): GymProfileData => ({
+  nombre_gimnasio: row?.nombre_gimnasio ?? fallbackName,
+  telefono: row?.telefono ?? null,
+  sitio_web: row?.sitio_web ?? null,
+  instagram: row?.instagram ?? null,
+  descripcion_corta: row?.descripcion_corta ?? null,
+  tipo_gimnasio: row?.tipo_gimnasio ?? null,
+  direccion: row?.direccion ?? null,
+  ciudad: row?.ciudad ?? null,
+  provincia: row?.provincia ?? null,
+  pais: row?.pais ?? null,
+  google_maps_url: row?.google_maps_url ?? null,
+  horarios: row?.horarios ?? DEFAULT_GYM_SCHEDULE,
+  horarios_feriados: row?.horarios_feriados ?? DEFAULT_GYM_HOLIDAYS,
+  servicios: row?.servicios ?? [],
+});
+
+const getGymProfile = async (userId: number, fallbackName: string) => {
+  await ensureGymProfileTable();
+
+  const result = await pool.query<GymProfileRow>(
+    `SELECT nombre_gimnasio,
+            telefono,
+            sitio_web,
+            instagram,
+            descripcion_corta,
+            tipo_gimnasio,
+            direccion,
+            ciudad,
+            provincia,
+            pais,
+            google_maps_url,
+            horarios,
+            horarios_feriados,
+            servicios
+     FROM gimnasio_perfil
+     WHERE usuario_id = $1`,
+    [userId]
+  );
+
+  return normalizeGymProfile(result.rows[0], fallbackName);
+};
+
+const upsertGymProfile = async (
+  userId: number,
+  data: Partial<GymProfileData>,
+  fallbackName: string
+) => {
+  await ensureGymProfileTable();
+
+  const normalized = normalizeGymProfile(data as GymProfileRow, fallbackName);
+
+  await pool.query(
+    `INSERT INTO gimnasio_perfil (
+       usuario_id,
+       nombre_gimnasio,
+       telefono,
+       sitio_web,
+       instagram,
+       descripcion_corta,
+       tipo_gimnasio,
+       direccion,
+       ciudad,
+       provincia,
+       pais,
+       google_maps_url,
+       horarios,
+       horarios_feriados,
+       servicios
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15::text[])
+     ON CONFLICT (usuario_id)
+     DO UPDATE SET
+       nombre_gimnasio = EXCLUDED.nombre_gimnasio,
+       telefono = EXCLUDED.telefono,
+       sitio_web = EXCLUDED.sitio_web,
+       instagram = EXCLUDED.instagram,
+       descripcion_corta = EXCLUDED.descripcion_corta,
+       tipo_gimnasio = EXCLUDED.tipo_gimnasio,
+       direccion = EXCLUDED.direccion,
+       ciudad = EXCLUDED.ciudad,
+       provincia = EXCLUDED.provincia,
+       pais = EXCLUDED.pais,
+       google_maps_url = EXCLUDED.google_maps_url,
+       horarios = EXCLUDED.horarios,
+       horarios_feriados = EXCLUDED.horarios_feriados,
+       servicios = EXCLUDED.servicios,
+       fecha_actualizacion = NOW()`,
+    [
+      userId,
+      normalized.nombre_gimnasio,
+      normalized.telefono,
+      normalized.sitio_web,
+      normalized.instagram,
+      normalized.descripcion_corta,
+      normalized.tipo_gimnasio,
+      normalized.direccion,
+      normalized.ciudad,
+      normalized.provincia,
+      normalized.pais,
+      normalized.google_maps_url,
+      JSON.stringify(normalized.horarios),
+      JSON.stringify(normalized.horarios_feriados),
+      normalized.servicios,
+    ]
+  );
+
+  return getGymProfile(userId, fallbackName);
 };
 
 const getRutinaMetricsSupport = async (): Promise<RutinaMetricSupport> => {
@@ -466,7 +664,7 @@ export const getUserRoleById = async (id: number) => {
   return role ? role.trim().toLowerCase() : null;
 };
 
-export const updateUser = async (id: number, data: Partial<UsuarioRow>) => {
+export const updateUser = async (id: number, data: Partial<UsuarioRow> & { gimnasio_perfil?: Partial<GymProfileData> }) => {
   const {
     username,
     email,
@@ -480,6 +678,7 @@ export const updateUser = async (id: number, data: Partial<UsuarioRow>) => {
     tipo_usuario,
   } = data;
 
+  const normalizedRole = isGymRole(tipo_usuario) ? "gimnasio" : tipo_usuario;
   const result = await pool.query<UsuarioRow>(
     `UPDATE usuario SET
        username = $1,
@@ -497,19 +696,25 @@ export const updateUser = async (id: number, data: Partial<UsuarioRow>) => {
     [
       username,
       email,
-      edad ?? null,
-      peso ?? null,
-      altura ?? null,
-      genero ?? null,
-      nacionalidad ?? null,
-      nivel_entrenamiento ?? null,
-      objetivo_entrenamiento ?? null,
-      tipo_usuario,
+      isGymRole(normalizedRole) ? null : edad ?? null,
+      isGymRole(normalizedRole) ? null : peso ?? null,
+      isGymRole(normalizedRole) ? null : altura ?? null,
+      isGymRole(normalizedRole) ? null : genero ?? null,
+      isGymRole(normalizedRole) ? null : nacionalidad ?? null,
+      isGymRole(normalizedRole) ? null : nivel_entrenamiento ?? null,
+      isGymRole(normalizedRole) ? null : objetivo_entrenamiento ?? null,
+      normalizedRole,
       id,
     ]
   );
 
-  return result.rows[0] ? sanitizeUser(result.rows[0]) : null;
+  const updatedUser = result.rows[0] ? sanitizeUser(result.rows[0]) : null;
+
+  if (updatedUser && isGymRole(updatedUser.tipo_usuario)) {
+    await upsertGymProfile(id, data.gimnasio_perfil ?? {}, updatedUser.username);
+  }
+
+  return updatedUser;
 };
 
 export const searchUsers = async (query: string, viewerId?: number) => {
@@ -707,22 +912,27 @@ export const getUserProfile = async (profileId: number, viewerId?: number) => {
     return null;
   }
 
-  const trainings = await getSessionSummaries(
-    `se.usuario_id = $1
-      AND se.estado = 'finalizada'`,
-    [profileId],
-    20,
-    viewerId
-  );
+  const gymUser = isGymRole(user.tipo_usuario);
+  const trainings = gymUser
+    ? []
+    : await getSessionSummaries(
+        `se.usuario_id = $1
+          AND se.estado = 'finalizada'`,
+        [profileId],
+        20,
+        viewerId
+      );
+  const gimnasioPerfil = gymUser ? await getGymProfile(profileId, user.username) : null;
 
   return {
     usuario: sanitizeUser(user),
     followers_count: user.followers_count,
     following_count: user.following_count,
-    trainings_count: user.trainings_count,
+    trainings_count: gymUser ? 0 : user.trainings_count,
     viewer_follows: user.viewer_follows ?? false,
     is_own_profile: viewerId != null ? viewerId === profileId : false,
     entrenamientos: trainings,
+    gimnasio_perfil: gimnasioPerfil,
   };
 };
 

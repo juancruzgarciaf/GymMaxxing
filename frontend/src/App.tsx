@@ -9,7 +9,7 @@ import {
   saveTrainingSeedAsRoutine,
 } from "./lib/trainingTransfer";
 import { canUseTrainingFeatures } from "./lib/roles";
-import type { EntrenamientoResumen, TrainingSeed, Usuario } from "./types";
+import type { EntrenamientoResumen, SearchUser, TrainingSeed, Usuario } from "./types";
 import Entrenamiento, { type ActiveTrainingSnapshot } from "./pages/Entrenamiento";
 import Home from "./pages/Home";
 import Buscar from "./pages/Buscar";
@@ -195,6 +195,8 @@ function App() {
   const [discardTrainingRequestKey, setDiscardTrainingRequestKey] = useState(0);
   const [discardTrainingModalOpen, setDiscardTrainingModalOpen] = useState(false);
   const [appToast, setAppToast] = useState<{ type: "error" | "ok"; text: string } | null>(null);
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [userSearchResults, setUserSearchResults] = useState<SearchUser[]>([]);
   const authScreen: AuthScreen = location.pathname === "/register" ? "register" : "login";
   const mainScreen = getMainScreenFromPath(location.pathname);
   const routeState = location.state as TrainingRouteState | null;
@@ -287,6 +289,15 @@ function App() {
   const openProfile = (username: string) => {
     dismissSharedRoutine();
     navigate(`/perfil/${encodeURIComponent(username)}`);
+  };
+
+  const goBackFromProfile = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate(pathForScreen("home"));
   };
 
   const openTraining = (
@@ -398,6 +409,8 @@ function App() {
     setSelectedTraining(null);
     setTrainingSeed(null);
     setActiveTraining(null);
+    setUserSearchQuery("");
+    setUserSearchResults([]);
     setDiscardTrainingModalOpen(false);
     navigate("/login", { replace: true });
   };
@@ -639,12 +652,22 @@ function App() {
             }}
           />
         ) : null}
-        {mainScreen === "buscar" ? <Buscar usuario={usuario} onOpenProfile={openProfile} /> : null}
+        {mainScreen === "buscar" ? (
+          <Buscar
+            usuario={usuario}
+            query={userSearchQuery}
+            resultados={userSearchResults}
+            onQueryChange={setUserSearchQuery}
+            onResultadosChange={setUserSearchResults}
+            onOpenProfile={openProfile}
+          />
+        ) : null}
         {mainScreen === "perfil" ? (
           <Perfil
             usuario={usuario}
             profileUsername={routeProfileUsername ?? usuario.username}
             onOpenProfile={openProfile}
+            onBack={goBackFromProfile}
             onOpenTraining={(training) => openTraining(training, "perfil")}
             onSaveAsRoutine={handleSaveTrainingAsRoutine}
             authToken={authToken}

@@ -13,6 +13,36 @@ export type Usuario = {
   objetivo_entrenamiento?: string | null;
 };
 
+export type GymDaySchedule = {
+  abierto: boolean;
+  apertura: string;
+  cierre: string;
+};
+
+export type GymHolidaySchedule = {
+  activo: boolean;
+  nota: string;
+  apertura: string;
+  cierre: string;
+};
+
+export type GimnasioPerfil = {
+  nombre_gimnasio: string | null;
+  telefono: string | null;
+  sitio_web: string | null;
+  instagram: string | null;
+  descripcion_corta: string | null;
+  tipo_gimnasio: string | null;
+  direccion: string | null;
+  ciudad: string | null;
+  provincia: string | null;
+  pais: string | null;
+  google_maps_url: string | null;
+  horarios: Record<string, GymDaySchedule>;
+  horarios_feriados: GymHolidaySchedule;
+  servicios: string[];
+};
+
 export type EjercicioPreview = {
   nombre: string;
   series: number;
@@ -164,6 +194,7 @@ export type Gimnasio = {
 
 export type PerfilUsuario = {
   usuario: Usuario;
+  gimnasio_perfil?: GimnasioPerfil | null;
   followers_count: number;
   following_count: number;
   trainings_count: number;

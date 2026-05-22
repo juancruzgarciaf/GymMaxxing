@@ -50,6 +50,7 @@ export const updateUser = async (req: Request, res: Response) => {
       nivel_entrenamiento,
       objetivo_entrenamiento,
       tipo_usuario,
+      gimnasio_perfil,
     } = req.body;
 
     const cleanUsername = typeof username === "string" ? username.trim() : "";
@@ -95,6 +96,7 @@ export const updateUser = async (req: Request, res: Response) => {
       nivel_entrenamiento,
       objetivo_entrenamiento,
       tipo_usuario,
+      gimnasio_perfil,
     });
 
     if (!usuario) {

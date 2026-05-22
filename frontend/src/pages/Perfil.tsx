@@ -5,12 +5,22 @@ import ProfileTrainingSearch from "../components/ProfileTrainingSearch";
 import TrainingCalendar from "../components/TrainingCalendar";
 import UserTrainingFeed from "../components/UserTrainingFeed";
 import { COUNTRY_OPTIONS } from "../lib/countries";
-import type { EntrenamientoResumen, PerfilUsuario, SocialUser, Usuario } from "../types";
+import { isGymUser } from "../lib/roles";
+import type {
+  EntrenamientoResumen,
+  GimnasioPerfil,
+  GymDaySchedule,
+  GymHolidaySchedule,
+  PerfilUsuario,
+  SocialUser,
+  Usuario,
+} from "../types";
 
 type PerfilProps = {
   usuario: Usuario;
   profileUsername: string;
   onOpenProfile: (username: string) => void;
+  onBack: () => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
   onSaveAsRoutine: (training: EntrenamientoResumen, customName?: string) => void | Promise<void>;
   authToken: string | null;
@@ -24,6 +34,101 @@ const GENDER_OPTIONS = [
   { value: "hombre", label: "Hombre" },
   { value: "mujer", label: "Mujer" },
 ];
+const GYM_TYPE_OPTIONS = [
+  "Comercial",
+  "Hardcore",
+  "Bodybuilding",
+  "Powerlifting",
+  "Crossfit",
+  "Funcional",
+  "Boutique",
+  "Premium",
+  "Women Only",
+];
+const GYM_SERVICE_OPTIONS = [
+  "Duchas",
+  "Lockers",
+  "Aire acondicionado",
+  "WiFi",
+  "Estacionamiento",
+  "Sauna",
+  "Pileta",
+  "Cafeteria",
+  "Venta de suplementos",
+  "Clases grupales",
+  "Personal trainers",
+  "Sector de posing",
+  "Sector de powerlifting",
+];
+const GYM_DAYS: Array<{ key: string; label: string }> = [
+  { key: "lunes", label: "Lunes" },
+  { key: "martes", label: "Martes" },
+  { key: "miercoles", label: "Miercoles" },
+  { key: "jueves", label: "Jueves" },
+  { key: "viernes", label: "Viernes" },
+  { key: "sabado", label: "Sabado" },
+  { key: "domingo", label: "Domingo" },
+];
+const GYM_DAY_SHORT_LABELS: Record<string, string> = {
+  lunes: "Lun",
+  martes: "Mar",
+  miercoles: "Mie",
+  jueves: "Jue",
+  viernes: "Vie",
+  sabado: "Sab",
+  domingo: "Dom",
+};
+const DEFAULT_GYM_SCHEDULE: Record<string, GymDaySchedule> = {
+  lunes: { abierto: true, apertura: "07:00", cierre: "22:00" },
+  martes: { abierto: true, apertura: "07:00", cierre: "22:00" },
+  miercoles: { abierto: true, apertura: "07:00", cierre: "22:00" },
+  jueves: { abierto: true, apertura: "07:00", cierre: "22:00" },
+  viernes: { abierto: true, apertura: "07:00", cierre: "22:00" },
+  sabado: { abierto: true, apertura: "09:00", cierre: "18:00" },
+  domingo: { abierto: false, apertura: "09:00", cierre: "14:00" },
+};
+const DEFAULT_GYM_HOLIDAYS: GymHolidaySchedule = {
+  activo: false,
+  nota: "",
+  apertura: "09:00",
+  cierre: "14:00",
+};
+
+const emptyGymForm = (): GimnasioPerfil => ({
+  nombre_gimnasio: "",
+  telefono: "",
+  sitio_web: "",
+  instagram: "",
+  descripcion_corta: "",
+  tipo_gimnasio: "",
+  direccion: "",
+  ciudad: "",
+  provincia: "",
+  pais: "",
+  google_maps_url: "",
+  horarios: DEFAULT_GYM_SCHEDULE,
+  horarios_feriados: DEFAULT_GYM_HOLIDAYS,
+  servicios: [],
+});
+
+const normalizeGymForm = (profile: PerfilUsuario | null): GimnasioPerfil => {
+  const source = profile?.gimnasio_perfil;
+
+  return {
+    ...emptyGymForm(),
+    ...source,
+    nombre_gimnasio: source?.nombre_gimnasio ?? profile?.usuario.username ?? "",
+    horarios: {
+      ...DEFAULT_GYM_SCHEDULE,
+      ...(source?.horarios ?? {}),
+    },
+    horarios_feriados: {
+      ...DEFAULT_GYM_HOLIDAYS,
+      ...(source?.horarios_feriados ?? {}),
+    },
+    servicios: source?.servicios ?? [],
+  };
+};
 
 type UserTrainingSearchResponse = {
   items: EntrenamientoResumen[];
@@ -32,11 +137,13 @@ type UserTrainingSearchResponse = {
 };
 
 type SocialModalMode = "followers" | "following";
+type GymPublicSection = "servicios" | "horarios";
 
 function Perfil({
   usuario,
   profileUsername,
   onOpenProfile,
+  onBack,
   onOpenTraining,
   onSaveAsRoutine,
   authToken,
@@ -63,6 +170,7 @@ function Perfil({
   const [socialLoading, setSocialLoading] = useState(false);
   const [socialError, setSocialError] = useState("");
   const [socialActionLoadingId, setSocialActionLoadingId] = useState<number | null>(null);
+  const [gymPublicSection, setGymPublicSection] = useState<GymPublicSection>("servicios");
   const [form, setForm] = useState({
     username: "",
     email: "",
@@ -74,6 +182,7 @@ function Perfil({
     nivel_entrenamiento: "",
     objetivo_entrenamiento: "",
   });
+  const [gymForm, setGymForm] = useState<GimnasioPerfil>(() => emptyGymForm());
   const currentNationalityIsKnown =
     !form.nacionalidad || COUNTRY_OPTIONS.includes(form.nacionalidad);
   const currentTrainingLevelIsKnown =
@@ -221,7 +330,7 @@ function Perfil({
     setTrainingResults(perfil?.entrenamientos ?? []);
     setTrainingSearchError("");
 
-    if (perfil?.is_own_profile) {
+    if (perfil?.is_own_profile && !isGymUser(perfil.usuario)) {
       void buscarEntrenamientos({
         query: "",
         minDuration: "",
@@ -248,6 +357,7 @@ function Perfil({
       nivel_entrenamiento: perfil.usuario.nivel_entrenamiento || "",
       objetivo_entrenamiento: perfil.usuario.objetivo_entrenamiento || "",
     });
+    setGymForm(normalizeGymForm(perfil));
   }, [perfil]);
 
   const handleGuardarPerfil = async () => {
@@ -263,6 +373,7 @@ function Perfil({
     try {
       setSaving(true);
       setError("");
+      const editingGym = isGymUser(perfil.usuario);
 
       const res = await fetch(`${API}/users/${perfil.usuario.id}`, {
         method: "PUT",
@@ -273,14 +384,15 @@ function Perfil({
         body: JSON.stringify({
           username: form.username.trim(),
           email: form.email.trim(),
-          edad: form.edad.trim() ? Number(form.edad) : null,
-          peso: form.peso.trim() ? Number(form.peso) : null,
-          altura: form.altura.trim() ? Number(form.altura) : null,
-          genero: form.genero || null,
-          nacionalidad: form.nacionalidad.trim() || null,
-          nivel_entrenamiento: form.nivel_entrenamiento.trim() || null,
-          objetivo_entrenamiento: form.objetivo_entrenamiento.trim() || null,
+          edad: editingGym ? null : form.edad.trim() ? Number(form.edad) : null,
+          peso: editingGym ? null : form.peso.trim() ? Number(form.peso) : null,
+          altura: editingGym ? null : form.altura.trim() ? Number(form.altura) : null,
+          genero: editingGym ? null : form.genero || null,
+          nacionalidad: editingGym ? null : form.nacionalidad.trim() || null,
+          nivel_entrenamiento: editingGym ? null : form.nivel_entrenamiento.trim() || null,
+          objetivo_entrenamiento: editingGym ? null : form.objetivo_entrenamiento.trim() || null,
           tipo_usuario: perfil.usuario.tipo_usuario,
+          gimnasio_perfil: editingGym ? gymForm : undefined,
         }),
       });
 
@@ -304,6 +416,7 @@ function Perfil({
                 ...prev.usuario,
                 ...usuarioActualizado,
               },
+              gimnasio_perfil: editingGym ? gymForm : prev.gimnasio_perfil,
             }
           : prev,
       );
@@ -478,10 +591,51 @@ function Perfil({
     });
   };
 
+  const updateGymField = <K extends keyof GimnasioPerfil>(key: K, value: GimnasioPerfil[K]) => {
+    setGymForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const updateGymDay = (dayKey: string, next: Partial<GymDaySchedule>) => {
+    setGymForm((prev) => ({
+      ...prev,
+      horarios: {
+        ...prev.horarios,
+        [dayKey]: {
+          ...(prev.horarios[dayKey] ?? DEFAULT_GYM_SCHEDULE[dayKey]),
+          ...next,
+        },
+      },
+    }));
+  };
+
+  const copyScheduleToAllDays = () => {
+    const monday = gymForm.horarios.lunes ?? DEFAULT_GYM_SCHEDULE.lunes;
+    setGymForm((prev) => ({
+      ...prev,
+      horarios: GYM_DAYS.reduce<Record<string, GymDaySchedule>>((acc, day) => {
+        acc[day.key] = { ...monday };
+        return acc;
+      }, {}),
+    }));
+  };
+
+  const toggleGymService = (service: string) => {
+    setGymForm((prev) => ({
+      ...prev,
+      servicios: prev.servicios.includes(service)
+        ? prev.servicios.filter((item) => item !== service)
+        : [...prev.servicios, service],
+    }));
+  };
+
   const trainingsToShow =
-    perfil?.is_own_profile
+    perfil && isGymUser(perfil.usuario)
+      ? []
+      : perfil?.is_own_profile
       ? trainingResults
       : perfil?.entrenamientos ?? [];
+  const profileIsGym = perfil ? isGymUser(perfil.usuario) : false;
+  const gymInfo = perfil?.gimnasio_perfil ?? null;
 
   return (
     <main className="page-shell profile-page-shell">
@@ -490,6 +644,14 @@ function Perfil({
 
       {!loading && perfil ? (
         <>
+          {!perfil.is_own_profile ? (
+            <div className="profile-back-row">
+              <button type="button" className="btn secondary profile-back-button" onClick={onBack}>
+                Volver
+              </button>
+            </div>
+          ) : null}
+
           <ProfileHeader
             perfil={perfil}
             editMode={editMode}
@@ -499,7 +661,7 @@ function Perfil({
             onOpenFollowing={() => abrirModalSocial("following")}
           />
 
-          {perfil.is_own_profile && editMode ? (
+          {perfil.is_own_profile && editMode && !profileIsGym ? (
             <section className="feed-card">
               <h2>Editar usuario</h2>
               <div className="form-grid two-inline">
@@ -596,53 +758,315 @@ function Perfil({
             </section>
           ) : null}
 
-          <section className="profile-content-layout">
-            <section className="profile-feed-column" aria-label="Entrenamientos del usuario">
-              {perfil.is_own_profile ? (
-                <>
-                  <ProfileTrainingSearch
-                    query={trainingSearchQuery}
-                    minDuration={trainingMinDuration}
-                    maxDuration={trainingMaxDuration}
-                    availableGroups={availableTrainingGroups}
-                    availableDisciplines={availableTrainingDisciplines}
-                    selectedGroups={selectedTrainingGroups}
-                    selectedDisciplines={selectedTrainingDisciplines}
-                    loading={trainingSearchLoading}
-                    resultsCount={trainingResults.length}
-                    onQueryChange={setTrainingSearchQuery}
-                    onMinDurationChange={setTrainingMinDuration}
-                    onMaxDurationChange={setTrainingMaxDuration}
-                    onToggleGroup={toggleTrainingGroup}
-                    onToggleDiscipline={toggleTrainingDiscipline}
-                    onApply={buscarEntrenamientos}
-                    onClear={clearTrainingSearch}
+          {perfil.is_own_profile && editMode && profileIsGym ? (
+            <section className="gym-profile-editor">
+              <div className="gym-editor-section">
+                <div className="gym-editor-head">
+                  <h2>Editar gimnasio</h2>
+                  <span>Perfil publico</span>
+                </div>
+                <div className="form-grid two-inline">
+                  <input
+                    className="field"
+                    placeholder="Username"
+                    value={form.username}
+                    onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
                   />
-                  {trainingSearchError ? <div className="status error">{trainingSearchError}</div> : null}
-                </>
-              ) : null}
+                  <input
+                    className="field"
+                    placeholder="Email"
+                    value={form.email}
+                    onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+                  />
+                  <input
+                    className="field"
+                    placeholder="Nombre del gimnasio"
+                    value={gymForm.nombre_gimnasio ?? ""}
+                    onChange={(event) => updateGymField("nombre_gimnasio", event.target.value)}
+                  />
+                  <select
+                    className="field"
+                    value={gymForm.tipo_gimnasio ?? ""}
+                    onChange={(event) => updateGymField("tipo_gimnasio", event.target.value)}
+                  >
+                    <option value="">Tipo de gimnasio</option>
+                    {GYM_TYPE_OPTIONS.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="field"
+                    placeholder="Telefono"
+                    value={gymForm.telefono ?? ""}
+                    onChange={(event) => updateGymField("telefono", event.target.value)}
+                  />
+                  <input
+                    className="field"
+                    placeholder="Instagram"
+                    value={gymForm.instagram ?? ""}
+                    onChange={(event) => updateGymField("instagram", event.target.value)}
+                  />
+                  <input
+                    className="field"
+                    placeholder="Sitio web"
+                    value={gymForm.sitio_web ?? ""}
+                    onChange={(event) => updateGymField("sitio_web", event.target.value)}
+                  />
+                  <textarea
+                    className="field gym-textarea"
+                    placeholder="Descripcion corta del gimnasio"
+                    value={gymForm.descripcion_corta ?? ""}
+                    onChange={(event) => updateGymField("descripcion_corta", event.target.value)}
+                  />
+                </div>
+              </div>
 
-              <UserTrainingFeed
-                trainings={trainingsToShow}
-                viewerId={usuario.id}
-                onOpenProfile={onOpenProfile}
-                onOpenTraining={onOpenTraining}
-                onSaveAsRoutine={onSaveAsRoutine}
-              />
-            </section>
+              <div className="gym-editor-section">
+                <div className="gym-editor-head">
+                  <h2>Ubicacion</h2>
+                  <span>Como llegar</span>
+                </div>
+                <div className="form-grid two-inline">
+                  <input className="field" placeholder="Direccion" value={gymForm.direccion ?? ""} onChange={(event) => updateGymField("direccion", event.target.value)} />
+                  <input className="field" placeholder="Ciudad" value={gymForm.ciudad ?? ""} onChange={(event) => updateGymField("ciudad", event.target.value)} />
+                  <input className="field" placeholder="Provincia" value={gymForm.provincia ?? ""} onChange={(event) => updateGymField("provincia", event.target.value)} />
+                  <input className="field" placeholder="Pais" value={gymForm.pais ?? ""} onChange={(event) => updateGymField("pais", event.target.value)} />
+                  <input className="field wide-field" placeholder="Link de Google Maps opcional" value={gymForm.google_maps_url ?? ""} onChange={(event) => updateGymField("google_maps_url", event.target.value)} />
+                </div>
+              </div>
 
-            <aside className="profile-calendar-column" aria-label="Calendario de entrenamientos">
-              <TrainingCalendar trainings={trainingsToShow} onOpenTraining={onOpenTraining} />
-            </aside>
-          </section>
+              <div className="gym-editor-section">
+                <div className="gym-editor-head">
+                  <h2>Horarios</h2>
+                  <button type="button" className="btn secondary compact" onClick={copyScheduleToAllDays}>
+                    Copiar lunes a todos
+                  </button>
+                </div>
+                <div className="gym-schedule-grid">
+                  {GYM_DAYS.map((day) => {
+                    const schedule = gymForm.horarios[day.key] ?? DEFAULT_GYM_SCHEDULE[day.key];
+                    return (
+                      <article key={day.key} className={`gym-day-card ${schedule.abierto ? "" : "closed"}`}>
+                        <div className="gym-day-head">
+                          <strong>{day.label}</strong>
+                          <label className="switch-row">
+                            <input
+                              type="checkbox"
+                              checked={schedule.abierto}
+                              onChange={(event) => updateGymDay(day.key, { abierto: event.target.checked })}
+                            />
+                            <span>{schedule.abierto ? "Abierto" : "Cerrado"}</span>
+                          </label>
+                        </div>
+                        <div className="gym-time-row">
+                          <input
+                            className="field"
+                            type="time"
+                            value={schedule.apertura}
+                            disabled={!schedule.abierto}
+                            onChange={(event) => updateGymDay(day.key, { apertura: event.target.value })}
+                          />
+                          <input
+                            className="field"
+                            type="time"
+                            value={schedule.cierre}
+                            disabled={!schedule.abierto}
+                            onChange={(event) => updateGymDay(day.key, { cierre: event.target.value })}
+                          />
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+                <div className="gym-holiday-card">
+                  <label className="switch-row">
+                    <input
+                      type="checkbox"
+                      checked={gymForm.horarios_feriados.activo}
+                      onChange={(event) =>
+                        updateGymField("horarios_feriados", {
+                          ...gymForm.horarios_feriados,
+                          activo: event.target.checked,
+                        })
+                      }
+                    />
+                    <span>Horario especial para feriados</span>
+                  </label>
+                  <input
+                    className="field"
+                    placeholder="Nota para feriados"
+                    value={gymForm.horarios_feriados.nota}
+                    onChange={(event) =>
+                      updateGymField("horarios_feriados", {
+                        ...gymForm.horarios_feriados,
+                        nota: event.target.value,
+                      })
+                    }
+                  />
+                  <div className="gym-time-row">
+                    <input
+                      className="field"
+                      type="time"
+                      value={gymForm.horarios_feriados.apertura}
+                      onChange={(event) =>
+                        updateGymField("horarios_feriados", {
+                          ...gymForm.horarios_feriados,
+                          apertura: event.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      className="field"
+                      type="time"
+                      value={gymForm.horarios_feriados.cierre}
+                      onChange={(event) =>
+                        updateGymField("horarios_feriados", {
+                          ...gymForm.horarios_feriados,
+                          cierre: event.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
 
-          {!perfil.is_own_profile ? (
-            <section className="profile-actions-row">
-              <button type="button" className="btn secondary" onClick={() => onOpenProfile(usuario.username)}>
-                Volver a mi perfil
-              </button>
+              <div className="gym-editor-section">
+                <div className="gym-editor-head">
+                  <h2>Servicios</h2>
+                  <span>{gymForm.servicios.length} seleccionados</span>
+                </div>
+                <div className="gym-chip-grid">
+                  {GYM_SERVICE_OPTIONS.map((service) => (
+                    <button
+                      key={service}
+                      type="button"
+                      className={`gym-chip ${gymForm.servicios.includes(service) ? "active" : ""}`}
+                      onClick={() => toggleGymService(service)}
+                    >
+                      {service}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="actions-row gym-editor-actions">
+                <button type="button" className="btn" disabled={saving} onClick={() => void handleGuardarPerfil()}>
+                  {saving ? "Guardando..." : "Guardar cambios"}
+                </button>
+              </div>
             </section>
           ) : null}
+
+          {profileIsGym ? (
+            <section className="gym-public-profile">
+              <article className="gym-public-card gym-public-combined-card">
+                <div className="gym-section-tabs" aria-label="Informacion del gimnasio">
+                  <button
+                    type="button"
+                    className={gymPublicSection === "servicios" ? "active" : ""}
+                    onClick={() => setGymPublicSection("servicios")}
+                  >
+                    Servicios
+                  </button>
+                  <button
+                    type="button"
+                    className={gymPublicSection === "horarios" ? "active" : ""}
+                    onClick={() => setGymPublicSection("horarios")}
+                  >
+                    Horarios
+                  </button>
+                </div>
+
+                {gymPublicSection === "horarios" ? (
+                  <div className="gym-section-content">
+                    <div className="gym-public-hours">
+                      {GYM_DAYS.map((day) => {
+                        const schedule = gymInfo?.horarios?.[day.key] ?? DEFAULT_GYM_SCHEDULE[day.key];
+                        return (
+                          <div key={day.key} className={`gym-hour-calendar-day ${schedule.abierto ? "" : "closed"}`}>
+                            <span className="gym-hour-calendar-label">{GYM_DAY_SHORT_LABELS[day.key] ?? day.label}</span>
+                            <div className="gym-hour-calendar-capsule">
+                              {schedule.abierto ? (
+                                <>
+                                  <strong>{schedule.apertura}</strong>
+                                  <small>{schedule.cierre}</small>
+                                </>
+                              ) : (
+                                <strong>Cerrado</strong>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {gymInfo?.horarios_feriados?.activo ? (
+                      <p className="helper-text">
+                        Feriados: {gymInfo.horarios_feriados.nota || `${gymInfo.horarios_feriados.apertura} - ${gymInfo.horarios_feriados.cierre}`}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {gymPublicSection === "servicios" ? (
+                  <div className="gym-section-content">
+                    {gymInfo?.servicios?.length ? (
+                      <div className="gym-chip-grid readonly">
+                        {gymInfo.servicios.map((service) => (
+                          <span key={service} className="gym-chip active">
+                            {service}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p>Servicios pendientes de cargar.</p>
+                    )}
+                  </div>
+                ) : null}
+              </article>
+            </section>
+          ) : (
+            <section className="profile-content-layout">
+              <section className="profile-feed-column" aria-label="Entrenamientos del usuario">
+                {perfil.is_own_profile ? (
+                  <>
+                    <ProfileTrainingSearch
+                      query={trainingSearchQuery}
+                      minDuration={trainingMinDuration}
+                      maxDuration={trainingMaxDuration}
+                      availableGroups={availableTrainingGroups}
+                      availableDisciplines={availableTrainingDisciplines}
+                      selectedGroups={selectedTrainingGroups}
+                      selectedDisciplines={selectedTrainingDisciplines}
+                      loading={trainingSearchLoading}
+                      resultsCount={trainingResults.length}
+                      onQueryChange={setTrainingSearchQuery}
+                      onMinDurationChange={setTrainingMinDuration}
+                      onMaxDurationChange={setTrainingMaxDuration}
+                      onToggleGroup={toggleTrainingGroup}
+                      onToggleDiscipline={toggleTrainingDiscipline}
+                      onApply={buscarEntrenamientos}
+                      onClear={clearTrainingSearch}
+                    />
+                    {trainingSearchError ? <div className="status error">{trainingSearchError}</div> : null}
+                  </>
+                ) : null}
+
+                <UserTrainingFeed
+                  trainings={trainingsToShow}
+                  viewerId={usuario.id}
+                  onOpenProfile={onOpenProfile}
+                  onOpenTraining={onOpenTraining}
+                  onSaveAsRoutine={onSaveAsRoutine}
+                />
+              </section>
+
+              <aside className="profile-calendar-column" aria-label="Calendario de entrenamientos">
+                <TrainingCalendar trainings={trainingsToShow} onOpenTraining={onOpenTraining} />
+              </aside>
+            </section>
+          )}
 
           {socialModal ? (
             <ProfileSocialModal
