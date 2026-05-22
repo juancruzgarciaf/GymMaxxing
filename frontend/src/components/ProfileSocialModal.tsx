@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { SocialUser } from "../types";
+import VerifiedBadge from "./VerifiedBadge";
 
 type SocialModalMode = "followers" | "following";
 
@@ -135,7 +136,10 @@ function ProfileSocialModal({
                   <div className="profile-social-user-main">
                     <span className="profile-social-avatar">{getInitial(user.username)}</span>
                     <span>
-                      <strong>{user.username}</strong>
+                      <strong className="verified-name">
+                        {user.username}
+                        <VerifiedBadge tipoUsuario={user.tipo_usuario} />
+                      </strong>
                       {user.nombre?.trim() ? <small>{user.nombre}</small> : null}
                     </span>
                   </div>

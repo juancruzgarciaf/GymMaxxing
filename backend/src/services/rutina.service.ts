@@ -50,6 +50,7 @@ type RutinaMetricSupport = {
 
 type DiscoverRutinaRow = RutinaRow & {
   creador_username: string;
+  creador_tipo_usuario: string;
   total_ejercicios: number;
   grupos_musculares: string[];
   creador_seguido: boolean;
@@ -433,6 +434,7 @@ export const getDiscoverRutinas = async (filters: DiscoverRutinasFilters) => {
             r.save_count,
             r.copy_count,
             u.username AS creador_username,
+            u.tipo_usuario AS creador_tipo_usuario,
             (
               SELECT COUNT(*)::int
               FROM rutinaejercicio re

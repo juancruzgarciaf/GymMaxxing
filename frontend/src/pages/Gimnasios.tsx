@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { useNavigate } from "react-router-dom";
 import type { Gimnasio } from "../types";
+import VerifiedBadge from "../components/VerifiedBadge";
 
 const API = "http://localhost:3000";
 
@@ -223,7 +224,10 @@ function Gimnasios({ onBack }: GimnasiosProps) {
                     <div className="gym-popup">
                       <strong>{gym.nombre}</strong>
                       {gym.direccion ? <span>{gym.direccion}</span> : null}
-                      <small>{gym.perfil ? `@${gym.perfil.username}` : "Sin perfil vinculado"}</small>
+                      <small className="verified-name">
+                        {gym.perfil ? `@${gym.perfil.username}` : "Sin perfil vinculado"}
+                        <VerifiedBadge tipoUsuario={gym.perfil?.tipoUsuario} />
+                      </small>
                       <button
                         type="button"
                         className="btn compact"

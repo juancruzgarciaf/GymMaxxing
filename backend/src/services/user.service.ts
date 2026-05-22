@@ -73,6 +73,7 @@ type TrendRoutineRow = {
   save_count: number;
   copy_count: number;
   creador_username: string;
+  creador_tipo_usuario: string;
   total_ejercicios: number;
   grupos_musculares: string[];
 };
@@ -100,6 +101,7 @@ type SessionSummaryRow = {
   id_sesion: number;
   usuario_id: number;
   username: string;
+  tipo_usuario: string;
   rutina_id: number | null;
   titulo: string;
   descripcion: string | null;
@@ -120,6 +122,36 @@ type ExercisePreviewRow = {
   sesion_id: number;
   nombre: string;
   series: number;
+};
+
+type RoutinePostSummaryRow = {
+  content_type: "routine";
+  id_rutina: number;
+  usuario_id: number;
+  username: string;
+  tipo_usuario: string;
+  titulo: string;
+  descripcion: string | null;
+  duracion_estimada: number | null;
+  fecha_actividad: string | null;
+  total_series: number;
+  total_ejercicios: number;
+  save_count: number;
+  copy_count: number;
+  ejercicios_preview: Array<{
+    nombre: string;
+    series: number;
+    grupo_muscular: string | null;
+  }>;
+};
+
+type RoutinePostRow = Omit<RoutinePostSummaryRow, "content_type" | "ejercicios_preview">;
+
+type RoutineExercisePreviewRow = {
+  id_rutina: number;
+  nombre: string;
+  series: number;
+  grupo_muscular: string | null;
 };
 
 const sanitizeUser = (user: UsuarioRow | BasicUserRow) => {
@@ -387,6 +419,111 @@ const buildSessionsWithPreview = async (sessions: SessionSummaryRow[]) => {
   }));
 };
 
+const getRoutineExercisePreviewMap = async (routineIds: number[]) => {
+  if (routineIds.length === 0) {
+    return new Map<number, Array<{ nombre: string; series: number; grupo_muscular: string | null }>>();
+  }
+
+  const result = await pool.query<RoutineExercisePreviewRow>(
+    `WITH ejercicios_rankeados AS (
+       SELECT re.id_rutina,
+              e.nombre,
+              re.series,
+              e.grupo_muscular,
+              ROW_NUMBER() OVER (
+                PARTITION BY re.id_rutina
+                ORDER BY re.orden ASC, e.id_ejercicio ASC
+              ) AS posicion
+       FROM rutinaejercicio re
+       JOIN ejercicio e ON e.id_ejercicio = re.id_ejercicio
+       WHERE re.id_rutina = ANY($1::int[])
+     )
+     SELECT id_rutina, nombre, series, grupo_muscular
+     FROM ejercicios_rankeados
+     WHERE posicion <= 3
+     ORDER BY id_rutina ASC, posicion ASC`,
+    [routineIds]
+  );
+
+  const previewMap = new Map<number, Array<{ nombre: string; series: number; grupo_muscular: string | null }>>();
+
+  result.rows.forEach((row) => {
+    const current = previewMap.get(row.id_rutina) ?? [];
+    current.push({
+      nombre: row.nombre,
+      series: row.series,
+      grupo_muscular: row.grupo_muscular,
+    });
+    previewMap.set(row.id_rutina, current);
+  });
+
+  return previewMap;
+};
+
+const buildRoutinePostsWithPreview = async (routines: RoutinePostRow[]) => {
+  const previewMap = await getRoutineExercisePreviewMap(
+    routines.map((routine) => routine.id_rutina)
+  );
+
+  return routines.map((routine) => ({
+    content_type: "routine" as const,
+    ...routine,
+    ejercicios_preview: previewMap.get(routine.id_rutina) ?? [],
+  }));
+};
+
+const getRoutinePostSummaries = async (
+  whereClause: string,
+  params: Array<number | string | string[]>,
+  limit: number,
+  offset = 0
+) => {
+  const support = await getRutinaMetricsSupport();
+  const finalParams = [...params, limit, offset];
+  const limitParam = finalParams.length - 1;
+  const offsetParam = finalParams.length;
+
+  const result = await pool.query<RoutinePostRow>(
+    `SELECT r.id_rutina,
+            r.creador_id AS usuario_id,
+            u.username,
+            u.tipo_usuario,
+            r.nombre AS titulo,
+            r.descripcion,
+            r.duracion_estimada,
+            r.fecha_creacion::text AS fecha_actividad,
+            COALESCE((
+              SELECT SUM(re.series)::int
+              FROM rutinaejercicio re
+              WHERE re.id_rutina = r.id_rutina
+            ), 0) AS total_series,
+            (
+              SELECT COUNT(*)::int
+              FROM rutinaejercicio re
+              WHERE re.id_rutina = r.id_rutina
+            ) AS total_ejercicios,
+            ${
+              support.has_save
+                ? `(SELECT COUNT(*)::int FROM rutina_guardado rg WHERE rg.rutina_id = r.id_rutina)`
+                : `0::int`
+            } AS save_count,
+            ${
+              support.has_copy
+                ? `(SELECT COUNT(*)::int FROM rutina_copia rc WHERE rc.rutina_id = r.id_rutina)`
+                : `0::int`
+            } AS copy_count
+     FROM rutina r
+     JOIN usuario u ON u.id = r.creador_id
+     WHERE ${whereClause}
+     ORDER BY r.fecha_creacion DESC, r.id_rutina DESC
+     LIMIT $${limitParam}
+     OFFSET $${offsetParam}`,
+    finalParams
+  );
+
+  return buildRoutinePostsWithPreview(result.rows);
+};
+
 const getSessionSummaries = async (
   whereClause: string,
   params: Array<number | string | string[]>,
@@ -417,6 +554,7 @@ const getSessionSummaries = async (
     `SELECT se.id_sesion,
             se.usuario_id,
             u.username,
+            u.tipo_usuario,
             se.rutina_id,
             COALESCE(se.nombre_rutina_snapshot, r.nombre, se.descripcion, 'Entrenamiento') AS titulo,
             se.descripcion,
@@ -871,6 +1009,7 @@ export const getUserProfile = async (profileId: number, viewerId?: number) => {
       followers_count: number;
       following_count: number;
       trainings_count: number;
+      routines_count: number;
       viewer_follows?: boolean;
     }
   >(
@@ -890,7 +1029,12 @@ export const getUserProfile = async (profileId: number, viewerId?: number) => {
               FROM sesionentrenamiento se
               WHERE se.usuario_id = u.id
                 AND se.estado = 'finalizada'
-            ) AS trainings_count
+            ) AS trainings_count,
+            (
+              SELECT COUNT(*)::int
+              FROM rutina r
+              WHERE r.creador_id = u.id
+            ) AS routines_count
             ${
               viewerId != null
                 ? `,
@@ -922,6 +1066,13 @@ export const getUserProfile = async (profileId: number, viewerId?: number) => {
         20,
         viewerId
       );
+  const routines = gymUser
+    ? await getRoutinePostSummaries(
+        `r.creador_id = $1`,
+        [profileId],
+        20
+      )
+    : [];
   const gimnasioPerfil = gymUser ? await getGymProfile(profileId, user.username) : null;
 
   return {
@@ -929,9 +1080,11 @@ export const getUserProfile = async (profileId: number, viewerId?: number) => {
     followers_count: user.followers_count,
     following_count: user.following_count,
     trainings_count: gymUser ? 0 : user.trainings_count,
+    routines_count: gymUser ? user.routines_count : 0,
     viewer_follows: user.viewer_follows ?? false,
     is_own_profile: viewerId != null ? viewerId === profileId : false,
     entrenamientos: trainings,
+    rutinas: routines,
     gimnasio_perfil: gimnasioPerfil,
   };
 };
@@ -953,6 +1106,8 @@ export const getUserProfileByUsername = async (username: string, viewerId?: numb
 };
 
 export const getFeed = async (userId: number, page = 1, pageSize = 10) => {
+  const viewerRole = await getUserRoleById(userId);
+  const viewerIsGym = isGymRole(viewerRole);
   const feedWhereClause = `se.estado = 'finalizada'
     AND (
       se.usuario_id = $1
@@ -962,25 +1117,74 @@ export const getFeed = async (userId: number, page = 1, pageSize = 10) => {
         WHERE su.id_seguidor = $1
       )
     )`;
+  const routineFeedWhereClause = `LOWER(u.tipo_usuario) = 'gimnasio'
+    AND (
+      r.creador_id = $1
+      OR r.creador_id IN (
+        SELECT su.id_seguido
+        FROM seguimientousuario su
+        WHERE su.id_seguidor = $1
+      )
+    )`;
   const safePageSize = Math.min(Math.max(Math.floor(pageSize), 1), 30);
 
-  const totalResult = await pool.query<{ total: string }>(
+  const [totalResult, totalRoutineResult] = await Promise.all([
+    pool.query<{ total: string }>(
     `SELECT COUNT(*)::text AS total
      FROM sesionentrenamiento se
      WHERE ${feedWhereClause}`,
     [userId]
-  );
-  const total = Number(totalResult.rows[0]?.total ?? 0);
+    ),
+    viewerIsGym
+      ? pool.query<{ total: string }>(
+          `SELECT COUNT(*)::text AS total
+           FROM rutina r
+           JOIN usuario u ON u.id = r.creador_id
+           WHERE ${routineFeedWhereClause}`,
+          [userId]
+        )
+      : Promise.resolve({ rows: [{ total: "0" }] }),
+  ]);
+  const total =
+    Number(totalResult.rows[0]?.total ?? 0) +
+    Number(totalRoutineResult.rows[0]?.total ?? 0);
   const totalPages = Math.max(Math.ceil(total / safePageSize), 1);
   const safePage = Math.min(Math.max(Math.floor(page), 1), totalPages);
   const offset = (safePage - 1) * safePageSize;
-  const items = await getSessionSummaries(
-    feedWhereClause,
-    [userId],
-    safePageSize,
-    userId,
-    offset
-  );
+  const windowSize = safePageSize + offset;
+  const [trainingItems, routineItems] = await Promise.all([
+    getSessionSummaries(
+      feedWhereClause,
+      [userId],
+      viewerIsGym ? windowSize : safePageSize,
+      userId,
+      viewerIsGym ? 0 : offset
+    ),
+    viewerIsGym
+      ? getRoutinePostSummaries(
+          routineFeedWhereClause,
+          [userId],
+          windowSize
+        )
+      : Promise.resolve([]),
+  ]);
+  const items = viewerIsGym
+    ? [
+        ...trainingItems.map((item) => ({ content_type: "training" as const, ...item })),
+        ...routineItems,
+      ]
+        .sort((a, b) => {
+          const aTime = a.fecha_actividad ? new Date(a.fecha_actividad).getTime() : 0;
+          const bTime = b.fecha_actividad ? new Date(b.fecha_actividad).getTime() : 0;
+          if (aTime !== bTime) {
+            return bTime - aTime;
+          }
+          const aId = "id_sesion" in a ? a.id_sesion : a.id_rutina;
+          const bId = "id_sesion" in b ? b.id_sesion : b.id_rutina;
+          return bId - aId;
+        })
+        .slice(offset, offset + safePageSize)
+    : trainingItems;
 
   return {
     items,
@@ -1123,6 +1327,7 @@ const getTrendRoutines = async (
             ${saveCountSql} AS save_count,
             ${copyCountSql} AS copy_count,
             u.username AS creador_username,
+            u.tipo_usuario AS creador_tipo_usuario,
             (
               SELECT COUNT(*)::int
               FROM rutinaejercicio re

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { DiscoverRoutineSummary, EntrenamientoResumen, Usuario } from "../types";
+import VerifiedBadge from "../components/VerifiedBadge";
+import trendsEmptyBodybuilder from "../assets/trends-empty-bodybuilder.png";
 
 type TrendUser = Usuario & {
   followers_count: number;
@@ -134,7 +136,7 @@ const getSubtitle = (item: TrendItem) => {
 
 function Tendencias({ usuario, onOpenProfile, onOpenTraining }: TendenciasProps) {
   const [trends, setTrends] = useState<TrendsResponse | null>(null);
-  const [selectedTrend, setSelectedTrend] = useState<TrendKind>("rutinas_mas_copiadas");
+  const [selectedTrend, setSelectedTrend] = useState<TrendKind | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -175,11 +177,14 @@ function Tendencias({ usuario, onOpenProfile, onOpenTraining }: TendenciasProps)
   }, [usuario.id]);
 
   const selectedConfig = useMemo(
-    () => TREND_CONFIGS.find((config) => config.key === selectedTrend) ?? TREND_CONFIGS[0],
+    () =>
+      selectedTrend == null
+        ? null
+        : TREND_CONFIGS.find((config) => config.key === selectedTrend) ?? null,
     [selectedTrend],
   );
 
-  const selectedItems = trends?.[selectedTrend] ?? [];
+  const selectedItems = selectedTrend == null ? [] : trends?.[selectedTrend] ?? [];
 
   return (
     <>
@@ -200,7 +205,7 @@ function Tendencias({ usuario, onOpenProfile, onOpenTraining }: TendenciasProps)
       {loading ? <div className="status">Cargando tendencias...</div> : null}
       {error ? <div className="status error">{error}</div> : null}
 
-      {!loading && !error ? (
+      {!loading && !error && selectedConfig ? (
         <section className="trend-panel">
           <div className="trend-panel-head">
             <div>
@@ -224,8 +229,23 @@ function Tendencias({ usuario, onOpenProfile, onOpenTraining }: TendenciasProps)
                 >
                   <strong className="trend-rank">#{index + 1}</strong>
                   <div className="trend-row-main">
-                    <h3>{getTitle(item)}</h3>
-                    <small>{getSubtitle(item)}</small>
+                    <h3 className="verified-name">
+                      {getTitle(item)}
+                      {isTrendUser(item) ? <VerifiedBadge tipoUsuario={item.tipo_usuario} /> : null}
+                    </h3>
+                    {isRoutine(item) ? (
+                      <small className="verified-name">
+                        Por {item.creador_username} - {item.total_ejercicios} ejercicios
+                        <VerifiedBadge tipoUsuario={item.creador_tipo_usuario} />
+                      </small>
+                    ) : isTraining(item) ? (
+                      <small className="verified-name">
+                        Por {item.username} - {item.total_series} series - {item.total_ejercicios} ejercicios
+                        <VerifiedBadge tipoUsuario={item.tipo_usuario} />
+                      </small>
+                    ) : (
+                      <small>{getSubtitle(item)}</small>
+                    )}
                     {isRoutine(item) && item.grupos_musculares.length > 0 ? (
                       <div className="trend-tags">
                         {item.grupos_musculares.slice(0, 3).map((group) => (
@@ -238,7 +258,7 @@ function Tendencias({ usuario, onOpenProfile, onOpenTraining }: TendenciasProps)
                     ) : null}
                   </div>
                   <div className="trend-row-side">
-                    <span>{getMetricText(selectedTrend, item)}</span>
+                    <span>{getMetricText(selectedConfig.key, item)}</span>
                     {isTrendUser(item) && onOpenProfile ? (
                       <button type="button" className="btn secondary" onClick={() => onOpenProfile(item.username)}>
                         Ver perfil
@@ -259,6 +279,17 @@ function Tendencias({ usuario, onOpenProfile, onOpenTraining }: TendenciasProps)
               <small>Cuando haya mas actividad, este top se llena solo.</small>
             </article>
           )}
+        </section>
+      ) : null}
+
+      {!loading && !error && !selectedConfig ? (
+        <section className="empty-state discover-empty">
+          <p>Elegí una categoría de tendencias para ver el ranking.</p>
+          <img
+            className="trend-empty-image"
+            src={trendsEmptyBodybuilder}
+            alt="Fisicoculturista posando"
+          />
         </section>
       ) : null}
     </>

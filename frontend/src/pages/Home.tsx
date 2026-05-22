@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import FeedSidebar from "../components/FeedSidebar";
+import RoutinePostCard from "../components/RoutinePostCard";
 import TrainingPostCard from "../components/TrainingPostCard";
-import type { EntrenamientoResumen, PerfilUsuario, SuggestedAthlete, Usuario } from "../types";
+import type { EntrenamientoResumen, FeedItem, PerfilUsuario, RoutinePostSummary, SuggestedAthlete, Usuario } from "../types";
 
 type HomeProps = {
   usuario: Usuario;
   onOpenProfile: (username: string) => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
+  onOpenRoutine: (routine: RoutinePostSummary) => void;
   onSaveAsRoutine: (training: EntrenamientoResumen, customName?: string) => void | Promise<void>;
 };
 
@@ -14,7 +16,7 @@ const API = "http://localhost:3000";
 const FEED_PAGE_SIZE = 10;
 
 type FeedResponse = {
-  items: EntrenamientoResumen[];
+  items: FeedItem[];
   total: number;
   page: number;
   pageSize: number;
@@ -25,9 +27,10 @@ function Home({
   usuario,
   onOpenProfile,
   onOpenTraining,
+  onOpenRoutine,
   onSaveAsRoutine,
 }: HomeProps) {
-  const [feed, setFeed] = useState<EntrenamientoResumen[]>([]);
+  const [feed, setFeed] = useState<FeedItem[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -52,7 +55,7 @@ function Home({
         setError("");
 
         const res = await fetch(`${API}/users/${usuario.id}/feed?page=${page}&pageSize=${FEED_PAGE_SIZE}`);
-        const data = (await res.json()) as EntrenamientoResumen[] | FeedResponse | { error?: string };
+        const data = (await res.json()) as FeedItem[] | FeedResponse | { error?: string };
 
         if (!res.ok) {
           throw new Error("error" in data ? data.error || "No se pudo cargar Inicio" : "No se pudo cargar Inicio");
@@ -207,14 +210,23 @@ function Home({
 
           <section className="feed-list">
             {feed.map((item) => (
-              <TrainingPostCard
-                key={item.id_sesion}
-                item={item}
-                viewerId={usuario.id}
-                onOpenProfile={onOpenProfile}
-                onOpenTraining={onOpenTraining}
-                onSaveAsRoutine={onSaveAsRoutine}
-              />
+              item.content_type === "routine" ? (
+                <RoutinePostCard
+                  key={`routine-${item.id_rutina}`}
+                  item={item}
+                  onOpenProfile={onOpenProfile}
+                  onOpenRoutine={onOpenRoutine}
+                />
+              ) : (
+                <TrainingPostCard
+                  key={`training-${item.id_sesion}`}
+                  item={item}
+                  viewerId={usuario.id}
+                  onOpenProfile={onOpenProfile}
+                  onOpenTraining={onOpenTraining}
+                  onSaveAsRoutine={onSaveAsRoutine}
+                />
+              )
             ))}
           </section>
 

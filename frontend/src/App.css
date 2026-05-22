@@ -1547,6 +1547,11 @@ h2 {
   color: #e5f8ff;
 }
 
+.profile-chip strong.verified-name {
+  display: flex;
+  width: fit-content;
+}
+
 .profile-chip small,
 .feed-card-header small {
   color: #9fb3c1;
@@ -1562,6 +1567,50 @@ h2 {
   background: linear-gradient(145deg, #7ed6a1 0%, #4fb6dd 100%);
   color: #10221a;
   font-weight: 800;
+}
+
+.verified-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+strong.verified-name,
+h1.verified-name,
+h2.verified-name,
+h3.verified-name,
+p.verified-name,
+small.verified-name {
+  display: inline-flex;
+}
+
+.verified-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #1d9bf0;
+  color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.16);
+  vertical-align: -2px;
+}
+
+.verified-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+.verified-badge.large {
+  width: 21px;
+  height: 21px;
+}
+
+.verified-badge.large svg {
+  width: 15px;
+  height: 15px;
 }
 
 .profile-banner {
@@ -1634,6 +1683,12 @@ h2 {
   color: #eef8fd;
   font-size: clamp(1.8rem, 3vw, 2.45rem);
   line-height: 1.05;
+}
+
+.profile-modern-topline h1.verified-name,
+.profile-real-name.verified-name {
+  display: flex;
+  width: fit-content;
 }
 
 .profile-real-name,
@@ -2044,6 +2099,9 @@ h2 {
 
 .gym-chip-grid.readonly .gym-chip {
   cursor: default;
+  font-size: 0.78rem;
+  padding: 6px 10px;
+  line-height: 1.2;
 }
 
 .gym-editor-actions {
@@ -2060,6 +2118,15 @@ h2 {
   gap: 14px;
 }
 
+.gym-public-sidebar {
+  grid-area: calendar;
+  grid-template-columns: 1fr;
+}
+
+.gym-public-sidebar .gym-public-combined-card {
+  grid-column: auto;
+}
+
 .gym-section-tabs {
   display: flex;
   gap: 8px;
@@ -2067,11 +2134,12 @@ h2 {
 }
 
 .gym-section-tabs button {
-  border: 1px solid rgba(151, 183, 202, 0.16);
-  border-radius: 999px;
-  background: rgba(17, 25, 32, 0.72);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
   color: #9fb3c1;
-  padding: 8px 12px;
+  padding: 4px 0 7px;
   font: inherit;
   font-size: 0.9rem;
   font-weight: 850;
@@ -2080,13 +2148,13 @@ h2 {
 }
 
 .gym-section-tabs button:hover {
-  border-color: rgba(126, 214, 161, 0.42);
+  border-bottom-color: rgba(126, 214, 161, 0.42);
   color: #d8e2ea;
 }
 
 .gym-section-tabs button.active {
-  border-color: rgba(126, 214, 161, 0.72);
-  background: rgba(126, 214, 161, 0.12);
+  border-bottom-color: rgba(126, 214, 161, 0.72);
+  background: transparent;
   color: #b8f0d0;
 }
 
@@ -2172,6 +2240,17 @@ h2 {
   min-width: 0;
   display: grid;
   gap: 16px;
+}
+
+.routine-post-label {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 6px;
+  color: #7ed6a1;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .profile-calendar-column {
@@ -3033,6 +3112,15 @@ button.discover-module-card:hover {
   gap: 12px;
 }
 
+.discover-muscle-toggle {
+  margin-left: auto;
+}
+
+.discover-muscle-toggle.active {
+  border-color: rgba(126, 214, 161, 0.72);
+  color: #b8f0d0;
+}
+
 .discover-check {
   display: inline-flex;
   align-items: center;
@@ -3090,6 +3178,15 @@ button.discover-module-card:hover {
 
 .discover-empty {
   grid-column: 1 / -1;
+}
+
+.trend-empty-image {
+  display: block;
+  width: min(340px, 78vw);
+  max-height: 520px;
+  object-fit: contain;
+  margin: 18px auto 0;
+  border-radius: 10px;
 }
 
 .discover-detail {

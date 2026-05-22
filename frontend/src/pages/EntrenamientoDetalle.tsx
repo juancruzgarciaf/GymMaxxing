@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { EntrenamientoResumen, SerieSesionDetalle } from "../types";
+import VerifiedBadge from "../components/VerifiedBadge";
 
 type EntrenamientoDetalleProps = {
   entrenamiento: EntrenamientoResumen;
@@ -282,7 +283,10 @@ function EntrenamientoDetalle({
         >
           <span className="avatar-circle">{entrenamiento.username.slice(0, 1).toUpperCase()}</span>
           <span>
-            <strong>{entrenamiento.username}</strong>
+            <strong className="verified-name">
+              {entrenamiento.username}
+              <VerifiedBadge tipoUsuario={entrenamiento.tipo_usuario} />
+            </strong>
             <small>{formatDate(entrenamiento.fecha_actividad)}</small>
           </span>
         </button>

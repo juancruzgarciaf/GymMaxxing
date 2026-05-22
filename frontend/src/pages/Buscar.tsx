@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { SearchUser, Usuario } from "../types";
+import VerifiedBadge from "../components/VerifiedBadge";
 
 type BuscarProps = {
   usuario: Usuario;
@@ -113,7 +114,10 @@ function Buscar({
         {resultados.map((item) => (
           <article key={item.id} className="user-card">
             <div>
-              <strong>{item.username}</strong>
+              <strong className="verified-name">
+                {item.username}
+                <VerifiedBadge tipoUsuario={item.tipo_usuario} />
+              </strong>
               <p>{item.email}</p>
               <small>
                 {item.followers_count} seguidores · {item.following_count} seguidos

@@ -49,9 +49,11 @@ export type EjercicioPreview = {
 };
 
 export type EntrenamientoResumen = {
+  content_type?: "training";
   id_sesion: number;
   usuario_id: number;
   username: string;
+  tipo_usuario?: string;
   rutina_id: number | null;
   titulo: string;
   descripcion: string | null;
@@ -68,6 +70,31 @@ export type EntrenamientoResumen = {
   viewer_liked: boolean;
   ejercicios_preview: EjercicioPreview[];
 };
+
+export type RoutinePostPreview = {
+  nombre: string;
+  series: number;
+  grupo_muscular: string | null;
+};
+
+export type RoutinePostSummary = {
+  content_type: "routine";
+  id_rutina: number;
+  usuario_id: number;
+  username: string;
+  tipo_usuario: string;
+  titulo: string;
+  descripcion: string | null;
+  duracion_estimada: number | null;
+  fecha_actividad: string | null;
+  total_series: number;
+  total_ejercicios: number;
+  save_count: number;
+  copy_count: number;
+  ejercicios_preview: RoutinePostPreview[];
+};
+
+export type FeedItem = EntrenamientoResumen | RoutinePostSummary;
 
 export type SessionComment = {
   id_comentario: number;
@@ -109,6 +136,7 @@ export type RoutineSummary = {
 
 export type DiscoverRoutineSummary = RoutineSummary & {
   creador_username: string;
+  creador_tipo_usuario?: string;
   total_ejercicios: number;
   grupos_musculares: string[];
   creador_seguido: boolean;
@@ -198,7 +226,9 @@ export type PerfilUsuario = {
   followers_count: number;
   following_count: number;
   trainings_count: number;
+  routines_count?: number;
   viewer_follows: boolean;
   is_own_profile: boolean;
   entrenamientos: EntrenamientoResumen[];
+  rutinas?: RoutinePostSummary[];
 };

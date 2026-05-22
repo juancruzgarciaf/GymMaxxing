@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import ProfileHeader from "../components/ProfileHeader";
 import ProfileSocialModal from "../components/ProfileSocialModal";
 import ProfileTrainingSearch from "../components/ProfileTrainingSearch";
+import RoutinePostCard from "../components/RoutinePostCard";
 import TrainingCalendar from "../components/TrainingCalendar";
 import UserTrainingFeed from "../components/UserTrainingFeed";
 import { COUNTRY_OPTIONS } from "../lib/countries";
@@ -12,6 +13,7 @@ import type {
   GymDaySchedule,
   GymHolidaySchedule,
   PerfilUsuario,
+  RoutinePostSummary,
   SocialUser,
   Usuario,
 } from "../types";
@@ -22,6 +24,7 @@ type PerfilProps = {
   onOpenProfile: (username: string) => void;
   onBack: () => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
+  onOpenRoutine: (routine: RoutinePostSummary) => void;
   onSaveAsRoutine: (training: EntrenamientoResumen, customName?: string) => void | Promise<void>;
   authToken: string | null;
   onAuthExpired: () => void;
@@ -145,6 +148,7 @@ function Perfil({
   onOpenProfile,
   onBack,
   onOpenTraining,
+  onOpenRoutine,
   onSaveAsRoutine,
   authToken,
   onAuthExpired,
@@ -960,71 +964,93 @@ function Perfil({
           ) : null}
 
           {profileIsGym ? (
-            <section className="gym-public-profile">
-              <article className="gym-public-card gym-public-combined-card">
-                <div className="gym-section-tabs" aria-label="Informacion del gimnasio">
-                  <button
-                    type="button"
-                    className={gymPublicSection === "servicios" ? "active" : ""}
-                    onClick={() => setGymPublicSection("servicios")}
-                  >
-                    Servicios
-                  </button>
-                  <button
-                    type="button"
-                    className={gymPublicSection === "horarios" ? "active" : ""}
-                    onClick={() => setGymPublicSection("horarios")}
-                  >
-                    Horarios
-                  </button>
-                </div>
+            <section className="profile-content-layout gym-profile-content-layout">
+              <section className="profile-feed-column" aria-label="Rutinas del gimnasio">
+                {perfil.rutinas?.length ? (
+                  <section className="feed-list">
+                    {perfil.rutinas.map((routine) => (
+                      <RoutinePostCard
+                        key={routine.id_rutina}
+                        item={routine}
+                        onOpenProfile={onOpenProfile}
+                        onOpenRoutine={onOpenRoutine}
+                      />
+                    ))}
+                  </section>
+                ) : (
+                  <section className="empty-state">
+                    <h2>No hay rutinas publicadas todavía</h2>
+                    <p>Cuando este gimnasio cree rutinas, van a aparecer acá.</p>
+                  </section>
+                )}
+              </section>
 
-                {gymPublicSection === "horarios" ? (
-                  <div className="gym-section-content">
-                    <div className="gym-public-hours">
-                      {GYM_DAYS.map((day) => {
-                        const schedule = gymInfo?.horarios?.[day.key] ?? DEFAULT_GYM_SCHEDULE[day.key];
-                        return (
-                          <div key={day.key} className={`gym-hour-calendar-day ${schedule.abierto ? "" : "closed"}`}>
-                            <span className="gym-hour-calendar-label">{GYM_DAY_SHORT_LABELS[day.key] ?? day.label}</span>
-                            <div className="gym-hour-calendar-capsule">
-                              {schedule.abierto ? (
-                                <>
-                                  <strong>{schedule.apertura}</strong>
-                                  <small>{schedule.cierre}</small>
-                                </>
-                              ) : (
-                                <strong>Cerrado</strong>
-                              )}
+              <aside className="gym-public-profile gym-public-sidebar">
+                <article className="gym-public-card gym-public-combined-card">
+                  <div className="gym-section-tabs" aria-label="Informacion del gimnasio">
+                    <button
+                      type="button"
+                      className={gymPublicSection === "servicios" ? "active" : ""}
+                      onClick={() => setGymPublicSection("servicios")}
+                    >
+                      Servicios
+                    </button>
+                    <button
+                      type="button"
+                      className={gymPublicSection === "horarios" ? "active" : ""}
+                      onClick={() => setGymPublicSection("horarios")}
+                    >
+                      Horarios
+                    </button>
+                  </div>
+
+                  {gymPublicSection === "horarios" ? (
+                    <div className="gym-section-content">
+                      <div className="gym-public-hours">
+                        {GYM_DAYS.map((day) => {
+                          const schedule = gymInfo?.horarios?.[day.key] ?? DEFAULT_GYM_SCHEDULE[day.key];
+                          return (
+                            <div key={day.key} className={`gym-hour-calendar-day ${schedule.abierto ? "" : "closed"}`}>
+                              <span className="gym-hour-calendar-label">{GYM_DAY_SHORT_LABELS[day.key] ?? day.label}</span>
+                              <div className="gym-hour-calendar-capsule">
+                                {schedule.abierto ? (
+                                  <>
+                                    <strong>{schedule.apertura}</strong>
+                                    <small>{schedule.cierre}</small>
+                                  </>
+                                ) : (
+                                  <strong>Cerrado</strong>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {gymInfo?.horarios_feriados?.activo ? (
-                      <p className="helper-text">
-                        Feriados: {gymInfo.horarios_feriados.nota || `${gymInfo.horarios_feriados.apertura} - ${gymInfo.horarios_feriados.cierre}`}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                {gymPublicSection === "servicios" ? (
-                  <div className="gym-section-content">
-                    {gymInfo?.servicios?.length ? (
-                      <div className="gym-chip-grid readonly">
-                        {gymInfo.servicios.map((service) => (
-                          <span key={service} className="gym-chip active">
-                            {service}
-                          </span>
-                        ))}
+                          );
+                        })}
                       </div>
-                    ) : (
-                      <p>Servicios pendientes de cargar.</p>
-                    )}
-                  </div>
-                ) : null}
-              </article>
+                      {gymInfo?.horarios_feriados?.activo ? (
+                        <p className="helper-text">
+                          Feriados: {gymInfo.horarios_feriados.nota || `${gymInfo.horarios_feriados.apertura} - ${gymInfo.horarios_feriados.cierre}`}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {gymPublicSection === "servicios" ? (
+                    <div className="gym-section-content">
+                      {gymInfo?.servicios?.length ? (
+                        <div className="gym-chip-grid readonly">
+                          {gymInfo.servicios.map((service) => (
+                            <span key={service} className="gym-chip active">
+                              {service}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p>Servicios pendientes de cargar.</p>
+                      )}
+                    </div>
+                  ) : null}
+                </article>
+              </aside>
             </section>
           ) : (
             <section className="profile-content-layout">

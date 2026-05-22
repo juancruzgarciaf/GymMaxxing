@@ -1,4 +1,5 @@
 import type { PerfilUsuario } from "../types";
+import VerifiedBadge from "./VerifiedBadge";
 
 type ProfileHeaderProps = {
   perfil: PerfilUsuario;
@@ -45,9 +46,15 @@ function ProfileHeader({
       <div className="profile-modern-main">
         <div className="profile-modern-topline">
           <div>
-            <h1>{displayName}</h1>
+            <h1 className="verified-name">
+              {displayName}
+              <VerifiedBadge tipoUsuario={perfil.usuario.tipo_usuario} className="large" />
+            </h1>
             {isGym ? (
-              <p className="profile-real-name">@{perfil.usuario.username}</p>
+              <p className="profile-real-name verified-name">
+                @{perfil.usuario.username}
+                <VerifiedBadge tipoUsuario={perfil.usuario.tipo_usuario} />
+              </p>
             ) : realName ? (
               <p className="profile-real-name">{realName}</p>
             ) : null}
@@ -69,12 +76,10 @@ function ProfileHeader({
         </div>
 
         <div className="profile-modern-stats">
-          {!isGym ? (
-            <div>
-              <strong>{formatNumber(perfil.trainings_count)}</strong>
-              <span>Entrenamientos</span>
-            </div>
-          ) : null}
+          <div>
+            <strong>{formatNumber(isGym ? perfil.routines_count ?? 0 : perfil.trainings_count)}</strong>
+            <span>{isGym ? "Rutinas" : "Entrenamientos"}</span>
+          </div>
           <button type="button" className="profile-stat-button" onClick={onOpenFollowers}>
             <strong>{formatNumber(perfil.followers_count)}</strong>
             <span>Seguidores</span>

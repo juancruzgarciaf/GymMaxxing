@@ -1,4 +1,5 @@
 import type { PerfilUsuario, SuggestedAthlete, Usuario } from "../types";
+import VerifiedBadge from "./VerifiedBadge";
 
 type ProfileSummaryCardProps = {
   usuario: Usuario;
@@ -40,7 +41,10 @@ function ProfileSummaryCard({ usuario, profile, onOpenProfile }: ProfileSummaryC
       <div className="profile-summary-head">
         <div className="profile-summary-avatar">{getInitial(profileUser.username)}</div>
         <div>
-          <h2>{profileUser.username}</h2>
+          <h2 className="verified-name">
+            {profileUser.username}
+            <VerifiedBadge tipoUsuario={profileUser.tipo_usuario} />
+          </h2>
           {realName ? <p>{realName}</p> : null}
         </div>
       </div>
@@ -97,7 +101,10 @@ function SuggestedAthletesCard({
             >
               <span className="suggested-athlete-avatar">{getInitial(athlete.username)}</span>
               <span>
-                <strong>{athlete.username}</strong>
+                <strong className="verified-name">
+                  {athlete.username}
+                  <VerifiedBadge tipoUsuario={athlete.tipo_usuario} />
+                </strong>
                 <small>
                   {athlete.nombre?.trim() ||
                     `${formatNumber(athlete.followers_count)} seguidores`}

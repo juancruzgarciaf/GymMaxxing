@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { EntrenamientoResumen, SessionComment } from "../types";
+import VerifiedBadge from "./VerifiedBadge";
 
 type TrainingPostCardProps = {
   item: EntrenamientoResumen;
@@ -354,7 +355,10 @@ function TrainingPostCard({
       >
         <span className="avatar-circle">{item.username.slice(0, 1).toUpperCase()}</span>
         <span>
-          <strong>{item.username}</strong>
+          <strong className="verified-name">
+            {item.username}
+            <VerifiedBadge tipoUsuario={item.tipo_usuario} />
+          </strong>
           <small>{formatDate(item.fecha_actividad)}</small>
         </span>
       </button>

@@ -9,7 +9,8 @@ import {
   saveTrainingSeedAsRoutine,
 } from "./lib/trainingTransfer";
 import { canUseTrainingFeatures } from "./lib/roles";
-import type { EntrenamientoResumen, SearchUser, TrainingSeed, Usuario } from "./types";
+import type { EntrenamientoResumen, RoutinePostSummary, SearchUser, TrainingSeed, Usuario } from "./types";
+import VerifiedBadge from "./components/VerifiedBadge";
 import Entrenamiento, { type ActiveTrainingSnapshot } from "./pages/Entrenamiento";
 import Home from "./pages/Home";
 import Buscar from "./pages/Buscar";
@@ -312,6 +313,11 @@ function App() {
     });
   };
 
+  const openRoutine = (routine: RoutinePostSummary) => {
+    dismissSharedRoutine();
+    navigate(sharedRoutinePath(routine.id_rutina));
+  };
+
   const openTrainingFromSeed = (seed: TrainingSeed, options: { recordCopy?: boolean } = {}) => {
     if (!canUseTrainingFeatures(usuario)) {
       setAppToast({
@@ -589,7 +595,10 @@ function App() {
         </nav>
 
         <div className="user-box">
-          <span>{usuario.username}</span>
+          <span className="verified-name">
+            {usuario.username}
+            <VerifiedBadge tipoUsuario={usuario.tipo_usuario} />
+          </span>
           <button type="button" className="logout-btn" onClick={handleLogout}>
             Salir
           </button>
@@ -602,6 +611,7 @@ function App() {
             usuario={usuario}
             onOpenProfile={openProfile}
             onOpenTraining={(training) => openTraining(training, "home")}
+            onOpenRoutine={openRoutine}
             onSaveAsRoutine={handleSaveTrainingAsRoutine}
           />
         ) : null}
@@ -669,6 +679,7 @@ function App() {
             onOpenProfile={openProfile}
             onBack={goBackFromProfile}
             onOpenTraining={(training) => openTraining(training, "perfil")}
+            onOpenRoutine={openRoutine}
             onSaveAsRoutine={handleSaveTrainingAsRoutine}
             authToken={authToken}
             onAuthExpired={handleAuthExpired}

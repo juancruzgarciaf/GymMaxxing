@@ -7,6 +7,7 @@ import {
   saveTrainingSeedAsRoutine,
 } from "../lib/trainingTransfer";
 import type { DiscoverRoutineSummary, RoutineExerciseDetailed, RoutineSummary, Usuario } from "../types";
+import VerifiedBadge from "../components/VerifiedBadge";
 
 type DescubrirRutinasProps = {
   usuario: Usuario;
@@ -35,6 +36,7 @@ function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
   const [excludeFollowing, setExcludeFollowing] = useState(false);
   const [rutinasOficiales, setRutinasOficiales] = useState(false);
   const [tipoCreador, setTipoCreador] = useState<TipoCreador>("todos");
+  const [showMuscleFilters, setShowMuscleFilters] = useState(false);
 
   const [rutinas, setRutinas] = useState<DiscoverRoutineSummary[]>([]);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
@@ -279,38 +281,51 @@ function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
           <label className="discover-check">
             <input
               type="checkbox"
+              checked={rutinasOficiales}
+              onChange={(event) => setRutinasOficiales(event.target.checked)}
+            />
+            Rutinas oficiales
+          </label>
+
+          <label className="discover-check">
+            <input
+              type="checkbox"
               checked={excludeFollowing}
               onChange={(event) => setExcludeFollowing(event.target.checked)}
             />
             Excluir rutinas de seguidos
           </label>
 
-          <label className="discover-check">
-            <input
-              type="checkbox"
-              checked={rutinasOficiales}
-              onChange={(event) => setRutinasOficiales(event.target.checked)}
-            />
-            Rutinas oficiales
-          </label>
+          <button
+            type="button"
+            className={`btn secondary discover-muscle-toggle ${showMuscleFilters ? "active" : ""}`}
+            onClick={() => setShowMuscleFilters((prev) => !prev)}
+            aria-expanded={showMuscleFilters}
+          >
+            {selectedGroups.length > 0
+              ? `Filtrar por musculo (${selectedGroups.length})`
+              : "Filtrar por musculo"}
+          </button>
         </div>
 
-        <div className="muscle-chips discover-muscles">
-          {availableGroups.length === 0 ? (
-            <span className="helper-text">No hay grupos musculares para filtrar.</span>
-          ) : (
-            availableGroups.map((group) => (
-              <button
-                type="button"
-                key={group}
-                className={`muscle-chip-btn ${selectedGroups.includes(group) ? "active" : ""}`}
-                onClick={() => handleToggleGroup(group)}
-              >
-                {group}
-              </button>
-            ))
-          )}
-        </div>
+        {showMuscleFilters ? (
+          <div className="muscle-chips discover-muscles">
+            {availableGroups.length === 0 ? (
+              <span className="helper-text">No hay grupos musculares para filtrar.</span>
+            ) : (
+              availableGroups.map((group) => (
+                <button
+                  type="button"
+                  key={group}
+                  className={`muscle-chip-btn ${selectedGroups.includes(group) ? "active" : ""}`}
+                  onClick={() => handleToggleGroup(group)}
+                >
+                  {group}
+                </button>
+              ))
+            )}
+          </div>
+        ) : null}
       </section>
 
       {loading ? <div className="status">Cargando rutinas...</div> : null}
@@ -320,7 +335,10 @@ function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
           <article key={rutina.id_rutina} className="discover-card">
             <div className="discover-card-head">
               <h2>{rutina.nombre}</h2>
-              <small>por {rutina.creador_username}</small>
+              <small className="verified-name">
+                por {rutina.creador_username}
+                <VerifiedBadge tipoUsuario={rutina.creador_tipo_usuario} />
+              </small>
             </div>
 
             <p className="discover-description">{rutina.descripcion || "Sin descripcion"}</p>
