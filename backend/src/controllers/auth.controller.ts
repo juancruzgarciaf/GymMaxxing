@@ -34,6 +34,7 @@ export const register = async (req: Request, res: Response) => {
       edad,
       peso,
       altura,
+      genero,
       nacionalidad,
       nivel_entrenamiento,
       objetivo_entrenamiento,
@@ -75,10 +76,21 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
+    const cleanGenero =
+      typeof genero === "string" && genero.trim()
+        ? genero.trim().toLowerCase()
+        : null;
+
+    if (cleanGenero != null && !["hombre", "mujer"].includes(cleanGenero)) {
+      return res.status(400).json({
+        error: "genero debe ser hombre o mujer",
+      });
+    }
+
     const result = await pool.query(
       `INSERT INTO usuario 
-      (username, email, password, edad, peso, altura, nacionalidad, nivel_entrenamiento, objetivo_entrenamiento, tipo_usuario)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      (username, email, password, edad, peso, altura, genero, nacionalidad, nivel_entrenamiento, objetivo_entrenamiento, tipo_usuario)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       RETURNING *`,
       [
         cleanUsername,
@@ -87,6 +99,7 @@ export const register = async (req: Request, res: Response) => {
         edad ?? null,
         peso ?? null,
         altura ?? null,
+        cleanGenero,
         nacionalidad ?? null,
         nivel_entrenamiento ?? null,
         objetivo_entrenamiento ?? null,

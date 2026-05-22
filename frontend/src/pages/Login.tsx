@@ -69,19 +69,14 @@ function Login({ goToRegister, onLoginSuccess }: LoginProps) {
   };
 
   return (
-    <main className="auth-shell">
-      <section className="auth-grid">
-        <article className="auth-showcase-panel">
-          <img src={showcase} alt="Vista de la app" className="auth-showcase-image" />
-        </article>
-
-        <article className="auth-panel auth-form-panel">
-          <div className="auth-brand-head">
-            <span className="brand-dot" />
+    <main className="auth-shell auth-fullscreen">
+      <section className="auth-full-page login-full-page">
+        <div className="auth-full-content login-full-content">
+          <div className="auth-brand-head login-brand-head">
             <strong>GymMaxxing</strong>
           </div>
           <div className="auth-logo-wrap">
-            <img src={logo} alt="GymMaxxing logo" className="auth-logo" />
+            <img src={logo} alt="GymMaxxing logo" className="auth-logo login-logo" />
           </div>
           <h2>Iniciar sesion</h2>
           <p className="auth-subtitle">Bienvenido de nuevo.</p>
@@ -109,7 +104,10 @@ function Login({ goToRegister, onLoginSuccess }: LoginProps) {
           <button className="auth-link-btn" type="button" onClick={goToRegister}>
             No tengo cuenta
           </button>
-        </article>
+        </div>
+        <div className="login-image-panel">
+          <img src={showcase} alt="Vista de la app" className="login-full-image" />
+        </div>
       </section>
     </main>
   );

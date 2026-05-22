@@ -1,4 +1,5 @@
-import { useState, type CSSProperties } from "react";
+import { useState, type FormEventHandler } from "react";
+import logo from "../assets/logo.png";
 
 type RegisterProps = {
   goToLogin: () => void;
@@ -8,13 +9,18 @@ function Register({ goToLogin }: RegisterProps) {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [tipoUsuario, setTipoUsuario] = useState("usuario");
+  const [tipoUsuario, setTipoUsuario] = useState("");
+  const [edad, setEdad] = useState("");
+  const [peso, setPeso] = useState("");
+  const [altura, setAltura] = useState("");
+  const [genero, setGenero] = useState("");
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "error" | "ok"; text: string } | null>(null);
+  const shouldShowBodyFields = tipoUsuario === "usuario" || tipoUsuario === "entrenador";
 
   const handleRegister = async () => {
-    if (!username.trim() || !email.trim() || !password.trim()) {
-      setFeedback({ type: "error", text: "Completa usuario, email y password" });
+    if (!username.trim() || !email.trim() || !password.trim() || !tipoUsuario) {
+      setFeedback({ type: "error", text: "Completa usuario, email, password y tipo de usuario" });
       return;
     }
 
@@ -31,6 +37,10 @@ function Register({ goToLogin }: RegisterProps) {
           email,
           password,
           tipo_usuario: tipoUsuario,
+          edad: shouldShowBodyFields && edad.trim() ? Number(edad) : null,
+          peso: shouldShowBodyFields && peso.trim() ? Number(peso) : null,
+          altura: shouldShowBodyFields && altura.trim() ? Number(altura) : null,
+          genero: shouldShowBodyFields ? genero || null : null,
         }),
       });
 
@@ -57,122 +67,120 @@ function Register({ goToLogin }: RegisterProps) {
     }
   };
 
+  const submit: FormEventHandler<HTMLFormElement> = (event) => {
+    event.preventDefault();
+    void handleRegister();
+  };
+
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>Crear cuenta</h1>
-        {feedback ? (
-          <p
-            style={{
-              ...styles.feedback,
-              ...(feedback.type === "error" ? styles.feedbackError : styles.feedbackOk),
-            }}
-          >
-            {feedback.text}
-          </p>
-        ) : null}
+    <main className="auth-shell auth-fullscreen">
+      <section className="auth-full-page register-full-page">
+        <div className="register-brand-panel">
+          <img src={logo} alt="GymMaxxing logo" className="register-hero-logo" />
+          <div className="register-motivation">
+            <h1>Hoy empieza tu nueva version.</h1>
+            <p>La cuenta se crea en un minuto. La disciplina empieza ahora.</p>
+          </div>
+        </div>
 
-        <input
-          style={styles.input}
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
+        <div className="auth-full-content register-form-panel">
+          <h2>Crear cuenta</h2>
+          <p className="auth-subtitle">Entrá, elegí tu rol y empezá a construir constancia.</p>
+          {feedback ? <p className={`status ${feedback.type}`}>{feedback.text}</p> : null}
 
-        <input
-          style={styles.input}
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+          <form onSubmit={submit} className="auth-form">
+            <input
+              className="field"
+              placeholder="Username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+            />
 
-        <input
-          style={styles.input}
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+            <input
+              className="field"
+              placeholder="Email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
 
-        <select
-          style={styles.input}
-          value={tipoUsuario}
-          onChange={(e) => setTipoUsuario(e.target.value)}
-        >
-          <option value="usuario">Usuario</option>
-          <option value="entrenador">Entrenador</option>
-          <option value="gimnasio">Gimnasio</option>
-        </select>
+            <input
+              className="field"
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
 
-        <button style={styles.button} onClick={handleRegister} disabled={loading}>
-          {loading ? "Creando..." : "Registrarse"}
-        </button>
+            <select
+              className="field"
+              value={tipoUsuario}
+              onChange={(event) => {
+                const nextType = event.target.value;
+                setTipoUsuario(nextType);
+                if (nextType === "gimnasio") {
+                  setEdad("");
+                  setPeso("");
+                  setAltura("");
+                  setGenero("");
+                }
+              }}
+            >
+              <option value="">Tipo de usuario</option>
+              <option value="usuario">Usuario</option>
+              <option value="entrenador">Entrenador</option>
+              <option value="gimnasio">Gimnasio</option>
+            </select>
 
-        <p style={styles.link} onClick={goToLogin}>
-          Ya tengo cuenta
-        </p>
-      </div>
-    </div>
+            {shouldShowBodyFields ? (
+              <div className="register-body-fields">
+                <input
+                  className="field"
+                  type="number"
+                  min="0"
+                  placeholder="Edad"
+                  value={edad}
+                  onChange={(event) => setEdad(event.target.value)}
+                />
+                <input
+                  className="field"
+                  type="number"
+                  min="0"
+                  placeholder="Peso"
+                  value={peso}
+                  onChange={(event) => setPeso(event.target.value)}
+                />
+                <input
+                  className="field"
+                  type="number"
+                  min="0"
+                  placeholder="Altura"
+                  value={altura}
+                  onChange={(event) => setAltura(event.target.value)}
+                />
+                <select
+                  className="field"
+                  value={genero}
+                  onChange={(event) => setGenero(event.target.value)}
+                >
+                  <option value="">Sexo</option>
+                  <option value="hombre">Hombre</option>
+                  <option value="mujer">Mujer</option>
+                </select>
+              </div>
+            ) : null}
+
+            <button className="btn auth-submit" type="submit" disabled={loading}>
+              {loading ? "Creando..." : "Crear cuenta"}
+            </button>
+          </form>
+
+          <button className="auth-link-btn" type="button" onClick={goToLogin}>
+            Ya tengo cuenta
+          </button>
+        </div>
+      </section>
+    </main>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  container: {
-    height: "100vh",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    background: "linear-gradient(135deg, #0f172a, #020617)",
-  },
-  card: {
-    backgroundColor: "#111827",
-    padding: "40px",
-    borderRadius: "16px",
-    width: "320px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "15px",
-  },
-  title: {
-    color: "white",
-    textAlign: "center",
-  },
-  input: {
-    padding: "12px",
-    borderRadius: "8px",
-    border: "none",
-    backgroundColor: "#1f2933",
-    color: "white",
-  },
-  button: {
-    padding: "12px",
-    borderRadius: "8px",
-    border: "none",
-    backgroundColor: "#22c55e",
-    fontWeight: "bold",
-    cursor: "pointer",
-  },
-  feedback: {
-    margin: 0,
-    borderRadius: "8px",
-    padding: "10px 12px",
-    fontSize: "0.92rem",
-  },
-  feedbackError: {
-    border: "1px solid #7a2f35",
-    backgroundColor: "#2b1a1d",
-    color: "#ffc0c6",
-  },
-  feedbackOk: {
-    border: "1px solid #2d6042",
-    backgroundColor: "#172821",
-    color: "#b9f2d1",
-  },
-  link: {
-    color: "#93c5fd",
-    textAlign: "center",
-    cursor: "pointer",
-  },
-};
 
 export default Register;
