@@ -3,6 +3,7 @@ import routineDetailEmptyBodybuilder from "../assets/routine-detail-empty-bodybu
 import { createRoutineShareUrl } from "../lib/trainingTransfer";
 import { canUseTrainingFeatures } from "../lib/roles";
 import type { TrainingSeed, Usuario } from "../types";
+import TrashIcon from "../components/TrashIcon";
 
 type Rutina = {
   id_rutina: number;
@@ -1544,10 +1545,12 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
                       </div>
                       <button
                         type="button"
-                        className="btn tiny danger"
+                        className="exercise-remove-btn"
                         onClick={() => removerEjercicioDelEditor(ejercicio.id_ejercicio)}
+                        aria-label={`Quitar ${ejercicio.nombre}`}
+                        title="Quitar ejercicio"
                       >
-                        Quitar
+                        <TrashIcon />
                       </button>
                     </div>
 

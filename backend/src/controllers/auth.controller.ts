@@ -7,6 +7,50 @@ const sanitizeUser = <T extends { password?: string }>(user: T) => {
   return safeUser;
 };
 
+type GoogleTokenInfo = {
+  aud?: string;
+  email?: string;
+  email_verified?: boolean | string;
+  name?: string;
+  sub?: string;
+  error_description?: string;
+};
+
+const GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo";
+
+const normalizeGoogleUsername = (value: string) => {
+  const normalized = value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 24);
+
+  return normalized || "google_user";
+};
+
+const buildUniqueGoogleUsername = async (email: string, fallbackName?: string) => {
+  const emailName = email.split("@")[0] || "google_user";
+  const base = normalizeGoogleUsername(fallbackName?.trim() || emailName);
+  let candidate = base;
+  let suffix = 1;
+
+  while (true) {
+    const existing = await pool.query(
+      "SELECT 1 FROM usuario WHERE LOWER(username) = LOWER($1) LIMIT 1",
+      [candidate]
+    );
+
+    if (existing.rows.length === 0) {
+      return candidate;
+    }
+
+    suffix += 1;
+    candidate = `${base}_${suffix}`;
+  }
+};
+
 /*
   primero mira si vino lo mínimo necesario,
   después consulta la base para evitar cosas raras,
@@ -188,6 +232,95 @@ export const login = async (req: Request, res: Response) => {
     console.error("ERROR LOGIN:", error);
     res.status(500).json({
       error: "Error en login",
+    });
+  }
+};
+
+export const googleLogin = async (req: Request, res: Response) => {
+  try {
+    const { credential } = req.body;
+
+    if (!credential || typeof credential !== "string") {
+      return res.status(400).json({
+        error: "Falta la credencial de Google",
+      });
+    }
+
+    const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID;
+
+    if (!googleClientId) {
+      return res.status(500).json({
+        error: "Falta configurar GOOGLE_CLIENT_ID en el backend",
+      });
+    }
+
+    const tokenRes = await fetch(
+      `${GOOGLE_TOKENINFO_URL}?id_token=${encodeURIComponent(credential)}`
+    );
+    const tokenInfo = (await tokenRes.json()) as GoogleTokenInfo;
+
+    if (!tokenRes.ok) {
+      return res.status(401).json({
+        error: tokenInfo.error_description || "Token de Google invalido",
+      });
+    }
+
+    const emailVerified =
+      tokenInfo.email_verified === true || tokenInfo.email_verified === "true";
+
+    if (tokenInfo.aud !== googleClientId || !tokenInfo.email || !emailVerified) {
+      return res.status(401).json({
+        error: "No se pudo validar la cuenta de Google",
+      });
+    }
+
+    const cleanEmail = tokenInfo.email.trim().toLowerCase();
+    const existingUser = await pool.query(
+      "SELECT * FROM usuario WHERE LOWER(email) = LOWER($1) LIMIT 1",
+      [cleanEmail]
+    );
+
+    const userRow =
+      existingUser.rows[0] ??
+      (
+        await pool.query(
+          `INSERT INTO usuario 
+          (username, email, password, edad, peso, altura, genero, nacionalidad, nivel_entrenamiento, objetivo_entrenamiento, tipo_usuario)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          RETURNING *`,
+          [
+            await buildUniqueGoogleUsername(cleanEmail, tokenInfo.name),
+            cleanEmail,
+            `google:${tokenInfo.sub || cleanEmail}`,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "usuario",
+          ]
+        )
+      ).rows[0];
+
+    const usuario = sanitizeUser(userRow);
+    const token = createAuthToken({
+      id: usuario.id,
+      email: usuario.email,
+      username: usuario.username,
+      tipo_usuario: usuario.tipo_usuario,
+    });
+
+    return res.json({
+      mensaje: "Login con Google exitoso",
+      usuario,
+      token,
+    });
+  } catch (error) {
+    console.error("ERROR GOOGLE LOGIN:", error);
+    return res.status(500).json({
+      error: "Error iniciando sesion con Google",
     });
   }
 };

@@ -10,7 +10,6 @@ import {
 } from "./lib/trainingTransfer";
 import { canUseTrainingFeatures } from "./lib/roles";
 import type { EntrenamientoResumen, RoutinePostSummary, SearchUser, TrainingSeed, Usuario } from "./types";
-import VerifiedBadge from "./components/VerifiedBadge";
 import Entrenamiento, { type ActiveTrainingSnapshot } from "./pages/Entrenamiento";
 import Home from "./pages/Home";
 import Buscar from "./pages/Buscar";
@@ -31,10 +30,12 @@ type MainScreen =
   | "buscar"
   | "descubrir"
   | "perfil"
+  | "ajustes"
   | "entrenamientoLibre"
   | "entrenamiento";
 
 const AUTH_STORAGE_KEY = "gymmaxxing_auth_v1";
+const THEME_STORAGE_KEY = "gymmaxxing_theme_v1";
 
 type StoredAuth = {
   usuario: Usuario;
@@ -44,6 +45,8 @@ type StoredAuth = {
 type StoredTokenPayload = {
   exp?: number;
 };
+
+type ThemeMode = "dark" | "light";
 
 type RoutedMainScreen = Exclude<MainScreen, "entrenamiento" | "rutinaCompartida">;
 
@@ -71,6 +74,7 @@ const pathForScreen = (screen: RoutedMainScreen) => {
     buscar: "/buscar",
     descubrir: "/descubrir",
     perfil: "/perfil",
+    ajustes: "/ajustes",
     entrenamientoLibre: "/entrenamiento",
   };
 
@@ -107,6 +111,9 @@ const getMainScreenFromPath = (pathname: string): MainScreen => {
   }
   if (pathname === "/entrenamiento") {
     return "entrenamientoLibre";
+  }
+  if (pathname === "/ajustes") {
+    return "ajustes";
   }
   if (pathname === "/rutina-compartida") {
     return "rutinaCompartida";
@@ -173,6 +180,15 @@ const persistAuth = (data: StoredAuth | null) => {
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
 };
 
+const readStoredTheme = (): ThemeMode => {
+  try {
+    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    return storedTheme === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+};
+
 const twoDigits = (value: number) => String(value).padStart(2, "0");
 
 const formatDuration = (totalSeconds: number) => {
@@ -186,6 +202,7 @@ function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const initialAuth = readStoredAuth();
+  const [themeMode, setThemeMode] = useState<ThemeMode>(readStoredTheme);
   const [usuario, setUsuario] = useState<Usuario | null>(initialAuth?.usuario ?? null);
   const [authToken, setAuthToken] = useState<string | null>(initialAuth?.token ?? null);
   const [selectedTraining, setSelectedTraining] = useState<EntrenamientoResumen | null>(null);
@@ -208,6 +225,11 @@ function App() {
   const currentTraining =
     mainScreen === "entrenamiento" && availableTraining?.id_sesion === routeTrainingId ? availableTraining : null;
   const routeProfileUsername = getProfileUsernameFromPath(location.pathname);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeMode;
+    localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+  }, [themeMode]);
 
   useEffect(() => {
     if (!appToast) {
@@ -425,6 +447,10 @@ function App() {
     handleLogout();
   };
 
+  const toggleTheme = () => {
+    setThemeMode((currentTheme) => (currentTheme === "dark" ? "light" : "dark"));
+  };
+
   if (!usuario) {
     if (authScreen === "register") {
       return <Register goToLogin={() => navigate("/login")} />;
@@ -445,6 +471,17 @@ function App() {
 
   const canTrain = canUseTrainingFeatures(usuario);
   const showActiveTrainingBar = Boolean(activeTraining && mainScreen !== "entrenamientoLibre");
+  const activeRestFinished = Boolean(
+    activeTraining?.rest &&
+      (activeTraining.rest.finalizado || activeTraining.rest.restanteSegundos <= 0)
+  );
+  const activeTimerClassName = [
+    "active-training-timer",
+    activeTraining?.rest ? "resting" : "",
+    activeRestFinished ? "rest-finished" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div className={`shell ${showActiveTrainingBar ? "has-active-training" : ""}`}>
@@ -594,15 +631,27 @@ function App() {
           </button>
         </nav>
 
-        <div className="user-box">
-          <span className="verified-name">
-            {usuario.username}
-            <VerifiedBadge tipoUsuario={usuario.tipo_usuario} />
-          </span>
-          <button type="button" className="logout-btn" onClick={handleLogout}>
-            Salir
-          </button>
-        </div>
+        <button
+          type="button"
+          className={`settings-nav-btn ${mainScreen === "ajustes" ? "active" : ""}`}
+          onClick={() => navigateTo("ajustes")}
+          aria-label="Ajustes"
+          title="Ajustes"
+        >
+          <svg
+            className="settings-nav-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" />
+            <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.04.04a2 2 0 0 1-2.83 2.83l-.04-.04A1.7 1.7 0 0 0 15 19.37a1.7 1.7 0 0 0-1 .91l-.02.05a2 2 0 0 1-3.66 0l-.02-.05a1.7 1.7 0 0 0-1-.91 1.7 1.7 0 0 0-1.88.34l-.04.04a2 2 0 0 1-2.83-2.83l.04-.04A1.7 1.7 0 0 0 4.63 15a1.7 1.7 0 0 0-.91-1l-.05-.02a2 2 0 0 1 0-3.66l.05-.02a1.7 1.7 0 0 0 .91-1 1.7 1.7 0 0 0-.34-1.88l-.04-.04a2 2 0 0 1 2.83-2.83l.04.04A1.7 1.7 0 0 0 9 4.63a1.7 1.7 0 0 0 1-.91l.02-.05a2 2 0 0 1 3.66 0l.02.05a1.7 1.7 0 0 0 1 .91 1.7 1.7 0 0 0 1.88-.34l.04-.04a2 2 0 0 1 2.83 2.83l-.04.04A1.7 1.7 0 0 0 19.37 9c.38.14.7.45.91.82l.05.02a2 2 0 0 1 0 3.66l-.05.02a1.7 1.7 0 0 0-.88 1.48Z" />
+          </svg>
+        </button>
       </header>
 
       <div className="content">
@@ -694,6 +743,24 @@ function App() {
             }}
           />
         ) : null}
+        {mainScreen === "ajustes" ? (
+          <main className="page-shell settings-page-shell">
+            <section className="settings-card">
+              <div className="settings-card-head">
+                <span>Ajustes</span>
+                <p>Preferencias de la cuenta</p>
+              </div>
+              <div className="settings-actions">
+                <button type="button" className="settings-action-btn theme-action-btn" onClick={toggleTheme}>
+                  {themeMode === "dark" ? "Tema claro" : "Tema oscuro"}
+                </button>
+                <button type="button" className="settings-action-btn logout-action-btn" onClick={handleLogout}>
+                  Salir
+                </button>
+              </div>
+            </section>
+          </main>
+        ) : null}
         {mainScreen === "entrenamiento" && currentTraining ? (
           <EntrenamientoDetalle
             entrenamiento={currentTraining}
@@ -718,11 +785,22 @@ function App() {
           }}
         >
           <div className="active-training-main">
-            <small>{activeTraining.rest ? "Descanso activo" : "Entrenamiento en curso"}</small>
+            <small className={activeRestFinished ? "active-training-mode finished" : "active-training-mode"}>
+              {activeRestFinished ? (
+                <>
+                  <span>Entrenamiento</span>
+                  <span>{formatDuration(activeTraining.elapsedSeconds)}</span>
+                </>
+              ) : activeTraining.rest ? (
+                "Descanso activo"
+              ) : (
+                "Entrenamiento en curso"
+              )}
+            </small>
             <strong>{activeTraining.title}</strong>
           </div>
           <div className="active-training-meta">
-            <span className={activeTraining.rest ? "active-training-timer resting" : "active-training-timer"}>
+            <span className={activeTimerClassName}>
               {formatDuration(activeTraining.rest?.restanteSegundos ?? activeTraining.elapsedSeconds)}
             </span>
             <span>

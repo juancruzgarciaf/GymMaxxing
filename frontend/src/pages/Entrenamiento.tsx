@@ -4,6 +4,7 @@ import siluetaStrongman from "../assets/siluetastrongman.png";
 import { canUseTrainingFeatures } from "../lib/roles";
 import { saveTrainingSeedAsRoutine } from "../lib/trainingTransfer";
 import type { TrainingSeed, TrainingSetType, Usuario } from "../types";
+import TrashIcon from "../components/TrashIcon";
 
 type Ejercicio = {
   id_ejercicio: number;
@@ -87,6 +88,7 @@ type EntrenamientoProps = {
 type VistaEntrenamiento = "inicio" | "ejecucion" | "guardar";
 
 const API = "http://localhost:3000";
+const ACTIVE_TRAINING_STORAGE_PREFIX = "gymmaxxing_active_training_v1";
 
 const SET_TIPO_OPTIONS: Array<{ value: TrainingSetType; label: string }> = [
   { value: "warmup", label: "WarmUp" },
@@ -146,6 +148,28 @@ const isTrainingSetType = (value: string): value is TrainingSetType =>
   SET_TIPO_OPTIONS.some((option) => option.value === value);
 
 type ExerciseInputMode = "strength" | "repsOnly" | "timed" | "cardio";
+
+type PersistedActiveTraining = {
+  usuarioId: number;
+  savedAt: number;
+  vista: Extract<VistaEntrenamiento, "ejecucion" | "guardar">;
+  sesionActiva: SesionEntrenamiento;
+  sourceRoutineIdContext: number | null;
+  ejecucionEjercicios: EjecucionEjercicio[];
+  descansoActivo: DescansoActivo | null;
+  elapsedSesionSegundos: number;
+  totalTrofeosEntrenamiento: number;
+  guardarNombre: string;
+  guardarDescripcion: string;
+  guardarCarpetaId: string;
+  guardarComoRutina: boolean;
+  filtroEquipo: string;
+  filtroMusculo: string;
+  busquedaEjercicio: string;
+};
+
+const activeTrainingStorageKey = (usuarioId: number) =>
+  `${ACTIVE_TRAINING_STORAGE_PREFIX}:${usuarioId}`;
 
 const normalizeText = (value: string) =>
   value
@@ -250,6 +274,7 @@ function Entrenamiento({
   const [guardarCarpetaId, setGuardarCarpetaId] = useState("");
   const [guardarComoRutina, setGuardarComoRutina] = useState(false);
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
+  const [activeTrainingHydrated, setActiveTrainingHydrated] = useState(false);
   const handledDiscardRequestKey = useRef(0);
   const descartarEntrenamientoRef = useRef<(() => Promise<void>) | null>(null);
   const catalogoAutoReloadTriedRef = useRef(false);
@@ -362,6 +387,127 @@ function Entrenamiento({
   }, [usuario.id]);
 
   useEffect(() => {
+    setActiveTrainingHydrated(false);
+    const storageKey = activeTrainingStorageKey(usuario.id);
+
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) {
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as Partial<PersistedActiveTraining>;
+      if (
+        parsed.usuarioId !== usuario.id ||
+        !parsed.sesionActiva ||
+        typeof parsed.sesionActiva.id_sesion !== "number"
+      ) {
+        localStorage.removeItem(storageKey);
+        return;
+      }
+
+      const savedAt = typeof parsed.savedAt === "number" ? parsed.savedAt : Date.now();
+      const elapsedAway = Math.max(0, Math.floor((Date.now() - savedAt) / 1000));
+      const restoredVista = parsed.vista === "guardar" ? "guardar" : "ejecucion";
+      const restoredExercises = Array.isArray(parsed.ejecucionEjercicios)
+        ? parsed.ejecucionEjercicios.map((ejercicio) => ({
+            ...ejercicio,
+            series: ejercicio.series.map((serie) =>
+              restoredVista === "ejecucion" && serie.timerActivo
+                ? { ...serie, tiempoSegundos: serie.tiempoSegundos + elapsedAway }
+                : serie,
+            ),
+          }))
+        : [];
+
+      const storedRest = parsed.descansoActivo ?? null;
+      const restoredRest =
+        storedRest && restoredVista === "ejecucion" && !storedRest.finalizado
+          ? {
+              ...storedRest,
+              restanteSegundos: Math.max(0, storedRest.restanteSegundos - elapsedAway),
+              finalizado: storedRest.restanteSegundos - elapsedAway <= 0,
+            }
+          : storedRest;
+
+      setVista(restoredVista);
+      setSesionActiva(parsed.sesionActiva);
+      setSourceRoutineIdContext(parsed.sourceRoutineIdContext ?? null);
+      setEjecucionEjercicios(restoredExercises);
+      setSeriesAnterioresPorEjercicio({});
+      setDescansoActivo(restoredRest);
+      setElapsedSesionSegundos(
+        Math.max(0, (parsed.elapsedSesionSegundos ?? 0) + (restoredVista === "ejecucion" ? elapsedAway : 0)),
+      );
+      setTotalTrofeosEntrenamiento(parsed.totalTrofeosEntrenamiento ?? 0);
+      setGuardarNombre(parsed.guardarNombre ?? "");
+      setGuardarDescripcion(parsed.guardarDescripcion ?? "");
+      setGuardarCarpetaId(parsed.guardarCarpetaId ?? "");
+      setGuardarComoRutina(Boolean(parsed.guardarComoRutina));
+      setFiltroEquipo(parsed.filtroEquipo ?? "");
+      setFiltroMusculo(parsed.filtroMusculo ?? "");
+      setBusquedaEjercicio(parsed.busquedaEjercicio ?? "");
+      setConfirmDiscardOpen(false);
+      setMensaje("Entrenamiento restaurado");
+    } catch (err) {
+      console.error("No se pudo restaurar el entrenamiento activo", err);
+      localStorage.removeItem(storageKey);
+    } finally {
+      setActiveTrainingHydrated(true);
+    }
+  }, [usuario.id]);
+
+  useEffect(() => {
+    if (!activeTrainingHydrated) {
+      return;
+    }
+
+    const storageKey = activeTrainingStorageKey(usuario.id);
+    if (!sesionActiva || (vista !== "ejecucion" && vista !== "guardar")) {
+      localStorage.removeItem(storageKey);
+      return;
+    }
+
+    const payload: PersistedActiveTraining = {
+      usuarioId: usuario.id,
+      savedAt: Date.now(),
+      vista,
+      sesionActiva,
+      sourceRoutineIdContext,
+      ejecucionEjercicios,
+      descansoActivo,
+      elapsedSesionSegundos,
+      totalTrofeosEntrenamiento,
+      guardarNombre,
+      guardarDescripcion,
+      guardarCarpetaId,
+      guardarComoRutina,
+      filtroEquipo,
+      filtroMusculo,
+      busquedaEjercicio,
+    };
+
+    localStorage.setItem(storageKey, JSON.stringify(payload));
+  }, [
+    busquedaEjercicio,
+    descansoActivo,
+    ejecucionEjercicios,
+    elapsedSesionSegundos,
+    filtroEquipo,
+    filtroMusculo,
+    guardarCarpetaId,
+    guardarComoRutina,
+    guardarDescripcion,
+    guardarNombre,
+    sesionActiva,
+    sourceRoutineIdContext,
+    totalTrofeosEntrenamiento,
+    usuario.id,
+    vista,
+    activeTrainingHydrated,
+  ]);
+
+  useEffect(() => {
     if (vista !== "ejecucion") {
       catalogoAutoReloadTriedRef.current = false;
       return;
@@ -462,6 +608,7 @@ function Entrenamiento({
   }, [error]);
 
   const resetEntrenamiento = () => {
+    localStorage.removeItem(activeTrainingStorageKey(usuario.id));
     setVista("inicio");
     setSesionActiva(null);
     setSourceRoutineIdContext(null);
@@ -1383,14 +1530,25 @@ function Entrenamiento({
             aria-live="polite"
           >
             <div className="rest-banner-main">
-              <small>Descanso activo</small>
+              <small className={descansoActivo.finalizado ? "rest-banner-mode finished" : "rest-banner-mode"}>
+                {descansoActivo.finalizado ? (
+                  <>
+                    <span>Entrenamiento</span>
+                    <span>{formatDuration(elapsedSesionSegundos)}</span>
+                  </>
+                ) : (
+                  "Descanso activo"
+                )}
+              </small>
               <strong>{descansoActivo.etiqueta}</strong>
             </div>
             <div className="rest-banner-controls">
               <button type="button" className="btn secondary" onClick={() => ajustarDescansoActivo(-10)}>
                 -10
               </button>
-              <div className="rest-pill">{formatDuration(descansoActivo.restanteSegundos)}</div>
+              <div className={descansoActivo.finalizado ? "rest-pill finished" : "rest-pill"}>
+                {formatDuration(descansoActivo.restanteSegundos)}
+              </div>
               <button type="button" className="btn secondary" onClick={() => ajustarDescansoActivo(10)}>
                 +10
               </button>
@@ -1470,10 +1628,12 @@ function Entrenamiento({
                       </div>
                       <button
                         type="button"
-                        className="btn tiny danger"
+                        className="exercise-remove-btn"
                         onClick={() => quitarEjercicio(ejercicio.id_ejercicio)}
+                        aria-label={`Quitar ${ejercicio.nombre}`}
+                        title="Quitar ejercicio"
                       >
-                        Quitar
+                        <TrashIcon />
                       </button>
                     </div>
 
