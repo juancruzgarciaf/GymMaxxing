@@ -5,6 +5,7 @@ import { canUseTrainingFeatures } from "../lib/roles";
 import { saveTrainingSeedAsRoutine } from "../lib/trainingTransfer";
 import type { TrainingSeed, TrainingSetType, Usuario } from "../types";
 import TrashIcon from "../components/TrashIcon";
+import DurationInput from "../components/DurationInput";
 
 type Ejercicio = {
   id_ejercicio: number;
@@ -1023,18 +1024,15 @@ function Entrenamiento({
     );
   };
 
-  const updateDescansoEjecucion = (idEjercicio: number, field: "min" | "seg", value: string) => {
+  const updateDescansoEjecucion = (idEjercicio: number, seconds: number) => {
     setEjecucionEjercicios((prev) =>
       prev.map((ejercicio) => {
         if (ejercicio.id_ejercicio !== idEjercicio) {
           return ejercicio;
         }
-        const current = descansoToInputs(ejercicio.descansoSegundos);
-        const minRaw = field === "min" ? value : current.min;
-        const segRaw = field === "seg" ? value : current.sec;
         return {
           ...ejercicio,
-          descansoSegundos: descansoDesdeInputs(minRaw, segRaw),
+          descansoSegundos: seconds,
         };
       }),
     );
@@ -1639,26 +1637,11 @@ function Entrenamiento({
 
                     <div className="rest-grid">
                       <span>Descanso</span>
-                      <input
-                        className="field compact"
-                        type="number"
-                        min="0"
-                        placeholder="Min"
-                        value={descansoToInputs(ejercicio.descansoSegundos).min}
-                        onChange={(event) =>
-                          updateDescansoEjecucion(ejercicio.id_ejercicio, "min", event.target.value)
-                        }
-                      />
-                      <input
-                        className="field compact"
-                        type="number"
-                        min="0"
-                        max="59"
-                        placeholder="Seg"
-                        value={descansoToInputs(ejercicio.descansoSegundos).sec}
-                        onChange={(event) =>
-                          updateDescansoEjecucion(ejercicio.id_ejercicio, "seg", event.target.value)
-                        }
+                      <DurationInput
+                        className="rest-time-input"
+                        seconds={ejercicio.descansoSegundos}
+                        onChangeSeconds={(seconds) => updateDescansoEjecucion(ejercicio.id_ejercicio, seconds)}
+                        ariaLabel={`Descanso de ${ejercicio.nombre}`}
                       />
                     </div>
 
@@ -1688,7 +1671,7 @@ function Entrenamiento({
                           >
                             <div className="set-type-wrap">
                               <select
-                                className="set-type-select"
+                                className={`set-type-select ${serie.tipo}`}
                                 value={serie.tipo}
                                 onChange={(event) =>
                                   updateSerieEjecucion(

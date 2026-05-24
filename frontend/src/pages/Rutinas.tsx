@@ -4,6 +4,7 @@ import { createRoutineShareUrl } from "../lib/trainingTransfer";
 import { canUseTrainingFeatures } from "../lib/roles";
 import type { TrainingSeed, Usuario } from "../types";
 import TrashIcon from "../components/TrashIcon";
+import DurationInput from "../components/DurationInput";
 
 type Rutina = {
   id_rutina: number;
@@ -925,13 +926,14 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
     );
   };
 
-  const updateDescansoEditor = (
-    idEjercicio: number,
-    field: "descansoMin" | "descansoSeg",
-    value: string,
-  ) => {
+  const updateDescansoEditor = (idEjercicio: number, seconds: number) => {
+    const next = descansoToInputs(seconds);
     setEditorEjercicios((prev) =>
-      prev.map((item) => (item.id_ejercicio === idEjercicio ? { ...item, [field]: value } : item)),
+      prev.map((item) =>
+        item.id_ejercicio === idEjercicio
+          ? { ...item, descansoMin: next.min, descansoSeg: next.sec }
+          : item,
+      ),
     );
   };
 
@@ -1121,22 +1123,15 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
     );
   };
 
-  const updateDescansoEjecucion = (
-    idEjercicio: number,
-    field: "min" | "seg",
-    value: string,
-  ) => {
+  const updateDescansoEjecucion = (idEjercicio: number, seconds: number) => {
     setEjecucionEjercicios((prev) =>
       prev.map((ejercicio) => {
         if (ejercicio.id_ejercicio !== idEjercicio) {
           return ejercicio;
         }
-        const current = descansoToInputs(ejercicio.descansoSegundos);
-        const minRaw = field === "min" ? value : current.min;
-        const segRaw = field === "seg" ? value : current.sec;
         return {
           ...ejercicio,
-          descansoSegundos: descansoDesdeInputs(minRaw, segRaw),
+          descansoSegundos: seconds,
         };
       }),
     );
@@ -1556,34 +1551,11 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
 
                     <div className="rest-grid">
                       <span>Descanso</span>
-                      <input
-                        className="field compact"
-                        type="number"
-                        min="0"
-                        placeholder="Min"
-                        value={ejercicio.descansoMin}
-                        onChange={(event) =>
-                          updateDescansoEditor(
-                            ejercicio.id_ejercicio,
-                            "descansoMin",
-                            event.target.value,
-                          )
-                        }
-                      />
-                      <input
-                        className="field compact"
-                        type="number"
-                        min="0"
-                        max="59"
-                        placeholder="Seg"
-                        value={ejercicio.descansoSeg}
-                        onChange={(event) =>
-                          updateDescansoEditor(
-                            ejercicio.id_ejercicio,
-                            "descansoSeg",
-                            event.target.value,
-                          )
-                        }
+                      <DurationInput
+                        className="rest-time-input"
+                        seconds={descansoDesdeInputs(ejercicio.descansoMin, ejercicio.descansoSeg)}
+                        onChangeSeconds={(seconds) => updateDescansoEditor(ejercicio.id_ejercicio, seconds)}
+                        ariaLabel={`Descanso de ${ejercicio.nombre}`}
                       />
                     </div>
 
@@ -1604,7 +1576,7 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
                         <div key={serie.id} className="set-row">
                           <div className="set-type-wrap">
                             <select
-                              className="set-type-select"
+                              className={`set-type-select ${serie.tipo}`}
                               value={serie.tipo}
                               onChange={(event) =>
                                 updateSerieEditor(
@@ -1840,26 +1812,11 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
 
                     <div className="rest-grid">
                       <span>Descanso</span>
-                      <input
-                        className="field compact"
-                        type="number"
-                        min="0"
-                        placeholder="Min"
-                        value={descansoToInputs(ejercicio.descansoSegundos).min}
-                        onChange={(event) =>
-                          updateDescansoEjecucion(ejercicio.id_ejercicio, "min", event.target.value)
-                        }
-                      />
-                      <input
-                        className="field compact"
-                        type="number"
-                        min="0"
-                        max="59"
-                        placeholder="Seg"
-                        value={descansoToInputs(ejercicio.descansoSegundos).sec}
-                        onChange={(event) =>
-                          updateDescansoEjecucion(ejercicio.id_ejercicio, "seg", event.target.value)
-                        }
+                      <DurationInput
+                        className="rest-time-input"
+                        seconds={ejercicio.descansoSegundos}
+                        onChangeSeconds={(seconds) => updateDescansoEjecucion(ejercicio.id_ejercicio, seconds)}
+                        ariaLabel={`Descanso de ${ejercicio.nombre}`}
                       />
                     </div>
 
@@ -1884,7 +1841,7 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
                         >
                           <div className="set-type-wrap">
                             <select
-                              className="set-type-select"
+                              className={`set-type-select ${serie.tipo}`}
                               value={serie.tipo}
                               onChange={(event) =>
                                 updateSerieEjecucion(
