@@ -1,5 +1,6 @@
 import { useState, type FormEventHandler } from "react";
 import logo from "../assets/logo.png";
+import { USERNAME_MAX_LENGTH, limitUsername } from "../lib/textLimits";
 
 type RegisterProps = {
   goToLogin: () => void;
@@ -92,8 +93,9 @@ function Register({ goToLogin }: RegisterProps) {
             <input
               className="field"
               placeholder="Username"
+              maxLength={USERNAME_MAX_LENGTH}
               value={username}
-              onChange={(event) => setUsername(event.target.value)}
+              onChange={(event) => setUsername(limitUsername(event.target.value))}
             />
 
             <input

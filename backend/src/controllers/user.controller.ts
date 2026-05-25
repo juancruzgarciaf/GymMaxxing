@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import * as userService from "../services/user.service";
+import { USERNAME_MAX_LENGTH } from "../utils/textLimits";
 
 /*
   Este controller se encarga del CRUD más básico de usuarios.
@@ -59,6 +60,12 @@ export const updateUser = async (req: Request, res: Response) => {
     if (!cleanUsername || !cleanEmail) {
       return res.status(400).json({
         error: "username y email son obligatorios",
+      });
+    }
+
+    if (cleanUsername.length > USERNAME_MAX_LENGTH) {
+      return res.status(400).json({
+        error: `El username no puede superar ${USERNAME_MAX_LENGTH} caracteres`,
       });
     }
 

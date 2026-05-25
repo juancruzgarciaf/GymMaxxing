@@ -6,6 +6,7 @@ import {
   saveTrainingSeedAsRoutine,
   toggleRoutineLike,
 } from "../lib/trainingTransfer";
+import { TITLE_MAX_LENGTH, limitTitle } from "../lib/textLimits";
 import type { DiscoverRoutineSummary, RoutineExerciseDetailed, RoutineSummary, Usuario } from "../types";
 import VerifiedBadge from "../components/VerifiedBadge";
 
@@ -182,7 +183,7 @@ function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasPr
 
   const openCopyModal = (rutina: Pick<RoutineSummary, "id_rutina" | "nombre">) => {
     setCopiarModalRutinaId(rutina.id_rutina);
-    setCopyNameDraft(rutina.nombre);
+    setCopyNameDraft(limitTitle(rutina.nombre));
   };
 
   const closeCopyModal = () => {
@@ -204,7 +205,7 @@ function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasPr
       return;
     }
 
-    const nextName = copyNameDraft.trim();
+    const nextName = limitTitle(copyNameDraft.trim());
     if (!nextName) {
       setError("El nombre de la rutina no puede estar vacio");
       return;
@@ -606,8 +607,9 @@ function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasPr
             <input
               className="field"
               placeholder="Nombre de rutina"
+              maxLength={TITLE_MAX_LENGTH}
               value={copyNameDraft}
-              onChange={(event) => setCopyNameDraft(event.target.value)}
+              onChange={(event) => setCopyNameDraft(limitTitle(event.target.value))}
             />
             <div className="modal-actions">
               <button type="button" className="btn secondary" onClick={closeCopyModal} disabled={copyingRoutine}>

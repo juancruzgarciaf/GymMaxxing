@@ -1140,16 +1140,57 @@ h2 {
   height: 34px;
 }
 
+.exercise-note-panel {
+  display: grid;
+  gap: 6px;
+}
+
+.exercise-note-panel label,
+.exercise-note-readonly span {
+  color: #9fb3c1;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.exercise-note-textarea {
+  width: 100%;
+  min-height: 58px;
+  height: 58px;
+  max-height: 58px;
+  line-height: 1.35;
+  resize: none;
+  overflow: hidden;
+}
+
+.exercise-note-readonly {
+  display: grid;
+  gap: 6px;
+}
+
+.exercise-note-readonly p {
+  min-height: 58px;
+  max-height: 58px;
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid #324351;
+  border-radius: 10px;
+  background: #0f171d;
+  color: #d8e2ea;
+  line-height: 1.35;
+  overflow: hidden;
+}
+
 .exercise-rest-control {
   display: grid;
   grid-template-columns: auto minmax(86px, 118px);
-  gap: 8px;
+  gap: 4px;
   align-items: center;
 }
 
 .exercise-rest-control span {
   color: #9fb3c1;
   font-size: 14px;
+  justify-self: end;
 }
 
 .exercise-remove-btn {
@@ -2128,6 +2169,7 @@ h2 {
 .feed-card {
   display: grid;
   gap: 16px;
+  position: relative;
 }
 
 .feed-card h2 {
@@ -2139,6 +2181,83 @@ h2 {
   display: flex;
   justify-content: space-between;
   gap: 12px;
+  padding-right: 42px;
+}
+
+.training-card-menu {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 3;
+}
+
+.training-menu-trigger {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid #344f6b;
+  background: #102238;
+  color: #d6e3ea;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.training-menu-trigger:hover {
+  background: #183149;
+  border-color: #567089;
+}
+
+.training-menu-trigger svg {
+  width: 22px;
+  height: 22px;
+}
+
+.training-menu-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 210px;
+  border: 1px solid #29445f;
+  border-radius: 12px;
+  background: #102238;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.34);
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+}
+
+.training-menu-popover button {
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #d8e2ea;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.training-menu-popover button:hover {
+  background: #183149;
+}
+
+.training-menu-popover button.danger {
+  color: #ff6b7a;
+}
+
+.training-menu-popover button.danger:hover {
+  background: #2a1a1d;
+}
+
+.training-edit-modal {
+  width: min(880px, calc(100vw - 28px));
+}
+
+.training-edit-summary {
+  padding: 0;
+  margin: 0 0 14px;
 }
 
 .feed-card .feed-description {
@@ -3593,6 +3712,8 @@ small.verified-name {
   background: transparent;
   min-height: 0;
   padding: 0;
+  justify-content: center;
+  text-align: center;
 }
 
 .serie-code {
@@ -3616,6 +3737,7 @@ small.verified-name {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 10px;
+  justify-content: center;
 }
 
 .series-trophy-badge {
@@ -4943,6 +5065,8 @@ button.discover-module-card:hover,
   .feed-card-header small,
   .detail-series-count,
   .exercise-card small,
+  .exercise-note-panel label,
+  .exercise-note-readonly span,
   .library-item small,
   .active-training-main small,
   .comment-item small,
@@ -4996,6 +5120,7 @@ button.discover-module-card:hover,
 :root[data-theme="light"] :is(
   .social-action,
   .social-action.active,
+  .training-menu-trigger,
   .profile-training-search-toggle,
   .profile-training-search-toggle.active
 ) {
@@ -5016,6 +5141,29 @@ button.discover-module-card:hover,
   color: #5aa9ff;
 }
 
+:root[data-theme="light"] .training-menu-popover {
+  border-color: #d9e2ea;
+  background: #ffffff;
+  color: #111827;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.14);
+}
+
+:root[data-theme="light"] .training-menu-popover button {
+  color: #111827;
+}
+
+:root[data-theme="light"] .training-menu-popover button:hover {
+  background: #f1f5f9;
+}
+
+:root[data-theme="light"] .training-menu-popover button.danger {
+  color: #b4232d;
+}
+
+:root[data-theme="light"] .training-menu-popover button.danger:hover {
+  background: #fff1f2;
+}
+
 :root[data-theme="light"] :is(.feed-card .exercise-preview-list, .comment-panel) {
   border-top-color: #e5e7eb;
 }
@@ -5034,6 +5182,12 @@ button.discover-module-card:hover,
   .previous-set-empty,
   .field.compact
 ) {
+  border-color: #d9e2ea;
+  background: #ffffff;
+  color: #111827;
+}
+
+:root[data-theme="light"] .exercise-note-readonly p {
   border-color: #d9e2ea;
   background: #ffffff;
   color: #111827;

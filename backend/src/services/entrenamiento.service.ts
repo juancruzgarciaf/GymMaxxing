@@ -1,5 +1,5 @@
 import { pool } from "../db";
-import { limitDescription } from "../utils/textLimits";
+import { limitDescription, limitTitle } from "../utils/textLimits";
 
 type SesionEntrenamientoRow = {
   id_sesion: number;
@@ -86,6 +86,10 @@ const ensureSerieTipoSerieColumn = async (queryable: Queryable) => {
   await queryable.query(
     `ALTER TABLE serie
      ADD COLUMN IF NOT EXISTS tiempo_segundos INT`
+  );
+  await queryable.query(
+    `ALTER TABLE serie
+     ADD COLUMN IF NOT EXISTS nota_ejercicio TEXT`
   );
   await queryable.query(
     `DO $$
@@ -469,7 +473,7 @@ export const updateSesionEntrenamiento = async (
     [
       id_sesion,
       limitDescription(data.descripcion),
-      data.nombre_rutina_snapshot ?? data.nombre ?? null,
+      limitTitle(data.nombre_rutina_snapshot ?? data.nombre ?? null),
     ]
   );
 
@@ -491,13 +495,14 @@ export const registrarSerie = async (data: any) => {
     tipo_serie,
     distancia_km,
     tiempo_segundos,
+    nota_ejercicio,
   } = data;
 
   await ensureSerieTipoSerieColumn(pool);
   const result = await pool.query(
     `INSERT INTO serie
-     (repeticiones, peso, descanso, orden, ejercicio_id, sesion_id, tipo_serie, distancia_km, tiempo_segundos)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     (repeticiones, peso, descanso, orden, ejercicio_id, sesion_id, tipo_serie, distancia_km, tiempo_segundos, nota_ejercicio)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
     [
       repeticiones ?? 0,
@@ -509,6 +514,7 @@ export const registrarSerie = async (data: any) => {
       tipo_serie ?? "serie",
       distancia_km ?? null,
       tiempo_segundos ?? null,
+      typeof nota_ejercicio === "string" ? nota_ejercicio.trim() || null : null,
     ]
   );
 
@@ -524,6 +530,7 @@ export const getSeriesDeSesion = async (sesion_id: string) => {
             e.descripcion,
             e.grupo_muscular,
             e.tipo_disciplina,
+            s.nota_ejercicio,
             COALESCE(
               ARRAY(
                 SELECT srt.tipo_record
@@ -699,6 +706,7 @@ export const replaceSeriesDeSesion = async (
     tipo_serie?: string | null;
     distancia_km?: number | null;
     tiempo_segundos?: number | null;
+    nota_ejercicio?: string | null;
   }>
 ) => {
   await ensureSerieTipoSerieColumn(pool);
@@ -714,8 +722,8 @@ export const replaceSeriesDeSesion = async (
     for (const serie of series) {
       await client.query(
         `INSERT INTO serie
-         (repeticiones, peso, descanso, orden, ejercicio_id, sesion_id, tipo_serie, distancia_km, tiempo_segundos)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+         (repeticiones, peso, descanso, orden, ejercicio_id, sesion_id, tipo_serie, distancia_km, tiempo_segundos, nota_ejercicio)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           serie.repeticiones ?? 0,
           serie.peso ?? null,
@@ -726,6 +734,7 @@ export const replaceSeriesDeSesion = async (
           serie.tipo_serie ?? "serie",
           serie.distancia_km ?? null,
           serie.tiempo_segundos ?? null,
+          typeof serie.nota_ejercicio === "string" ? serie.nota_ejercicio.trim() || null : null,
         ]
       );
     }
@@ -801,6 +810,8 @@ export const deleteSesionEntrenamiento = async (sesion_id: string) => {
 
     await client.query(`DELETE FROM serie_record_trofeo WHERE sesion_id = $1`, [sesion_id]);
     await client.query(`DELETE FROM sesion_record_evaluacion WHERE sesion_id = $1`, [sesion_id]);
+    await client.query(`DELETE FROM sesion_comentario WHERE sesion_id = $1`, [sesion_id]);
+    await client.query(`DELETE FROM sesion_like WHERE sesion_id = $1`, [sesion_id]);
     await client.query(`DELETE FROM serie WHERE sesion_id = $1`, [sesion_id]);
     const result = await client.query<SesionEntrenamientoRow>(
       `DELETE FROM sesionentrenamiento

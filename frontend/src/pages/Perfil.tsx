@@ -7,7 +7,7 @@ import TrainingCalendar from "../components/TrainingCalendar";
 import UserTrainingFeed from "../components/UserTrainingFeed";
 import { COUNTRY_OPTIONS } from "../lib/countries";
 import { isGymUser } from "../lib/roles";
-import { DESCRIPTION_MAX_LENGTH, limitDescription } from "../lib/textLimits";
+import { DESCRIPTION_MAX_LENGTH, USERNAME_MAX_LENGTH, limitDescription, limitUsername } from "../lib/textLimits";
 import type {
   EntrenamientoResumen,
   GimnasioPerfil,
@@ -388,7 +388,7 @@ function Perfil({
           Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
-          username: form.username.trim(),
+      username: limitUsername(form.username.trim()),
           email: form.email.trim(),
           edad: editingGym ? null : form.edad.trim() ? Number(form.edad) : null,
           peso: editingGym ? null : form.peso.trim() ? Number(form.peso) : null,
@@ -634,6 +634,35 @@ function Perfil({
     }));
   };
 
+  const handleTrainingUpdated = (training: EntrenamientoResumen) => {
+    setPerfil((prev) =>
+      prev
+        ? {
+            ...prev,
+            entrenamientos: prev.entrenamientos.map((item) =>
+              item.id_sesion === training.id_sesion ? { ...item, ...training } : item,
+            ),
+          }
+        : prev,
+    );
+    setTrainingResults((prev) =>
+      prev.map((item) => (item.id_sesion === training.id_sesion ? { ...item, ...training } : item)),
+    );
+  };
+
+  const handleTrainingDeleted = (trainingId: number) => {
+    setPerfil((prev) =>
+      prev
+        ? {
+            ...prev,
+            trainings_count: Math.max(0, prev.trainings_count - 1),
+            entrenamientos: prev.entrenamientos.filter((item) => item.id_sesion !== trainingId),
+          }
+        : prev,
+    );
+    setTrainingResults((prev) => prev.filter((item) => item.id_sesion !== trainingId));
+  };
+
   const trainingsToShow =
     perfil && isGymUser(perfil.usuario)
       ? []
@@ -674,8 +703,9 @@ function Perfil({
                 <input
                   className="field"
                   placeholder="Username"
+                  maxLength={USERNAME_MAX_LENGTH}
                   value={form.username}
-                  onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
+                  onChange={(event) => setForm((prev) => ({ ...prev, username: limitUsername(event.target.value) }))}
                 />
                 <input
                   className="field"
@@ -775,8 +805,9 @@ function Perfil({
                   <input
                     className="field"
                     placeholder="Username"
+                    maxLength={USERNAME_MAX_LENGTH}
                     value={form.username}
-                    onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
+                    onChange={(event) => setForm((prev) => ({ ...prev, username: limitUsername(event.target.value) }))}
                   />
                   <input
                     className="field"
@@ -1091,6 +1122,8 @@ function Perfil({
                   onOpenProfile={onOpenProfile}
                   onOpenTraining={onOpenTraining}
                   onSaveAsRoutine={onSaveAsRoutine}
+                  onTrainingUpdated={handleTrainingUpdated}
+                  onTrainingDeleted={handleTrainingDeleted}
                 />
               </section>
 

@@ -6,7 +6,7 @@ import type {
   TrainingSeed,
   TrainingSetType,
 } from "../types";
-import { limitDescription } from "./textLimits";
+import { limitDescription, limitTitle } from "./textLimits";
 
 const API = "http://localhost:3000";
 const RUTINA_PREFS_KEY = "gymmaxxing_rutina_series_v1";
@@ -196,6 +196,7 @@ export const fetchSessionSeed = async (training: EntrenamientoResumen): Promise<
       nombre: string;
       grupo_muscular: string;
       tipo_disciplina: string;
+      nota: string | null;
       orden_ejercicio: number;
       descansoSegundos: number;
       series: SerieSesionDetalle[];
@@ -206,6 +207,9 @@ export const fetchSessionSeed = async (training: EntrenamientoResumen): Promise<
     const existing = grouped.get(serie.ejercicio_id);
     if (existing) {
       existing.series.push(serie);
+      if (!existing.nota && serie.nota_ejercicio) {
+        existing.nota = serie.nota_ejercicio;
+      }
       return;
     }
 
@@ -214,6 +218,7 @@ export const fetchSessionSeed = async (training: EntrenamientoResumen): Promise<
       nombre: serie.nombre,
       grupo_muscular: serie.grupo_muscular || "Sin grupo",
       tipo_disciplina: serie.tipo_disciplina || "Sin disciplina",
+      nota: serie.nota_ejercicio ?? null,
       orden_ejercicio: serie.orden_ejercicio ?? 9999,
       descansoSegundos: Math.max(0, serie.descanso ?? 0),
       series: [serie],
@@ -244,6 +249,7 @@ export const fetchSessionSeed = async (training: EntrenamientoResumen): Promise<
         nombre: exercise.nombre,
         grupo_muscular: exercise.grupo_muscular,
         tipo_disciplina: exercise.tipo_disciplina,
+        nota: exercise.nota ?? undefined,
         descansoSegundos: exercise.descansoSegundos,
         series: exercise.series
           .slice()
@@ -268,7 +274,7 @@ export const saveTrainingSeedAsRoutine = async (
     folderId?: number | null;
   },
 ) => {
-  const name = options?.name?.trim() || seed.title || `Rutina ${seed.sourceId}`;
+  const name = limitTitle(options?.name?.trim() || seed.title || `Rutina ${seed.sourceId}`);
   const descripcion =
     options?.description !== undefined
       ? options.description == null

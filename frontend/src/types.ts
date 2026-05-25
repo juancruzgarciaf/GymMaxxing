@@ -119,6 +119,7 @@ export type SerieSesionDetalle = {
   tiempo_segundos?: number | null;
   descanso: number | null;
   tipo_serie?: TrainingSetType | null;
+  nota_ejercicio?: string | null;
   trofeos?: Array<"peso" | "volumen" | "1rm">;
   nombre: string;
   descripcion: string | null;

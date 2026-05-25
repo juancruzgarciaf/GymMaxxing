@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import bodybuilderFlexSample from "../assets/bodybuilder-flex-sample.webp";
 import siluetaStrongman from "../assets/siluetastrongman.png";
 import { canUseTrainingFeatures } from "../lib/roles";
-import { DESCRIPTION_MAX_LENGTH, limitDescription } from "../lib/textLimits";
+import { DESCRIPTION_MAX_LENGTH, TITLE_MAX_LENGTH, limitDescription, limitTitle } from "../lib/textLimits";
 import { saveTrainingSeedAsRoutine } from "../lib/trainingTransfer";
 import type { TrainingSeed, TrainingSetType, Usuario } from "../types";
 import TrashIcon from "../components/TrashIcon";
@@ -93,7 +93,8 @@ type VistaEntrenamiento = "inicio" | "ejecucion" | "guardar";
 
 const API = "http://localhost:3000";
 const ACTIVE_TRAINING_STORAGE_PREFIX = "gymmaxxing_active_training_v1";
-const EXERCISE_NOTE_MAX_LENGTH = 60;
+const TRAINING_DELETED_EVENT = "gymmaxxing:training-deleted";
+const EXERCISE_NOTE_MAX_LENGTH = 120;
 
 const SET_TIPO_OPTIONS: Array<{ value: TrainingSetType; label: string }> = [
   { value: "warmup", label: "WarmUp" },
@@ -268,8 +269,8 @@ function Entrenamiento({
   const [sesionActiva, setSesionActiva] = useState<SesionEntrenamiento | null>(null);
   const [sourceRoutineIdContext, setSourceRoutineIdContext] = useState<number | null>(null);
   const [ejecucionEjercicios, setEjecucionEjercicios] = useState<EjecucionEjercicio[]>([]);
+  const [draggedExerciseInstanceId, setDraggedExerciseInstanceId] = useState<string | null>(null);
   const [pendingExerciseScrollId, setPendingExerciseScrollId] = useState<string | null>(null);
-  const [exerciseNoteOpenIds, setExerciseNoteOpenIds] = useState<Record<string, boolean>>({});
   const [seriesAnterioresPorEjercicio, setSeriesAnterioresPorEjercicio] = useState<
     Record<number, SerieAnterior[]>
   >({});
@@ -465,7 +466,7 @@ function Entrenamiento({
         Math.max(0, (parsed.elapsedSesionSegundos ?? 0) + (restoredVista === "ejecucion" ? elapsedAway : 0)),
       );
       setTotalTrofeosEntrenamiento(parsed.totalTrofeosEntrenamiento ?? 0);
-      setGuardarNombre(parsed.guardarNombre ?? "");
+      setGuardarNombre(limitTitle(parsed.guardarNombre ?? ""));
       setGuardarDescripcion(limitDescription(parsed.guardarDescripcion ?? ""));
       setGuardarCarpetaId(parsed.guardarCarpetaId ?? "");
       setGuardarComoRutina(Boolean(parsed.guardarComoRutina));
@@ -638,6 +639,7 @@ function Entrenamiento({
     setSesionActiva(null);
     setSourceRoutineIdContext(null);
     setEjecucionEjercicios([]);
+    setDraggedExerciseInstanceId(null);
     setSeriesAnterioresPorEjercicio({});
     setDescansoActivo(null);
     setElapsedSesionSegundos(0);
@@ -651,6 +653,21 @@ function Entrenamiento({
     setBusquedaEjercicio("");
     setConfirmDiscardOpen(false);
   };
+
+  useEffect(() => {
+    const handleTrainingDeleted = (event: Event) => {
+      const sessionId = (event as CustomEvent<{ sessionId?: number }>).detail?.sessionId;
+      if (!sessionId || sesionActiva?.id_sesion !== sessionId) {
+        return;
+      }
+
+      resetEntrenamiento();
+      setMensaje("El entrenamiento fue eliminado");
+    };
+
+    window.addEventListener(TRAINING_DELETED_EVENT, handleTrainingDeleted);
+    return () => window.removeEventListener(TRAINING_DELETED_EVENT, handleTrainingDeleted);
+  }, [sesionActiva?.id_sesion, usuario.id]);
 
   const renderToast = () => {
     if (!error && !mensaje) {
@@ -722,6 +739,7 @@ function Entrenamiento({
       ejercicio_id: ejercicio.id_ejercicio,
       sesion_id: sesionId,
       tipo_serie: serie.tipo,
+      nota_ejercicio: limitExerciseNote(ejercicio.nota.trim()) || null,
     };
 
     const res = await fetch(`${API}/entrenamientos/serie`, {
@@ -765,6 +783,7 @@ function Entrenamiento({
             orden: serie.numero,
             ejercicio_id: ejercicio.id_ejercicio,
             tipo_serie: serie.tipo,
+            nota_ejercicio: limitExerciseNote(ejercicio.nota.trim()) || null,
           };
         }),
     );
@@ -784,7 +803,7 @@ function Entrenamiento({
     origin: "sesion",
     sourceId: sesionActiva?.id_sesion ?? 0,
     sourceRoutineId: sourceRoutineIdContext,
-    title: guardarNombre.trim() || "Entrenamiento",
+    title: limitTitle(guardarNombre.trim()) || "Entrenamiento",
     description: guardarDescripcion.trim() || null,
     durationMinutes: Math.max(1, Math.round(elapsedSesionSegundos / 60) || 1),
     exercises: ejecucionEjercicios.map((ejercicio) => ({
@@ -868,7 +887,7 @@ function Entrenamiento({
       const nextEjecucion = nextSeed ? seedToExecution(nextSeed) : [];
       setEjecucionEjercicios(nextEjecucion);
       setSeriesAnterioresPorEjercicio({});
-      setGuardarNombre(nextSeed?.title ?? "");
+      setGuardarNombre(limitTitle(nextSeed?.title ?? ""));
       setGuardarDescripcion(limitDescription(nextSeed?.description ?? ""));
       setVista("ejecucion");
       setMensaje(
@@ -900,6 +919,25 @@ function Entrenamiento({
       },
     ]);
     void cargarSeriesAnterioresEjercicio(ejercicio.id_ejercicio);
+  };
+
+  const moveEjecucionExercise = (targetInstanceId: string) => {
+    if (draggedExerciseInstanceId == null || draggedExerciseInstanceId === targetInstanceId) {
+      return;
+    }
+
+    setEjecucionEjercicios((prev) => {
+      const fromIndex = prev.findIndex((item) => item.instanceId === draggedExerciseInstanceId);
+      const toIndex = prev.findIndex((item) => item.instanceId === targetInstanceId);
+      if (fromIndex < 0 || toIndex < 0) {
+        return prev;
+      }
+
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
   };
 
   const cargarSeriesAnterioresEjercicio = async (idEjercicio: number) => {
@@ -975,11 +1013,6 @@ function Entrenamiento({
 
   const quitarEjercicio = (instanceId: string) => {
     setEjecucionEjercicios((prev) => prev.filter((item) => item.instanceId !== instanceId));
-    setExerciseNoteOpenIds((prev) => {
-      const next = { ...prev };
-      delete next[instanceId];
-      return next;
-    });
   };
 
   const updateSerieEjecucion = (
@@ -1066,10 +1099,6 @@ function Entrenamiento({
         };
       }),
     );
-  };
-
-  const toggleNotaEjercicio = (instanceId: string) => {
-    setExerciseNoteOpenIds((prev) => ({ ...prev, [instanceId]: !prev[instanceId] }));
   };
 
   const updateNotaEjercicio = (instanceId: string, nota: string) => {
@@ -1233,6 +1262,12 @@ function Entrenamiento({
         headers: { "Content-Type": "application/json" },
       });
 
+      if (res.status === 404) {
+        resetEntrenamiento();
+        setMensaje("El entrenamiento ya no existe");
+        return;
+      }
+
       if (!res.ok) {
         throw new Error(await parseError(res, "No se pudo completar el entrenamiento"));
       }
@@ -1243,7 +1278,13 @@ function Entrenamiento({
       setVista("guardar");
       setMensaje("Entrenamiento completado");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error completando entrenamiento");
+      const message = err instanceof Error ? err.message : "Error completando entrenamiento";
+      if (message.toLowerCase().includes("sesión no encontrada") || message.toLowerCase().includes("sesion no encontrada")) {
+        resetEntrenamiento();
+        setMensaje("El entrenamiento ya no existe");
+        return;
+      }
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -1262,6 +1303,12 @@ function Entrenamiento({
       const res = await fetch(`${API}/entrenamientos/${sesionActiva.id_sesion}`, {
         method: "DELETE",
       });
+
+      if (res.status === 404) {
+        resetEntrenamiento();
+        setMensaje("El entrenamiento ya no existe");
+        return;
+      }
 
       if (!res.ok) {
         throw new Error(await parseError(res, "No se pudo descartar el entrenamiento"));
@@ -1300,7 +1347,7 @@ function Entrenamiento({
       setLoading(true);
       setError("");
 
-      const nombre = guardarNombre.trim();
+      const nombre = limitTitle(guardarNombre.trim());
       const descripcion = limitDescription(guardarDescripcion.trim()) || null;
 
       const updateRes = await fetch(`${API}/entrenamientos/${sesionActiva.id_sesion}`, {
@@ -1311,6 +1358,12 @@ function Entrenamiento({
           descripcion,
         }),
       });
+
+      if (updateRes.status === 404) {
+        resetEntrenamiento();
+        setMensaje("El entrenamiento ya no existe");
+        return;
+      }
 
       if (!updateRes.ok) {
         throw new Error(await parseError(updateRes, "No se pudo guardar el entrenamiento"));
@@ -1362,7 +1415,7 @@ function Entrenamiento({
 
     onActiveTrainingChange?.({
       sessionId: sesionActiva.id_sesion,
-      title: guardarNombre.trim() || "Entrenamiento libre",
+      title: limitTitle(guardarNombre.trim()) || "Entrenamiento libre",
       elapsedSeconds: elapsedSesionSegundos,
       completedSeries: seriesCompletadasEjecucion,
       totalSeries: totalSeriesEjecucion,
@@ -1501,8 +1554,9 @@ function Entrenamiento({
               <input
                 className="field"
                 placeholder="Nombre del entrenamiento"
+                maxLength={TITLE_MAX_LENGTH}
                 value={guardarNombre}
-                onChange={(event) => setGuardarNombre(event.target.value)}
+                onChange={(event) => setGuardarNombre(limitTitle(event.target.value))}
               />
               <input
                 className="field"
@@ -1667,7 +1721,13 @@ function Entrenamiento({
                   return (
                   <article
                     key={ejercicio.instanceId}
-                    className="exercise-card"
+                    className={`exercise-card ${draggedExerciseInstanceId === ejercicio.instanceId ? "dragging" : ""}`}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      moveEjecucionExercise(ejercicio.instanceId);
+                      setDraggedExerciseInstanceId(null);
+                    }}
                     ref={(node) => {
                       if (node) {
                         exerciseRefs.current.set(ejercicio.instanceId, node);
@@ -1677,6 +1737,26 @@ function Entrenamiento({
                     }}
                   >
                     <div className="exercise-card-head exercise-card-head-with-tools">
+                      <button
+                        type="button"
+                        className="drag-handle"
+                        draggable
+                        onDragStart={(event) => {
+                          setDraggedExerciseInstanceId(ejercicio.instanceId);
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData("text/plain", ejercicio.instanceId);
+                        }}
+                        onDragEnd={() => setDraggedExerciseInstanceId(null)}
+                        aria-label={`Reordenar ${ejercicio.nombre}`}
+                        title="Arrastrar para reordenar"
+                      >
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                      </button>
                       <div className="exercise-title-block">
                         <h3>{ejercicio.nombre}</h3>
                         <small>
@@ -1684,26 +1764,6 @@ function Entrenamiento({
                         </small>
                       </div>
                       <div className="exercise-card-tools">
-                        <div className="exercise-note-control">
-                          <button
-                            type="button"
-                            className="btn tiny secondary"
-                            onClick={() => toggleNotaEjercicio(ejercicio.instanceId)}
-                          >
-                            Nota
-                          </button>
-                          {(exerciseNoteOpenIds[ejercicio.instanceId] || ejercicio.nota) && (
-                            <input
-                              className="field exercise-note-input"
-                              placeholder="Descripcion del ejercicio"
-                              maxLength={EXERCISE_NOTE_MAX_LENGTH}
-                              value={ejercicio.nota}
-                              onChange={(event) =>
-                                updateNotaEjercicio(ejercicio.instanceId, event.target.value)
-                              }
-                            />
-                          )}
-                        </div>
                         <div className="exercise-rest-control">
                           <span>Descanso</span>
                           <DurationInput
@@ -1723,6 +1783,20 @@ function Entrenamiento({
                           <TrashIcon />
                         </button>
                       </div>
+                    </div>
+
+                    <div className="exercise-note-panel">
+                      <label htmlFor={`exercise-note-${ejercicio.instanceId}`}>Nota</label>
+                      <textarea
+                        id={`exercise-note-${ejercicio.instanceId}`}
+                        className="field exercise-note-textarea"
+                        placeholder="Escribir nota"
+                        maxLength={EXERCISE_NOTE_MAX_LENGTH}
+                        value={ejercicio.nota}
+                        onChange={(event) =>
+                          updateNotaEjercicio(ejercicio.instanceId, event.target.value)
+                        }
+                      />
                     </div>
 
                     <div className={`set-table execution-mode ${inputMode}`}>

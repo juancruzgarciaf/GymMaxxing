@@ -226,6 +226,7 @@ function EntrenamientoDetalle({
         descripcion: string | null;
         grupo_muscular: string | null;
         tipo_disciplina: string | null;
+        nota: string | null;
         orden_ejercicio: number;
         series: SerieSesionDetalle[];
       }
@@ -235,6 +236,9 @@ function EntrenamientoDetalle({
       const existing = groups.get(serie.ejercicio_id);
       if (existing) {
         existing.series.push(serie);
+        if (!existing.nota && serie.nota_ejercicio) {
+          existing.nota = serie.nota_ejercicio;
+        }
         return;
       }
 
@@ -244,6 +248,7 @@ function EntrenamientoDetalle({
         descripcion: serie.descripcion,
         grupo_muscular: serie.grupo_muscular,
         tipo_disciplina: serie.tipo_disciplina,
+        nota: serie.nota_ejercicio ?? null,
         orden_ejercicio: serie.orden_ejercicio ?? 9999,
         series: [serie],
       });
@@ -355,7 +360,10 @@ function EntrenamientoDetalle({
                   <span className="detail-series-count">{ejercicio.series.length} series</span>
                 </div>
 
-                {ejercicio.descripcion ? <p className="feed-description">{ejercicio.descripcion}</p> : null}
+                <div className="exercise-note-readonly">
+                  <span>Nota</span>
+                  <p>{ejercicio.nota || "Sin nota"}</p>
+                </div>
 
                 <div className="set-table readonly-table detail-readonly-table">
                   <div className={`set-table-head readonly-grid detail-series-grid ${inputMode}`}>

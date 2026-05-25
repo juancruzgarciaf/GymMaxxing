@@ -7,6 +7,8 @@ type UserTrainingFeedProps = {
   onOpenProfile: (username: string) => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
   onSaveAsRoutine: (training: EntrenamientoResumen, customName?: string) => void | Promise<void>;
+  onTrainingUpdated?: (training: EntrenamientoResumen) => void;
+  onTrainingDeleted?: (trainingId: number) => void;
 };
 
 function UserTrainingFeed({
@@ -15,6 +17,8 @@ function UserTrainingFeed({
   onOpenProfile,
   onOpenTraining,
   onSaveAsRoutine,
+  onTrainingUpdated,
+  onTrainingDeleted,
 }: UserTrainingFeedProps) {
   if (trainings.length === 0) {
     return (
@@ -35,6 +39,8 @@ function UserTrainingFeed({
           onOpenProfile={onOpenProfile}
           onOpenTraining={onOpenTraining}
           onSaveAsRoutine={onSaveAsRoutine}
+          onTrainingUpdated={onTrainingUpdated}
+          onTrainingDeleted={onTrainingDeleted}
         />
       ))}
     </section>

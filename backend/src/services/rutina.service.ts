@@ -1,5 +1,5 @@
 import { pool } from "../db";
-import { limitDescription } from "../utils/textLimits";
+import { limitDescription, limitTitle } from "../utils/textLimits";
 
 const CANDIDATE_CARPETA_TABLES = [
   "carpeta_rutina",
@@ -382,7 +382,7 @@ export const crearRutina = async (data: any) => {
      VALUES ($1, $2, $3, NOW(), $4, $5, $6)
      RETURNING *`,
     [
-      nombre,
+      limitTitle(nombre),
       limitDescription(descripcion),
       duracion_estimada ?? null,
       creador_id,
@@ -611,7 +611,7 @@ export const updateRutina = async (id: string, data: any) => {
        AND ($4::int IS NULL OR creador_id = $4)
      RETURNING *`,
     [
-      nombre,
+      limitTitle(nombre),
       limitDescription(descripcion),
       duracion_estimada ?? null,
       creador_id ?? null,

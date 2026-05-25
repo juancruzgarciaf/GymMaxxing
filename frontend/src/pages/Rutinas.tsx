@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import routineDetailEmptyBodybuilder from "../assets/routine-detail-empty-bodybuilder.png";
 import { createRoutineShareUrl } from "../lib/trainingTransfer";
 import { canUseTrainingFeatures } from "../lib/roles";
-import { DESCRIPTION_MAX_LENGTH, limitDescription } from "../lib/textLimits";
+import { DESCRIPTION_MAX_LENGTH, TITLE_MAX_LENGTH, limitDescription, limitTitle } from "../lib/textLimits";
 import type { TrainingSeed, Usuario } from "../types";
 import TrashIcon from "../components/TrashIcon";
 import DurationInput from "../components/DurationInput";
@@ -125,7 +125,7 @@ type PersistedRutinaEjercicio = {
 
 const API = "http://localhost:3000";
 const RUTINA_PREFS_KEY = "gymmaxxing_rutina_series_v1";
-const EXERCISE_NOTE_MAX_LENGTH = 60;
+const EXERCISE_NOTE_MAX_LENGTH = 120;
 
 const nuevaSerie = (reps = ""): SerieDraft => ({
   id: crypto.randomUUID(),
@@ -239,7 +239,6 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
   const [editorVisibleEnDescubrir, setEditorVisibleEnDescubrir] = useState(false);
   const [editorEjercicios, setEditorEjercicios] = useState<EjercicioDraft[]>([]);
   const [pendingEditorScrollId, setPendingEditorScrollId] = useState<number | null>(null);
-  const [editorNoteOpenIds, setEditorNoteOpenIds] = useState<Record<number, boolean>>({});
   const [draggedEditorExerciseId, setDraggedEditorExerciseId] = useState<number | null>(null);
 
   const [filtroEquipo, setFiltroEquipo] = useState("");
@@ -250,7 +249,6 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
   const [sesionActiva, setSesionActiva] = useState<SesionEntrenamiento | null>(null);
   const [ejecucionEjercicios, setEjecucionEjercicios] = useState<EjecucionEjercicio[]>([]);
   const [pendingExecutionScrollId, setPendingExecutionScrollId] = useState<number | null>(null);
-  const [executionNoteOpenIds, setExecutionNoteOpenIds] = useState<Record<number, boolean>>({});
   const [descansoActivo, setDescansoActivo] = useState<DescansoActivo | null>(null);
   const [elapsedSesionSegundos, setElapsedSesionSegundos] = useState(0);
   const editorExerciseRefs = useRef(new Map<number, HTMLElement>());
@@ -553,7 +551,6 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
     setEditorCarpetaId("");
     setEditorVisibleEnDescubrir(true);
     setEditorEjercicios([]);
-    setEditorNoteOpenIds({});
     setDraggedEditorExerciseId(null);
     setFiltroEquipo("");
     setFiltroMusculo("");
@@ -599,13 +596,12 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
       });
 
       setEditorRutinaId(rutina.id_rutina);
-      setEditorNombre(rutina.nombre);
+      setEditorNombre(limitTitle(rutina.nombre));
       setEditorDescripcion(limitDescription(rutina.descripcion ?? ""));
       setEditorDuracion(rutina.duracion_estimada ? String(rutina.duracion_estimada) : "");
       setEditorCarpetaId(rutina.id_carpeta ? String(rutina.id_carpeta) : "");
       setEditorVisibleEnDescubrir(Boolean(rutina.visible_en_descubrir));
       setEditorEjercicios(draft);
-      setEditorNoteOpenIds({});
       setDraggedEditorExerciseId(null);
       setVista("editor");
     } catch (err) {
@@ -901,15 +897,6 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
 
   const removerEjercicioDelEditor = (idEjercicio: number) => {
     setEditorEjercicios((prev) => prev.filter((item) => item.id_ejercicio !== idEjercicio));
-    setEditorNoteOpenIds((prev) => {
-      const next = { ...prev };
-      delete next[idEjercicio];
-      return next;
-    });
-  };
-
-  const toggleNotaEditor = (idEjercicio: number) => {
-    setEditorNoteOpenIds((prev) => ({ ...prev, [idEjercicio]: !prev[idEjercicio] }));
   };
 
   const updateNotaEditor = (idEjercicio: number, nota: string) => {
@@ -1039,7 +1026,7 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
       setMensaje("");
 
       const body = {
-        nombre: editorNombre.trim(),
+        nombre: limitTitle(editorNombre.trim()),
         descripcion: limitDescription(editorDescripcion.trim()) || null,
         duracion_estimada: editorDuracion ? Number(editorDuracion) : null,
         creador_id: usuario.id,
@@ -1124,6 +1111,7 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
       orden: serie.numero,
       ejercicio_id: ejercicio.id_ejercicio,
       sesion_id: sesionId,
+      nota_ejercicio: limitExerciseNote(ejercicio.nota.trim()) || null,
     };
 
     const res = await fetch(`${API}/entrenamientos/serie`, {
@@ -1134,6 +1122,36 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
 
     if (!res.ok) {
       throw new Error(await parseError(res, "No se pudo registrar la serie"));
+    }
+  };
+
+  const syncSeriesDeSesion = async (sesionId: number) => {
+    const series = ejecucionEjercicios.flatMap((ejercicio) =>
+      ejercicio.series
+        .filter((serie) => serie.completada)
+        .map((serie) => {
+          const reps = Number(serie.reps || "0");
+          const kg = Number(serie.kg || "0");
+          return {
+            repeticiones: Number.isNaN(reps) ? 1 : Math.max(1, reps),
+            peso: Number.isNaN(kg) || !serie.kg.trim() ? null : Math.max(0, kg),
+            descanso: ejercicio.descansoSegundos,
+            orden: serie.numero,
+            ejercicio_id: ejercicio.id_ejercicio,
+            tipo_serie: serie.tipo,
+            nota_ejercicio: limitExerciseNote(ejercicio.nota.trim()) || null,
+          };
+        }),
+    );
+
+    const res = await fetch(`${API}/entrenamientos/${sesionId}/series`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ series }),
+    });
+
+    if (!res.ok) {
+      throw new Error(await parseError(res, "No se pudieron sincronizar las series"));
     }
   };
 
@@ -1228,10 +1246,6 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
         };
       }),
     );
-  };
-
-  const toggleNotaEjecucion = (idEjercicio: number) => {
-    setExecutionNoteOpenIds((prev) => ({ ...prev, [idEjercicio]: !prev[idEjercicio] }));
   };
 
   const updateNotaEjecucion = (idEjercicio: number, nota: string) => {
@@ -1349,6 +1363,7 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
       setError("");
       setFinalizeModalOpen(false);
       if (sesionActiva) {
+        await syncSeriesDeSesion(sesionActiva.id_sesion);
         const res = await fetch(`${API}/entrenamientos/${sesionActiva.id_sesion}/finalizar`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1603,8 +1618,9 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
               <input
                 className="field"
                 placeholder="Nombre de rutina"
+                maxLength={TITLE_MAX_LENGTH}
                 value={editorNombre}
-                onChange={(event) => setEditorNombre(event.target.value)}
+                onChange={(event) => setEditorNombre(limitTitle(event.target.value))}
               />
               <input
                 className="field"
@@ -1701,26 +1717,6 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
                         </small>
                       </div>
                       <div className="exercise-card-tools">
-                        <div className="exercise-note-control">
-                          <button
-                            type="button"
-                            className="btn tiny secondary"
-                            onClick={() => toggleNotaEditor(ejercicio.id_ejercicio)}
-                          >
-                            Nota
-                          </button>
-                          {(editorNoteOpenIds[ejercicio.id_ejercicio] || ejercicio.nota) && (
-                            <input
-                              className="field exercise-note-input"
-                              placeholder="Descripcion del ejercicio"
-                              maxLength={EXERCISE_NOTE_MAX_LENGTH}
-                              value={ejercicio.nota}
-                              onChange={(event) =>
-                                updateNotaEditor(ejercicio.id_ejercicio, event.target.value)
-                              }
-                            />
-                          )}
-                        </div>
                         <div className="exercise-rest-control">
                           <span>Descanso</span>
                           <DurationInput
@@ -1740,6 +1736,20 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
                           <TrashIcon />
                         </button>
                       </div>
+                    </div>
+
+                    <div className="exercise-note-panel">
+                      <label htmlFor={`routine-note-${ejercicio.id_ejercicio}`}>Nota</label>
+                      <textarea
+                        id={`routine-note-${ejercicio.id_ejercicio}`}
+                        className="field exercise-note-textarea"
+                        placeholder="Escribir nota"
+                        maxLength={EXERCISE_NOTE_MAX_LENGTH}
+                        value={ejercicio.nota}
+                        onChange={(event) =>
+                          updateNotaEditor(ejercicio.id_ejercicio, event.target.value)
+                        }
+                      />
                     </div>
 
                     <div className="set-table">
@@ -2002,26 +2012,6 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
                         </small>
                       </div>
                       <div className="exercise-card-tools">
-                        <div className="exercise-note-control">
-                          <button
-                            type="button"
-                            className="btn tiny secondary"
-                            onClick={() => toggleNotaEjecucion(ejercicio.id_ejercicio)}
-                          >
-                            Nota
-                          </button>
-                          {(executionNoteOpenIds[ejercicio.id_ejercicio] || ejercicio.nota) && (
-                            <input
-                              className="field exercise-note-input"
-                              placeholder="Descripcion del ejercicio"
-                              maxLength={EXERCISE_NOTE_MAX_LENGTH}
-                              value={ejercicio.nota}
-                              onChange={(event) =>
-                                updateNotaEjecucion(ejercicio.id_ejercicio, event.target.value)
-                              }
-                            />
-                          )}
-                        </div>
                         <div className="exercise-rest-control">
                           <span>Descanso</span>
                           <DurationInput
@@ -2032,6 +2022,20 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
                           />
                         </div>
                       </div>
+                    </div>
+
+                    <div className="exercise-note-panel">
+                      <label htmlFor={`routine-execution-note-${ejercicio.id_ejercicio}`}>Nota</label>
+                      <textarea
+                        id={`routine-execution-note-${ejercicio.id_ejercicio}`}
+                        className="field exercise-note-textarea"
+                        placeholder="Escribir nota"
+                        maxLength={EXERCISE_NOTE_MAX_LENGTH}
+                        value={ejercicio.nota}
+                        onChange={(event) =>
+                          updateNotaEjecucion(ejercicio.id_ejercicio, event.target.value)
+                        }
+                      />
                     </div>
 
                     <div className="set-table execution-mode">

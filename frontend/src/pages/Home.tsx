@@ -187,6 +187,42 @@ function Home({
     }
   };
 
+  const handleTrainingUpdated = (training: EntrenamientoResumen) => {
+    setFeed((prev) =>
+      prev.map((item) =>
+        item.content_type !== "routine" && item.id_sesion === training.id_sesion
+          ? { ...item, ...training }
+          : item,
+      ),
+    );
+    setProfileSummary((prev) =>
+      prev
+        ? {
+            ...prev,
+            entrenamientos: prev.entrenamientos.map((item) =>
+              item.id_sesion === training.id_sesion ? { ...item, ...training } : item,
+            ),
+          }
+        : prev,
+    );
+  };
+
+  const handleTrainingDeleted = (trainingId: number) => {
+    setFeed((prev) =>
+      prev.filter((item) => item.content_type === "routine" || item.id_sesion !== trainingId),
+    );
+    setTotalItems((prev) => Math.max(0, prev - 1));
+    setProfileSummary((prev) =>
+      prev
+        ? {
+            ...prev,
+            trainings_count: Math.max(0, prev.trainings_count - 1),
+            entrenamientos: prev.entrenamientos.filter((item) => item.id_sesion !== trainingId),
+          }
+        : prev,
+    );
+  };
+
   return (
     <main className="page-shell feed-page-shell">
       <section className="page-hero">
@@ -225,6 +261,8 @@ function Home({
                   onOpenProfile={onOpenProfile}
                   onOpenTraining={onOpenTraining}
                   onSaveAsRoutine={onSaveAsRoutine}
+                  onTrainingUpdated={handleTrainingUpdated}
+                  onTrainingDeleted={handleTrainingDeleted}
                 />
               )
             ))}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DESCRIPTION_MAX_LENGTH, TITLE_MAX_LENGTH, limitDescription, limitTitle } from "../lib/textLimits";
 import type { EntrenamientoResumen, SessionComment } from "../types";
 import VerifiedBadge from "./VerifiedBadge";
 
@@ -8,9 +9,12 @@ type TrainingPostCardProps = {
   onOpenProfile?: (username: string) => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
   onSaveAsRoutine?: (training: EntrenamientoResumen, customName?: string) => void | Promise<void>;
+  onTrainingUpdated?: (training: EntrenamientoResumen) => void;
+  onTrainingDeleted?: (trainingId: number) => void;
 };
 
 const API = "http://localhost:3000";
+const TRAINING_DELETED_EVENT = "gymmaxxing:training-deleted";
 
 const formatDate = (value: string | null) => {
   if (!value) {
@@ -90,6 +94,21 @@ function SaveIcon() {
   );
 }
 
+function DotsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M5 12H5.01M12 12H12.01M19 12H19.01"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function TrashIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -128,8 +147,12 @@ function TrainingPostCard({
   onOpenProfile,
   onOpenTraining,
   onSaveAsRoutine,
+  onTrainingUpdated,
+  onTrainingDeleted,
 }: TrainingPostCardProps) {
-  const remainingExercises = Math.max(0, item.total_ejercicios - item.ejercicios_preview.length);
+  const canManageTraining = item.usuario_id === viewerId;
+  const [displayItem, setDisplayItem] = useState(item);
+  const remainingExercises = Math.max(0, displayItem.total_ejercicios - displayItem.ejercicios_preview.length);
   const [liked, setLiked] = useState(item.viewer_liked);
   const [likesCount, setLikesCount] = useState(item.likes_count);
   const [commentsCount, setCommentsCount] = useState(item.comments_count);
@@ -143,11 +166,20 @@ function TrainingPostCard({
   const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
   const [pendingDeleteCommentId, setPendingDeleteCommentId] = useState<number | null>(null);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
-  const [saveRoutineName, setSaveRoutineName] = useState(item.titulo);
+  const [saveRoutineName, setSaveRoutineName] = useState(limitTitle(item.titulo));
   const [savingRoutine, setSavingRoutine] = useState(false);
   const [likePulse, setLikePulse] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState(limitTitle(item.titulo));
+  const [editDescription, setEditDescription] = useState(item.descripcion ?? "");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletingTraining, setDeletingTraining] = useState(false);
+  const [hiddenAfterDelete, setHiddenAfterDelete] = useState(false);
 
   useEffect(() => {
+    setDisplayItem(item);
     setLiked(item.viewer_liked);
     setLikesCount(item.likes_count);
     setCommentsCount(item.comments_count);
@@ -161,13 +193,21 @@ function TrainingPostCard({
     setDeletingCommentId(null);
     setPendingDeleteCommentId(null);
     setSaveModalOpen(false);
-    setSaveRoutineName(item.titulo);
+    setSaveRoutineName(limitTitle(item.titulo));
     setSavingRoutine(false);
     setLikePulse(false);
+    setActionsOpen(false);
+    setEditModalOpen(false);
+    setEditTitle(limitTitle(item.titulo));
+    setEditDescription(item.descripcion ?? "");
+    setSavingEdit(false);
+    setDeleteModalOpen(false);
+    setDeletingTraining(false);
+    setHiddenAfterDelete(false);
   }, [item]);
 
   const handleOpenSaveRoutineModal = () => {
-    setSaveRoutineName(item.titulo);
+    setSaveRoutineName(limitTitle(displayItem.titulo));
     setSaveModalOpen(true);
   };
 
@@ -176,7 +216,7 @@ function TrainingPostCard({
       return;
     }
 
-    const nextName = saveRoutineName.trim();
+    const nextName = limitTitle(saveRoutineName.trim());
     if (!nextName) {
       setInteractionError("El nombre de la rutina no puede estar vacio");
       return;
@@ -185,12 +225,90 @@ function TrainingPostCard({
     try {
       setSavingRoutine(true);
       setInteractionError("");
-      await onSaveAsRoutine(item, nextName);
+      await onSaveAsRoutine(displayItem, nextName);
       setSaveModalOpen(false);
     } catch (error) {
       setInteractionError(error instanceof Error ? error.message : "No se pudo guardar la rutina");
     } finally {
       setSavingRoutine(false);
+    }
+  };
+
+  const openEditModal = () => {
+    setEditTitle(limitTitle(displayItem.titulo));
+    setEditDescription(limitDescription(displayItem.descripcion ?? ""));
+    setActionsOpen(false);
+    setEditModalOpen(true);
+  };
+
+  const handleUpdateTraining = async () => {
+    const nextTitle = limitTitle(editTitle.trim());
+    if (!nextTitle) {
+      setInteractionError("El titulo del entrenamiento no puede estar vacio");
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+      setInteractionError("");
+      const res = await fetch(`${API}/entrenamientos/${displayItem.id_sesion}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre: nextTitle,
+          descripcion: limitDescription(editDescription.trim()) || null,
+        }),
+      });
+      const data = (await res.json()) as {
+        descripcion?: string | null;
+        nombre_rutina_snapshot?: string | null;
+        error?: string;
+      };
+
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo modificar el entrenamiento");
+      }
+
+      const updated = {
+        ...displayItem,
+        titulo: data.nombre_rutina_snapshot ?? nextTitle,
+        descripcion: data.descripcion ?? null,
+      };
+      setDisplayItem(updated);
+      onTrainingUpdated?.(updated);
+      setEditModalOpen(false);
+    } catch (error) {
+      setInteractionError(error instanceof Error ? error.message : "No se pudo modificar el entrenamiento");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDeleteTraining = async () => {
+    try {
+      setDeletingTraining(true);
+      setInteractionError("");
+      const res = await fetch(`${API}/entrenamientos/${displayItem.id_sesion}`, {
+        method: "DELETE",
+      });
+      const data = (await res.json()) as { error?: string };
+
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo borrar el entrenamiento");
+      }
+
+      setDeleteModalOpen(false);
+      setHiddenAfterDelete(true);
+      window.dispatchEvent(
+        new CustomEvent(TRAINING_DELETED_EVENT, {
+          detail: { sessionId: displayItem.id_sesion },
+        }),
+      );
+      onTrainingDeleted?.(displayItem.id_sesion);
+    } catch (error) {
+      setInteractionError(error instanceof Error ? error.message : "No se pudo borrar el entrenamiento");
+    } finally {
+      setDeletingTraining(false);
     }
   };
 
@@ -351,64 +469,99 @@ function TrainingPostCard({
     }
   };
 
+  if (hiddenAfterDelete) {
+    return null;
+  }
+
   return (
     <article className="feed-card">
+      {canManageTraining ? (
+        <div className="training-card-menu">
+          <button
+            type="button"
+            className="training-menu-trigger"
+            onClick={() => setActionsOpen((current) => !current)}
+            aria-label="Opciones del entrenamiento"
+            aria-expanded={actionsOpen}
+            title="Opciones"
+          >
+            <DotsIcon />
+          </button>
+          {actionsOpen ? (
+            <div className="training-menu-popover">
+              <button type="button" onClick={openEditModal}>
+                Modificar entrenamiento
+              </button>
+              <button
+                type="button"
+                className="danger"
+                onClick={() => {
+                  setActionsOpen(false);
+                  setDeleteModalOpen(true);
+                }}
+              >
+                Borrar entrenamiento
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <button
         type="button"
         className={`profile-chip ${onOpenProfile ? "" : "static"}`}
-        onClick={() => onOpenProfile?.(item.username)}
+        onClick={() => onOpenProfile?.(displayItem.username)}
         disabled={!onOpenProfile}
       >
-        <span className="avatar-circle">{item.username.slice(0, 1).toUpperCase()}</span>
+        <span className="avatar-circle">{displayItem.username.slice(0, 1).toUpperCase()}</span>
         <span>
           <strong className="verified-name">
-            {item.username}
-            <VerifiedBadge tipoUsuario={item.tipo_usuario} />
+            {displayItem.username}
+            <VerifiedBadge tipoUsuario={displayItem.tipo_usuario} />
           </strong>
-          <small>{formatDate(item.fecha_actividad)}</small>
+          <small>{formatDate(displayItem.fecha_actividad)}</small>
         </span>
       </button>
 
       <div className="feed-card-header">
         <div>
-          <h2>{item.titulo}</h2>
-          <p className="feed-description">{item.descripcion || "Entrenamiento finalizado"}</p>
+          <h2>{displayItem.titulo}</h2>
+          <p className="feed-description">{displayItem.descripcion || "Entrenamiento finalizado"}</p>
         </div>
       </div>
 
       <div className="metrics-row">
         <div className="metric-box">
           <span>Duracion</span>
-          <strong>{formatDuration(item.duracion_segundos)}</strong>
+          <strong>{formatDuration(displayItem.duracion_segundos)}</strong>
         </div>
         <div className="metric-box">
           <span>Volumen</span>
-          <strong>{formatVolume(item.volumen_total)}</strong>
+          <strong>{formatVolume(displayItem.volumen_total)}</strong>
         </div>
         <div className="metric-box">
           <span>Series</span>
-          <strong>{item.total_series}</strong>
+          <strong>{displayItem.total_series}</strong>
         </div>
         <div className="metric-box">
           <span>Ejercicios</span>
-          <strong>{item.total_ejercicios}</strong>
+          <strong>{displayItem.total_ejercicios}</strong>
         </div>
-        {(item.total_trofeos ?? 0) > 0 ? (
+        {(displayItem.total_trofeos ?? 0) > 0 ? (
           <div className="metric-box trophy-metric">
             <span>Trofeos</span>
             <strong>
               <TrophyIcon />
-              {item.total_trofeos}
+              {displayItem.total_trofeos}
             </strong>
           </div>
         ) : null}
       </div>
 
       <div className="exercise-preview-list">
-        {item.ejercicios_preview.length > 0 ? (
+        {displayItem.ejercicios_preview.length > 0 ? (
           <>
-            {item.ejercicios_preview.map((ejercicio) => (
-              <div key={`${item.id_sesion}-${ejercicio.nombre}`} className="exercise-preview-item">
+            {displayItem.ejercicios_preview.map((ejercicio) => (
+              <div key={`${displayItem.id_sesion}-${ejercicio.nombre}`} className="exercise-preview-item">
                 <span>{ejercicio.nombre}</span>
                 <small>{ejercicio.series} series</small>
               </div>
@@ -461,7 +614,7 @@ function TrainingPostCard({
           ) : null}
         </div>
         <div className="feed-card-secondary-actions">
-          <button type="button" className="btn secondary" onClick={() => onOpenTraining(item)}>
+          <button type="button" className="btn secondary" onClick={() => onOpenTraining(displayItem)}>
             Ver entrenamiento completo
           </button>
         </div>
@@ -562,8 +715,9 @@ function TrainingPostCard({
             <input
               className="field"
               placeholder="Nombre de rutina"
+              maxLength={TITLE_MAX_LENGTH}
               value={saveRoutineName}
-              onChange={(event) => setSaveRoutineName(event.target.value)}
+              onChange={(event) => setSaveRoutineName(limitTitle(event.target.value))}
             />
             <div className="modal-actions">
               <button
@@ -581,6 +735,142 @@ function TrainingPostCard({
                 disabled={savingRoutine}
               >
                 {savingRoutine ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editModalOpen ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => {
+            if (!savingEdit) {
+              setEditModalOpen(false);
+            }
+          }}
+        >
+          <div
+            className="modal-card training-edit-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Modificar entrenamiento"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>Modificar entrenamiento</h2>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setEditModalOpen(false)}
+                disabled={savingEdit}
+              >
+                ×
+              </button>
+            </div>
+            <section className="panel two-cols training-edit-summary">
+              <article className="box">
+                <h2>Resumen</h2>
+                <p className="helper-text">
+                  Sesion #{displayItem.id_sesion} · Tiempo total {formatDuration(displayItem.duracion_segundos)}
+                </p>
+                <p className="helper-text">Series completas: {displayItem.total_series}</p>
+                <p className="helper-text">Ejercicios usados: {displayItem.total_ejercicios}</p>
+              </article>
+              <article className="box">
+                <h2>Que se modifica</h2>
+                <p className="helper-text">
+                  Cambia el titulo y la descripcion que aparecen en tu perfil e Inicio.
+                </p>
+              </article>
+            </section>
+            <div className="form-grid">
+              <input
+                className="field"
+                placeholder="Nombre del entrenamiento"
+                maxLength={TITLE_MAX_LENGTH}
+                value={editTitle}
+                onChange={(event) => setEditTitle(limitTitle(event.target.value))}
+              />
+              <input
+                className="field"
+                placeholder="Descripcion"
+                maxLength={DESCRIPTION_MAX_LENGTH}
+                value={editDescription}
+                onChange={(event) => setEditDescription(limitDescription(event.target.value))}
+              />
+              <small className="field-counter">
+                {editDescription.length}/{DESCRIPTION_MAX_LENGTH}
+              </small>
+            </div>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setEditModalOpen(false)}
+                disabled={savingEdit}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void handleUpdateTraining()}
+                disabled={savingEdit || !editTitle.trim()}
+              >
+                {savingEdit ? "Guardando..." : "Guardar cambios"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteModalOpen ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => {
+            if (!deletingTraining) {
+              setDeleteModalOpen(false);
+            }
+          }}
+        >
+          <div
+            className="modal-card save-name-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Borrar entrenamiento"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>Borrar entrenamiento</h2>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setDeleteModalOpen(false)}
+                disabled={deletingTraining}
+              >
+                ×
+              </button>
+            </div>
+            <p className="helper-text">¿Quieres borrar "{displayItem.titulo}" de tu perfil?</p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setDeleteModalOpen(false)}
+                disabled={deletingTraining}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn danger"
+                onClick={() => void handleDeleteTraining()}
+                disabled={deletingTraining}
+              >
+                {deletingTraining ? "Borrando..." : "Borrar"}
               </button>
             </div>
           </div>
