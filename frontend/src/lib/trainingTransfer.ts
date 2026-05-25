@@ -25,6 +25,11 @@ type RoutineMetricSummary = {
   copy_count: number;
 };
 
+type RoutineLikeSummary = {
+  likes_count: number;
+  viewer_liked: boolean;
+};
+
 const parseError = async (res: Response, fallback: string) => {
   try {
     const data = (await res.json()) as { error?: string };
@@ -101,8 +106,27 @@ export const recordRoutineCopy = async (routineId: number, userId: number) => {
   return (await res.json()) as RoutineMetricSummary;
 };
 
-export const fetchRoutineSummary = async (routineId: number) => {
-  const res = await fetch(`${API}/rutinas/${routineId}`);
+export const toggleRoutineLike = async (routineId: number, userId: number, liked: boolean) => {
+  const res = await fetch(`${API}/rutinas/${routineId}/like`, {
+    method: liked ? "DELETE" : "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ usuario_id: userId }),
+  });
+
+  if (!res.ok) {
+    throw new Error(await parseError(res, "No se pudo actualizar el like de la rutina"));
+  }
+
+  return (await res.json()) as RoutineLikeSummary;
+};
+
+export const fetchRoutineSummary = async (routineId: number, viewerId?: number) => {
+  const params = new URLSearchParams();
+  if (viewerId != null) {
+    params.set("viewer_id", String(viewerId));
+  }
+  const query = params.toString();
+  const res = await fetch(`${API}/rutinas/${routineId}${query ? `?${query}` : ""}`);
   if (!res.ok) {
     throw new Error(await parseError(res, "No se pudo cargar la rutina"));
   }

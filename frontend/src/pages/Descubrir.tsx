@@ -29,7 +29,7 @@ function Descubrir({ usuario, onOpenProfile, onOpenTraining }: DescubrirProps) {
   const goHome = () => navigate("/descubrir");
 
   if (branch === "rutinas") {
-    return <DescubrirRutinas usuario={usuario} onBack={goHome} />;
+    return <DescubrirRutinas usuario={usuario} onBack={goHome} onOpenProfile={onOpenProfile} />;
   }
 
   if (branch === "atletas") {

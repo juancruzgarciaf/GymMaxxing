@@ -145,6 +145,7 @@ function TrainingPostCard({
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [saveRoutineName, setSaveRoutineName] = useState(item.titulo);
   const [savingRoutine, setSavingRoutine] = useState(false);
+  const [likePulse, setLikePulse] = useState(false);
 
   useEffect(() => {
     setLiked(item.viewer_liked);
@@ -162,6 +163,7 @@ function TrainingPostCard({
     setSaveModalOpen(false);
     setSaveRoutineName(item.titulo);
     setSavingRoutine(false);
+    setLikePulse(false);
   }, [item]);
 
   const handleOpenSaveRoutineModal = () => {
@@ -244,6 +246,10 @@ function TrainingPostCard({
         setLiked(data.viewer_liked);
         setLikesCount(data.likes_count);
         setCommentsCount(data.comments_count);
+        if (data.viewer_liked && !liked) {
+          setLikePulse(true);
+          window.setTimeout(() => setLikePulse(false), 520);
+        }
       }
     } catch (error) {
       setInteractionError(error instanceof Error ? error.message : "No se pudo actualizar el like");
@@ -420,7 +426,7 @@ function TrainingPostCard({
         <div className="feed-card-social-actions">
           <button
             type="button"
-            className={`social-action ${liked ? "active" : ""}`}
+            className={`social-action ${liked ? "active" : ""} ${likePulse ? "like-burst" : ""}`}
             onClick={() => void handleToggleLike()}
             disabled={interactionLoading}
             aria-label={liked ? "Quitar like" : "Dar like"}

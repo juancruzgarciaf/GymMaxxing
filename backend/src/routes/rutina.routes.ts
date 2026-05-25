@@ -8,6 +8,8 @@ import {
   deleteRutina,
   recordRutinaSave,
   recordRutinaCopy,
+  addLikeToRutina,
+  removeLikeFromRutina,
   getCarpetasRutina,
   crearCarpetaRutina,
   updateCarpetaRutina,
@@ -33,6 +35,8 @@ router.put("/:id", updateRutina);
 router.delete("/:id", deleteRutina);
 router.post("/:id/metricas/guardar", recordRutinaSave);
 router.post("/:id/metricas/copiar", recordRutinaCopy);
+router.post("/:id/like", addLikeToRutina);
+router.delete("/:id/like", removeLikeFromRutina);
 
 // Gestión de ejercicios dentro de la rutina
 router.post("/ejercicios", agregarEjercicioARutina);

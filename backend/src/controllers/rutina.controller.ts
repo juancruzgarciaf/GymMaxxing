@@ -198,7 +198,17 @@ export const getRutinaPorId = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "id inválido" });
     }
 
-    const rutina = await rutinaService.getRutinaPorId(id);
+    const viewerIdRaw = req.query.viewer_id;
+    const viewerId =
+      typeof viewerIdRaw === "string" && viewerIdRaw.trim()
+        ? Number(viewerIdRaw)
+        : undefined;
+
+    if (viewerIdRaw != null && (viewerId == null || Number.isNaN(viewerId))) {
+      return res.status(400).json({ error: "viewer_id inválido" });
+    }
+
+    const rutina = await rutinaService.getRutinaPorId(id, viewerId);
 
     if (!rutina) {
       return res.status(404).json({ error: "Rutina no encontrada" });
@@ -321,6 +331,54 @@ export const recordRutinaCopy = async (req: Request, res: Response) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Error registrando copia de rutina" });
+  }
+};
+
+export const addLikeToRutina = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const usuarioId = Number(req.body.usuario_id);
+
+    if (!id || Array.isArray(id) || Number.isNaN(usuarioId)) {
+      return res.status(400).json({
+        error: "id y usuario_id son obligatorios",
+      });
+    }
+
+    const summary = await rutinaService.addLikeToRutina(id, usuarioId);
+
+    if (!summary) {
+      return res.status(404).json({ error: "Rutina no encontrada" });
+    }
+
+    return res.status(201).json(summary);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Error registrando like de rutina" });
+  }
+};
+
+export const removeLikeFromRutina = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const usuarioId = Number(req.body.usuario_id ?? req.query.usuario_id);
+
+    if (!id || Array.isArray(id) || Number.isNaN(usuarioId)) {
+      return res.status(400).json({
+        error: "id y usuario_id son obligatorios",
+      });
+    }
+
+    const summary = await rutinaService.removeLikeFromRutina(id, usuarioId);
+
+    if (!summary) {
+      return res.status(404).json({ error: "Rutina no encontrada" });
+    }
+
+    return res.json(summary);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Error eliminando like de rutina" });
   }
 };
 

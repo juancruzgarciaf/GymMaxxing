@@ -676,13 +676,13 @@ function App() {
             />
           </div>
         ) : null}
-        {mainScreen === "rutinas" ? (
+        <div className={mainScreen === "rutinas" ? "" : "screen-hidden"}>
           <Rutinas
             usuario={usuario}
             canTrain={canTrain}
             onStartTraining={(seed) => openTrainingFromSeed(seed, { recordCopy: false })}
           />
-        ) : null}
+        </div>
         {mainScreen === "descubrir" ? (
           <Descubrir
             usuario={usuario}

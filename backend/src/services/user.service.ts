@@ -60,6 +60,7 @@ type GymProfileRow = Omit<GymProfileData, "horarios" | "horarios_feriados"> & {
 type RutinaMetricSupport = {
   has_save: boolean;
   has_copy: boolean;
+  has_like: boolean;
 };
 
 type TrendRoutineRow = {
@@ -138,6 +139,8 @@ type RoutinePostSummaryRow = {
   total_ejercicios: number;
   save_count: number;
   copy_count: number;
+  likes_count: number;
+  viewer_liked: boolean;
   ejercicios_preview: Array<{
     nombre: string;
     series: number;
@@ -351,13 +354,15 @@ const getRutinaMetricsSupport = async (): Promise<RutinaMetricSupport> => {
   const result = await pool.query<RutinaMetricSupport>(
     `SELECT
        to_regclass('public.rutina_guardado') IS NOT NULL AS has_save,
-       to_regclass('public.rutina_copia') IS NOT NULL AS has_copy`
+       to_regclass('public.rutina_copia') IS NOT NULL AS has_copy,
+       to_regclass('public.rutina_like') IS NOT NULL AS has_like`
   );
 
   return (
     result.rows[0] ?? {
       has_save: false,
       has_copy: false,
+      has_like: false,
     }
   );
 };
@@ -511,7 +516,13 @@ const getRoutinePostSummaries = async (
               support.has_copy
                 ? `(SELECT COUNT(*)::int FROM rutina_copia rc WHERE rc.rutina_id = r.id_rutina)`
                 : `0::int`
-            } AS copy_count
+            } AS copy_count,
+            ${
+              support.has_like
+                ? `(SELECT COUNT(*)::int FROM rutina_like rl WHERE rl.rutina_id = r.id_rutina)`
+                : `0::int`
+            } AS likes_count,
+            FALSE AS viewer_liked
      FROM rutina r
      JOIN usuario u ON u.id = r.creador_id
      WHERE ${whereClause}

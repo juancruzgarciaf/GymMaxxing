@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   fetchRoutineExercises,
-  fetchRoutineSummary,
   fetchRoutineSeed,
   recordRoutineCopy,
   saveTrainingSeedAsRoutine,
+  toggleRoutineLike,
 } from "../lib/trainingTransfer";
 import type { DiscoverRoutineSummary, RoutineExerciseDetailed, RoutineSummary, Usuario } from "../types";
 import VerifiedBadge from "../components/VerifiedBadge";
@@ -12,6 +12,7 @@ import VerifiedBadge from "../components/VerifiedBadge";
 type DescubrirRutinasProps = {
   usuario: Usuario;
   onBack?: () => void;
+  onOpenProfile?: (username: string) => void;
 };
 
 type OrdenDiscover = "recientes" | "populares" | "copiadas" | "guardadas" | "random";
@@ -26,7 +27,22 @@ const ORDEN_OPTIONS: Array<{ value: OrdenDiscover; label: string }> = [
   { value: "random", label: "Random" },
 ];
 
-function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
+function LikeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M9 10V21H5.5C4.7 21 4 20.3 4 19.5V11.5C4 10.7 4.7 10 5.5 10H9ZM11 21H17.5C18.2 21 18.8 20.5 19 19.8L20.9 13.1C21.1 12.3 20.5 11.5 19.7 11.5H15V6.8C15 5.8 14.2 5 13.2 5C12.8 5 12.4 5.2 12.2 5.5L8.9 10.2C8.6 10.6 8.5 11 8.5 11.4V19C8.5 20.1 9.4 21 10.5 21H11Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
@@ -48,6 +64,8 @@ function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
   const [copiarModalRutinaId, setCopiarModalRutinaId] = useState<number | null>(null);
   const [copyNameDraft, setCopyNameDraft] = useState("");
   const [copyingRoutine, setCopyingRoutine] = useState(false);
+  const [likeLoadingId, setLikeLoadingId] = useState<number | null>(null);
+  const [likePulseId, setLikePulseId] = useState<number | null>(null);
 
   const availableGroups = useMemo(() => {
     const grupos = new Set<string>();
@@ -60,6 +78,11 @@ function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
     });
     return Array.from(grupos).sort((a, b) => a.localeCompare(b));
   }, [rutinas]);
+
+  const detalleDiscoverRutina = useMemo(
+    () => rutinas.find((rutina) => rutina.id_rutina === detalleRutinaId) ?? null,
+    [detalleRutinaId, rutinas],
+  );
 
   const fetchDescubrirRutinas = async () => {
     try {
@@ -105,16 +128,13 @@ function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
     }
   };
 
-  const abrirDetalle = async (rutinaId: number) => {
+  const abrirDetalle = async (rutina: DiscoverRoutineSummary) => {
     try {
       setDetalleLoading(true);
       setError("");
-      const [rutina, ejercicios] = await Promise.all([
-        fetchRoutineSummary(rutinaId),
-        fetchRoutineExercises(rutinaId),
-      ]);
-      setDetalleRutinaId(rutinaId);
+      setDetalleRutinaId(rutina.id_rutina);
       setDetalleRutina(rutina);
+      const ejercicios = await fetchRoutineExercises(rutina.id_rutina);
       setDetalleEjercicios(ejercicios);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo abrir la rutina");
@@ -123,14 +143,32 @@ function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
     }
   };
 
-  const handleCopiarRutina = async (rutinaId: number, customName?: string) => {
+  const handleGuardarRutina = async (rutinaId: number, customName?: string) => {
     try {
       setError("");
       setMensaje("");
       const { seed, routine } = await fetchRoutineSeed(rutinaId);
 
       await saveTrainingSeedAsRoutine(seed, usuario.id, {
-        name: customName?.trim() || `${routine.nombre} (Copia)`,
+        name: customName?.trim() || routine.nombre,
+        description: routine.descripcion,
+      });
+
+      setMensaje("Rutina guardada en tus rutinas");
+      await fetchDescubrirRutinas();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo guardar la rutina");
+    }
+  };
+
+  const handleCopiarRutina = async (rutinaId: number) => {
+    try {
+      setError("");
+      setMensaje("");
+      const { seed, routine } = await fetchRoutineSeed(rutinaId);
+
+      await saveTrainingSeedAsRoutine(seed, usuario.id, {
+        name: `${routine.nombre} (Copia)`,
         description: routine.descripcion,
       });
 
@@ -142,9 +180,9 @@ function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
     }
   };
 
-  const openCopyModal = (rutina: DiscoverRoutineSummary) => {
+  const openCopyModal = (rutina: Pick<RoutineSummary, "id_rutina" | "nombre">) => {
     setCopiarModalRutinaId(rutina.id_rutina);
-    setCopyNameDraft(`${rutina.nombre} (Copia)`);
+    setCopyNameDraft(rutina.nombre);
   };
 
   const closeCopyModal = () => {
@@ -174,11 +212,39 @@ function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
 
     try {
       setCopyingRoutine(true);
-      await handleCopiarRutina(copiarModalRutinaId, nextName);
+      await handleGuardarRutina(copiarModalRutinaId, nextName);
       setCopiarModalRutinaId(null);
       setCopyNameDraft("");
     } finally {
       setCopyingRoutine(false);
+    }
+  };
+
+  const handleToggleRoutineLike = async (rutinaId: number, liked: boolean) => {
+    try {
+      setLikeLoadingId(rutinaId);
+      setError("");
+      const summary = await toggleRoutineLike(rutinaId, usuario.id, liked);
+      setRutinas((prev) =>
+        prev.map((rutina) =>
+          rutina.id_rutina === rutinaId
+            ? { ...rutina, likes_count: summary.likes_count, viewer_liked: summary.viewer_liked }
+            : rutina,
+        ),
+      );
+      setDetalleRutina((prev) =>
+        prev && prev.id_rutina === rutinaId
+          ? { ...prev, likes_count: summary.likes_count, viewer_liked: summary.viewer_liked }
+          : prev,
+      );
+      if (summary.viewer_liked) {
+        setLikePulseId(rutinaId);
+        window.setTimeout(() => setLikePulseId((current) => (current === rutinaId ? null : current)), 520);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo actualizar el like");
+    } finally {
+      setLikeLoadingId(null);
     }
   };
 
@@ -212,6 +278,22 @@ function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
 
     return () => window.clearTimeout(timer);
   }, [mensaje]);
+
+  useEffect(() => {
+    if (detalleRutinaId == null) {
+      return;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousRootOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousRootOverflow;
+    };
+  }, [detalleRutinaId]);
 
   return (
     <main className="page-shell">
@@ -365,14 +447,14 @@ function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
               <button
                 type="button"
                 className="btn secondary"
-                onClick={() => void abrirDetalle(rutina.id_rutina)}
+                onClick={() => void abrirDetalle(rutina)}
               >
                 Ver rutina
               </button>
               <button
                 type="button"
                 className="btn"
-                onClick={() => openCopyModal(rutina)}
+                onClick={() => void handleCopiarRutina(rutina.id_rutina)}
               >
                 Copiar rutina
               </button>
@@ -409,7 +491,61 @@ function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
             ) : (
               <>
                 <h3 className="routine-title-xl">{detalleRutina?.nombre || "Rutina"}</h3>
+                {detalleDiscoverRutina ? (
+                  <button
+                    type="button"
+                    className={`profile-chip ${onOpenProfile ? "" : "static"}`}
+                    onClick={() => {
+                      closeDetailModal();
+                      onOpenProfile?.(detalleDiscoverRutina.creador_username);
+                    }}
+                    disabled={!onOpenProfile}
+                  >
+                    <span className="avatar-circle">
+                      {detalleDiscoverRutina.creador_username.slice(0, 1).toUpperCase()}
+                    </span>
+                    <span>
+                      <strong className="verified-name">
+                        {detalleDiscoverRutina.creador_username}
+                        <VerifiedBadge tipoUsuario={detalleDiscoverRutina.creador_tipo_usuario} />
+                      </strong>
+                      <small>Autor de la rutina</small>
+                    </span>
+                  </button>
+                ) : null}
                 <p className="helper-text">{detalleRutina?.descripcion || "Sin descripcion"}</p>
+
+                {detalleRutina ? (
+                  <>
+                    <div className="detail-meta">
+                      <span>{detalleEjercicios.length} ejercicios</span>
+                      <span>{detalleRutina.likes_count} likes</span>
+                      <span>{detalleRutina.save_count} guardados</span>
+                      <span>{detalleRutina.copy_count} copias</span>
+                    </div>
+                    <div className="feed-card-social-actions discover-detail-actions">
+                      <button
+                        type="button"
+                        className={`social-action ${detalleRutina.viewer_liked ? "active" : ""} ${
+                          likePulseId === detalleRutina.id_rutina ? "like-burst" : ""
+                        }`}
+                        onClick={() =>
+                          void handleToggleRoutineLike(detalleRutina.id_rutina, detalleRutina.viewer_liked)
+                        }
+                        disabled={likeLoadingId === detalleRutina.id_rutina}
+                        aria-label={detalleRutina.viewer_liked ? "Quitar like" : "Dar like"}
+                        aria-pressed={detalleRutina.viewer_liked}
+                        title={detalleRutina.viewer_liked ? "Quitar like" : "Dar like"}
+                      >
+                        <LikeIcon />
+                        <span className="social-action-count">{detalleRutina.likes_count}</span>
+                      </button>
+                      <button type="button" className="btn" onClick={() => openCopyModal(detalleRutina)}>
+                        Guardar rutina
+                      </button>
+                    </div>
+                  </>
+                ) : null}
 
                 <div className="table-wrap">
                   <table className="table">
@@ -454,11 +590,11 @@ function DescubrirRutinas({ usuario, onBack }: DescubrirRutinasProps) {
             className="modal-card save-name-modal"
             role="dialog"
             aria-modal="true"
-            aria-label="Copiar rutina"
+            aria-label="Guardar rutina"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="modal-head">
-              <h2>Copiar rutina</h2>
+              <h2>Guardar rutina</h2>
               <button type="button" className="modal-close" onClick={closeCopyModal} disabled={copyingRoutine}>
                 ×
               </button>

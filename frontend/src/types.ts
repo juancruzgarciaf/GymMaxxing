@@ -91,6 +91,8 @@ export type RoutinePostSummary = {
   total_ejercicios: number;
   save_count: number;
   copy_count: number;
+  likes_count: number;
+  viewer_liked: boolean;
   ejercicios_preview: RoutinePostPreview[];
 };
 
@@ -132,6 +134,8 @@ export type RoutineSummary = {
   id_carpeta: number | null;
   save_count: number;
   copy_count: number;
+  likes_count: number;
+  viewer_liked: boolean;
 };
 
 export type DiscoverRoutineSummary = RoutineSummary & {

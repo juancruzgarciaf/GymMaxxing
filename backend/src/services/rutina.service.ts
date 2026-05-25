@@ -36,6 +36,8 @@ type RutinaRow = {
   id_carpeta: number | null;
   save_count: number;
   copy_count: number;
+  likes_count: number;
+  viewer_liked?: boolean;
 };
 
 type RutinaMetricSummary = {
@@ -43,9 +45,15 @@ type RutinaMetricSummary = {
   copy_count: number;
 };
 
+type RutinaLikeSummary = {
+  likes_count: number;
+  viewer_liked: boolean;
+};
+
 type RutinaMetricSupport = {
   has_save: boolean;
   has_copy: boolean;
+  has_like: boolean;
 };
 
 type DiscoverRutinaRow = RutinaRow & {
@@ -158,22 +166,50 @@ const resolveCarpetaTable = async (): Promise<CarpetaTableInfo | null> => {
   };
 };
 
+const ensureRutinaLikeTable = async () => {
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS rutina_like (
+       id_like SERIAL PRIMARY KEY,
+       rutina_id INT NOT NULL REFERENCES rutina(id_rutina) ON DELETE CASCADE,
+       usuario_id INT NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+       fecha TIMESTAMP NOT NULL DEFAULT NOW(),
+       UNIQUE (rutina_id, usuario_id)
+     )`
+  );
+
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_rutina_like_rutina
+     ON rutina_like(rutina_id)`
+  );
+
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_rutina_like_usuario
+     ON rutina_like(usuario_id)`
+  );
+};
+
 const getRutinaMetricsSupport = async (): Promise<RutinaMetricSupport> => {
   const result = await pool.query<RutinaMetricSupport>(
     `SELECT
        to_regclass('public.rutina_guardado') IS NOT NULL AS has_save,
-       to_regclass('public.rutina_copia') IS NOT NULL AS has_copy`
+       to_regclass('public.rutina_copia') IS NOT NULL AS has_copy,
+       to_regclass('public.rutina_like') IS NOT NULL AS has_like`
   );
 
   return (
     result.rows[0] ?? {
       has_save: false,
       has_copy: false,
+      has_like: false,
     }
   );
 };
 
-const buildRutinaSelectSql = (alias: string, support: RutinaMetricSupport) => `
+const buildRutinaSelectSql = (
+  alias: string,
+  support: RutinaMetricSupport,
+  viewerParamRef?: string
+) => `
   SELECT ${alias}.id_rutina,
          ${alias}.nombre,
          ${alias}.descripcion,
@@ -191,6 +227,21 @@ const buildRutinaSelectSql = (alias: string, support: RutinaMetricSupport) => `
              ? `(SELECT COUNT(*)::int FROM rutina_copia rc WHERE rc.rutina_id = ${alias}.id_rutina)`
              : `0::int`
          } AS copy_count
+         ${
+           support.has_like
+             ? `, (SELECT COUNT(*)::int FROM rutina_like rl WHERE rl.rutina_id = ${alias}.id_rutina)`
+             : `, 0::int`
+         } AS likes_count
+         ${
+           viewerParamRef && support.has_like
+             ? `, EXISTS (
+                  SELECT 1
+                  FROM rutina_like rlv
+                  WHERE rlv.rutina_id = ${alias}.id_rutina
+                    AND rlv.usuario_id = ${viewerParamRef}
+                )`
+             : `, FALSE`
+         } AS viewer_liked
   FROM rutina ${alias}
 `;
 
@@ -219,6 +270,39 @@ const getRutinaMetricSummary = async (
     result.rows[0] ?? {
       save_count: 0,
       copy_count: 0,
+    }
+  );
+};
+
+const getRutinaLikeSummary = async (
+  id_rutina: string,
+  usuario_id: number,
+  support?: RutinaMetricSupport
+): Promise<RutinaLikeSummary> => {
+  const resolvedSupport = support ?? (await getRutinaMetricsSupport());
+  if (!resolvedSupport.has_like) {
+    return {
+      likes_count: 0,
+      viewer_liked: false,
+    };
+  }
+
+  const result = await pool.query<RutinaLikeSummary>(
+    `SELECT
+       (SELECT COUNT(*)::int FROM rutina_like rl WHERE rl.rutina_id = $1) AS likes_count,
+       EXISTS (
+         SELECT 1
+         FROM rutina_like rl
+         WHERE rl.rutina_id = $1
+           AND rl.usuario_id = $2
+       ) AS viewer_liked`,
+    [id_rutina, usuario_id]
+  );
+
+  return (
+    result.rows[0] ?? {
+      likes_count: 0,
+      viewer_liked: false,
     }
   );
 };
@@ -284,9 +368,11 @@ export const crearRutina = async (data: any) => {
   return result.rows[0]
     ? {
         ...result.rows[0],
-        save_count: 0,
-        copy_count: 0,
-      }
+      save_count: 0,
+      copy_count: 0,
+      likes_count: 0,
+      viewer_liked: false,
+    }
     : null;
 };
 
@@ -320,7 +406,7 @@ const getUsuarioIdByEmail = async (email: string) => {
 const getDiscoverOrderSql = (orden: string | undefined) => {
   switch (orden) {
     case "populares":
-      return "ORDER BY (r.save_count + r.copy_count) DESC, r.fecha_creacion DESC";
+      return "ORDER BY (r.likes_count + r.save_count + r.copy_count) DESC, r.fecha_creacion DESC";
     case "copiadas":
       return "ORDER BY r.copy_count DESC, r.fecha_creacion DESC";
     case "guardadas":
@@ -433,6 +519,8 @@ export const getDiscoverRutinas = async (filters: DiscoverRutinasFilters) => {
             r.id_carpeta,
             r.save_count,
             r.copy_count,
+            r.likes_count,
+            r.viewer_liked,
             u.username AS creador_username,
             u.tipo_usuario AS creador_tipo_usuario,
             (
@@ -448,7 +536,7 @@ export const getDiscoverRutinas = async (filters: DiscoverRutinasFilters) => {
             ), ARRAY[]::text[]) AS grupos_musculares,
             ${viewerFollowSql}
      FROM (
-       ${buildRutinaSelectSql("base", support)}
+       ${buildRutinaSelectSql("base", support, viewerId != null ? "$1" : undefined)}
      ) r
      JOIN usuario u ON u.id = r.creador_id
      WHERE ${whereClauses.join(" AND ")}
@@ -460,12 +548,12 @@ export const getDiscoverRutinas = async (filters: DiscoverRutinasFilters) => {
   return result.rows;
 };
 
-export const getRutinaPorId = async (id: string) => {
+export const getRutinaPorId = async (id: string, viewerId?: number) => {
   const support = await getRutinaMetricsSupport();
   const result = await pool.query<RutinaRow>(
-    `${buildRutinaSelectSql("r", support)}
+    `${buildRutinaSelectSql("r", support, viewerId != null ? "$2" : undefined)}
      WHERE r.id_rutina = $1`,
-    [id]
+    viewerId == null ? [id] : [id, viewerId]
   );
   return result.rows[0];
 };
@@ -591,6 +679,46 @@ export const recordRutinaSave = async (id_rutina: string, usuario_id: number) =>
 
 export const recordRutinaCopy = async (id_rutina: string, usuario_id: number) =>
   recordRutinaMetric(id_rutina, usuario_id, "copy");
+
+export const addLikeToRutina = async (id_rutina: string, usuario_id: number) => {
+  const rutina = await getRutinaPorId(id_rutina);
+  if (!rutina) {
+    return null;
+  }
+
+  await ensureRutinaLikeTable();
+  const support = await getRutinaMetricsSupport();
+  if (support.has_like) {
+    await pool.query(
+      `INSERT INTO rutina_like (rutina_id, usuario_id, fecha)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (rutina_id, usuario_id) DO NOTHING`,
+      [id_rutina, usuario_id]
+    );
+  }
+
+  return getRutinaLikeSummary(id_rutina, usuario_id, support);
+};
+
+export const removeLikeFromRutina = async (id_rutina: string, usuario_id: number) => {
+  const rutina = await getRutinaPorId(id_rutina);
+  if (!rutina) {
+    return null;
+  }
+
+  await ensureRutinaLikeTable();
+  const support = await getRutinaMetricsSupport();
+  if (support.has_like) {
+    await pool.query(
+      `DELETE FROM rutina_like
+       WHERE rutina_id = $1
+         AND usuario_id = $2`,
+      [id_rutina, usuario_id]
+    );
+  }
+
+  return getRutinaLikeSummary(id_rutina, usuario_id, support);
+};
 
 export const crearCarpetaRutina = async (data: any) => {
   const tableInfo = await resolveCarpetaTable();
