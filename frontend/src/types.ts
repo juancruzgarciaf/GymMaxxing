@@ -87,6 +87,7 @@ export type RoutinePostSummary = {
   descripcion: string | null;
   duracion_estimada: number | null;
   fecha_actividad: string | null;
+  visible_en_descubrir: boolean;
   total_series: number;
   total_ejercicios: number;
   save_count: number;
@@ -132,6 +133,7 @@ export type RoutineSummary = {
   duracion_estimada: number | null;
   creador_id: number;
   id_carpeta: number | null;
+  visible_en_descubrir: boolean;
   save_count: number;
   copy_count: number;
   likes_count: number;
@@ -174,6 +176,7 @@ export type TrainingSeedExercise = {
   nombre: string;
   grupo_muscular: string;
   tipo_disciplina: string;
+  nota?: string;
   descansoSegundos: number;
   series: TrainingSeedSerie[];
 };

@@ -6,6 +6,7 @@ import type {
   TrainingSeed,
   TrainingSetType,
 } from "../types";
+import { limitDescription } from "./textLimits";
 
 const API = "http://localhost:3000";
 const RUTINA_PREFS_KEY = "gymmaxxing_rutina_series_v1";
@@ -269,7 +270,13 @@ export const saveTrainingSeedAsRoutine = async (
 ) => {
   const name = options?.name?.trim() || seed.title || `Rutina ${seed.sourceId}`;
   const descripcion =
-    options?.description !== undefined ? options.description : seed.description ?? null;
+    options?.description !== undefined
+      ? options.description == null
+        ? null
+        : limitDescription(options.description)
+      : seed.description == null
+        ? null
+        : limitDescription(seed.description);
   const folderId = options?.folderId ?? null;
 
   const createRes = await fetch(`${API}/rutinas`, {

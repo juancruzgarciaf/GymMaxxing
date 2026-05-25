@@ -1,4 +1,5 @@
 import { pool } from "../db";
+import { limitDescription } from "../utils/textLimits";
 
 type SesionEntrenamientoRow = {
   id_sesion: number;
@@ -388,7 +389,7 @@ export const iniciarSesionEntrenamiento = async (data: any) => {
      VALUES (NOW(), NOW(), $1, $2, $3, $4, 'en_curso', $5)
      RETURNING *`,
     [
-      descripcion ?? null,
+      limitDescription(descripcion),
       gimnasio_id ?? null,
       usuario_id,
       rutina_id,
@@ -467,7 +468,7 @@ export const updateSesionEntrenamiento = async (
      RETURNING *`,
     [
       id_sesion,
-      data.descripcion ?? null,
+      limitDescription(data.descripcion),
       data.nombre_rutina_snapshot ?? data.nombre ?? null,
     ]
   );

@@ -480,7 +480,7 @@ function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasPr
             onClick={(event) => event.stopPropagation()}
           >
             <div className="detail-topbar">
-              <h2>Detalle de rutina #{detalleRutinaId}</h2>
+              <h2>Detalle de rutina</h2>
               <button type="button" className="btn secondary" onClick={closeDetailModal}>
                 Cerrar
               </button>
@@ -490,38 +490,41 @@ function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasPr
               <p className="helper-text">Cargando detalle...</p>
             ) : (
               <>
-                <h3 className="routine-title-xl">{detalleRutina?.nombre || "Rutina"}</h3>
-                {detalleDiscoverRutina ? (
-                  <button
-                    type="button"
-                    className={`profile-chip ${onOpenProfile ? "" : "static"}`}
-                    onClick={() => {
-                      closeDetailModal();
-                      onOpenProfile?.(detalleDiscoverRutina.creador_username);
-                    }}
-                    disabled={!onOpenProfile}
-                  >
-                    <span className="avatar-circle">
-                      {detalleDiscoverRutina.creador_username.slice(0, 1).toUpperCase()}
-                    </span>
-                    <span>
-                      <strong className="verified-name">
-                        {detalleDiscoverRutina.creador_username}
-                        <VerifiedBadge tipoUsuario={detalleDiscoverRutina.creador_tipo_usuario} />
-                      </strong>
-                      <small>Autor de la rutina</small>
-                    </span>
-                  </button>
-                ) : null}
-                <p className="helper-text">{detalleRutina?.descripcion || "Sin descripcion"}</p>
+                <div className="discover-detail-summary">
+                  <div className="discover-detail-main">
+                    <h3 className="routine-title-xl">{detalleRutina?.nombre || "Rutina"}</h3>
+                    <p className="helper-text">{detalleRutina?.descripcion || "Sin descripcion"}</p>
+                  </div>
+                  {detalleDiscoverRutina ? (
+                    <button
+                      type="button"
+                      className={`profile-chip discover-detail-author ${onOpenProfile ? "" : "static"}`}
+                      onClick={() => {
+                        closeDetailModal();
+                        onOpenProfile?.(detalleDiscoverRutina.creador_username);
+                      }}
+                      disabled={!onOpenProfile}
+                    >
+                      <span className="avatar-circle">
+                        {detalleDiscoverRutina.creador_username.slice(0, 1).toUpperCase()}
+                      </span>
+                      <span>
+                        <strong className="verified-name">
+                          {detalleDiscoverRutina.creador_username}
+                          <VerifiedBadge tipoUsuario={detalleDiscoverRutina.creador_tipo_usuario} />
+                        </strong>
+                        <small>Autor de la rutina</small>
+                      </span>
+                    </button>
+                  ) : null}
+                </div>
 
                 {detalleRutina ? (
                   <>
-                    <div className="detail-meta">
-                      <span>{detalleEjercicios.length} ejercicios</span>
-                      <span>{detalleRutina.likes_count} likes</span>
-                      <span>{detalleRutina.save_count} guardados</span>
-                      <span>{detalleRutina.copy_count} copias</span>
+                    <div className="detail-meta discover-detail-meta">
+                      <span>{detalleEjercicios.length} Ejercicios</span>
+                      <span>{detalleRutina.save_count} Guardados</span>
+                      <span>{detalleRutina.copy_count} Copias</span>
                     </div>
                     <div className="feed-card-social-actions discover-detail-actions">
                       <button

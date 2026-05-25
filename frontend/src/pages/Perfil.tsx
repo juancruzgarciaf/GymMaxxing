@@ -7,6 +7,7 @@ import TrainingCalendar from "../components/TrainingCalendar";
 import UserTrainingFeed from "../components/UserTrainingFeed";
 import { COUNTRY_OPTIONS } from "../lib/countries";
 import { isGymUser } from "../lib/roles";
+import { DESCRIPTION_MAX_LENGTH, limitDescription } from "../lib/textLimits";
 import type {
   EntrenamientoResumen,
   GimnasioPerfil,
@@ -121,6 +122,7 @@ const normalizeGymForm = (profile: PerfilUsuario | null): GimnasioPerfil => {
     ...emptyGymForm(),
     ...source,
     nombre_gimnasio: source?.nombre_gimnasio ?? profile?.usuario.username ?? "",
+    descripcion_corta: limitDescription(source?.descripcion_corta ?? ""),
     horarios: {
       ...DEFAULT_GYM_SCHEDULE,
       ...(source?.horarios ?? {}),
@@ -821,9 +823,13 @@ function Perfil({
                   <textarea
                     className="field gym-textarea"
                     placeholder="Descripcion corta del gimnasio"
+                    maxLength={DESCRIPTION_MAX_LENGTH}
                     value={gymForm.descripcion_corta ?? ""}
-                    onChange={(event) => updateGymField("descripcion_corta", event.target.value)}
+                    onChange={(event) => updateGymField("descripcion_corta", limitDescription(event.target.value))}
                   />
+                  <small className="field-counter">
+                    {(gymForm.descripcion_corta ?? "").length}/{DESCRIPTION_MAX_LENGTH}
+                  </small>
                 </div>
               </div>
 

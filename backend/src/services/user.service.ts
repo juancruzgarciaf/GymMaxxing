@@ -1,4 +1,5 @@
 import { pool } from "../db";
+import { limitDescription } from "../utils/textLimits";
 
 type UsuarioRow = {
   id: number;
@@ -71,6 +72,7 @@ type TrendRoutineRow = {
   fecha_creacion: string | null;
   creador_id: number;
   id_carpeta: number | null;
+  visible_en_descubrir: boolean;
   save_count: number;
   copy_count: number;
   creador_username: string;
@@ -135,6 +137,7 @@ type RoutinePostSummaryRow = {
   descripcion: string | null;
   duracion_estimada: number | null;
   fecha_actividad: string | null;
+  visible_en_descubrir: boolean;
   total_series: number;
   total_ejercicios: number;
   save_count: number;
@@ -334,7 +337,7 @@ const upsertGymProfile = async (
       normalized.telefono,
       normalized.sitio_web,
       normalized.instagram,
-      normalized.descripcion_corta,
+      limitDescription(normalized.descripcion_corta),
       normalized.tipo_gimnasio,
       normalized.direccion,
       normalized.ciudad,
@@ -364,6 +367,18 @@ const getRutinaMetricsSupport = async (): Promise<RutinaMetricSupport> => {
       has_copy: false,
       has_like: false,
     }
+  );
+};
+
+const ensureRutinaVisibilityColumn = async () => {
+  await pool.query(
+    `ALTER TABLE rutina
+     ADD COLUMN IF NOT EXISTS visible_en_descubrir BOOLEAN NOT NULL DEFAULT TRUE`
+  );
+
+  await pool.query(
+    `ALTER TABLE rutina
+     ALTER COLUMN visible_en_descubrir SET DEFAULT TRUE`
   );
 };
 
@@ -483,6 +498,7 @@ const getRoutinePostSummaries = async (
   limit: number,
   offset = 0
 ) => {
+  await ensureRutinaVisibilityColumn();
   const support = await getRutinaMetricsSupport();
   const finalParams = [...params, limit, offset];
   const limitParam = finalParams.length - 1;
@@ -497,6 +513,7 @@ const getRoutinePostSummaries = async (
             r.descripcion,
             r.duracion_estimada,
             r.fecha_creacion::text AS fecha_actividad,
+            COALESCE(r.visible_en_descubrir, FALSE) AS visible_en_descubrir,
             COALESCE((
               SELECT SUM(re.series)::int
               FROM rutinaejercicio re
@@ -1320,6 +1337,7 @@ const getTrendRoutines = async (
   orderByMetric: "copy_count" | "save_count",
   support: RutinaMetricSupport
 ) => {
+  await ensureRutinaVisibilityColumn();
   const copyCountSql = support.has_copy
     ? `(SELECT COUNT(*)::int FROM rutina_copia rc WHERE rc.rutina_id = r.id_rutina)`
     : `0::int`;
@@ -1335,6 +1353,7 @@ const getTrendRoutines = async (
             r.fecha_creacion::text,
             r.creador_id,
             r.id_carpeta,
+            COALESCE(r.visible_en_descubrir, FALSE) AS visible_en_descubrir,
             ${saveCountSql} AS save_count,
             ${copyCountSql} AS copy_count,
             u.username AS creador_username,
@@ -1352,6 +1371,7 @@ const getTrendRoutines = async (
             ), ARRAY[]::text[]) AS grupos_musculares
      FROM rutina r
      JOIN usuario u ON u.id = r.creador_id
+     WHERE COALESCE(r.visible_en_descubrir, FALSE) = TRUE
      ORDER BY ${orderByMetric} DESC, r.fecha_creacion DESC, r.id_rutina DESC
      LIMIT 10`
   );

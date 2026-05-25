@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import routineDetailEmptyBodybuilder from "../assets/routine-detail-empty-bodybuilder.png";
 import { createRoutineShareUrl } from "../lib/trainingTransfer";
 import { canUseTrainingFeatures } from "../lib/roles";
+import { DESCRIPTION_MAX_LENGTH, limitDescription } from "../lib/textLimits";
 import type { TrainingSeed, Usuario } from "../types";
 import TrashIcon from "../components/TrashIcon";
 import DurationInput from "../components/DurationInput";
@@ -13,6 +14,7 @@ type Rutina = {
   duracion_estimada: number | null;
   creador_id: number;
   id_carpeta: number | null;
+  visible_en_descubrir: boolean;
   save_count: number;
   copy_count: number;
 };
@@ -58,6 +60,7 @@ type EjercicioDraft = {
   nombre: string;
   grupo_muscular: string;
   tipo_disciplina: string;
+  nota: string;
   descansoMin: string;
   descansoSeg: string;
   series: SerieDraft[];
@@ -83,6 +86,7 @@ type EjecucionEjercicio = {
   nombre: string;
   grupo_muscular: string;
   tipo_disciplina: string;
+  nota: string;
   descansoSegundos: number;
   series: EjecucionSerie[];
 };
@@ -110,6 +114,7 @@ type DescansoActivo = {
 
 type PersistedRutinaEjercicio = {
   id_ejercicio: number;
+  nota?: string;
   descansoSegundos: number;
   series: Array<{
     kg: string;
@@ -120,6 +125,7 @@ type PersistedRutinaEjercicio = {
 
 const API = "http://localhost:3000";
 const RUTINA_PREFS_KEY = "gymmaxxing_rutina_series_v1";
+const EXERCISE_NOTE_MAX_LENGTH = 60;
 
 const nuevaSerie = (reps = ""): SerieDraft => ({
   id: crypto.randomUUID(),
@@ -138,6 +144,7 @@ const parseError = async (res: Response, fallback: string) => {
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+const limitExerciseNote = (value: string) => value.slice(0, EXERCISE_NOTE_MAX_LENGTH);
 
 const twoDigits = (value: number) => String(value).padStart(2, "0");
 
@@ -229,7 +236,11 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
   const [editorDescripcion, setEditorDescripcion] = useState("");
   const [editorDuracion, setEditorDuracion] = useState("");
   const [editorCarpetaId, setEditorCarpetaId] = useState<string>("");
+  const [editorVisibleEnDescubrir, setEditorVisibleEnDescubrir] = useState(false);
   const [editorEjercicios, setEditorEjercicios] = useState<EjercicioDraft[]>([]);
+  const [pendingEditorScrollId, setPendingEditorScrollId] = useState<number | null>(null);
+  const [editorNoteOpenIds, setEditorNoteOpenIds] = useState<Record<number, boolean>>({});
+  const [draggedEditorExerciseId, setDraggedEditorExerciseId] = useState<number | null>(null);
 
   const [filtroEquipo, setFiltroEquipo] = useState("");
   const [filtroMusculo, setFiltroMusculo] = useState("");
@@ -238,13 +249,44 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
   const [rutinaEnEjecucion, setRutinaEnEjecucion] = useState<Rutina | null>(null);
   const [sesionActiva, setSesionActiva] = useState<SesionEntrenamiento | null>(null);
   const [ejecucionEjercicios, setEjecucionEjercicios] = useState<EjecucionEjercicio[]>([]);
+  const [pendingExecutionScrollId, setPendingExecutionScrollId] = useState<number | null>(null);
+  const [executionNoteOpenIds, setExecutionNoteOpenIds] = useState<Record<number, boolean>>({});
   const [descansoActivo, setDescansoActivo] = useState<DescansoActivo | null>(null);
   const [elapsedSesionSegundos, setElapsedSesionSegundos] = useState(0);
+  const editorExerciseRefs = useRef(new Map<number, HTMLElement>());
+  const executionExerciseRefs = useRef(new Map<number, HTMLElement>());
 
   const rutinaSeleccionada =
     selectedRutinaId == null
       ? null
       : rutinas.find((rutina) => rutina.id_rutina === selectedRutinaId) ?? null;
+
+  const scrollToExercise = (refs: { current: Map<number, HTMLElement> }, idEjercicio: number) => {
+    window.requestAnimationFrame(() => {
+      refs.current.get(idEjercicio)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  };
+
+  useEffect(() => {
+    if (pendingEditorScrollId == null) {
+      return;
+    }
+
+    scrollToExercise(editorExerciseRefs, pendingEditorScrollId);
+    setPendingEditorScrollId(null);
+  }, [editorEjercicios, pendingEditorScrollId]);
+
+  useEffect(() => {
+    if (pendingExecutionScrollId == null) {
+      return;
+    }
+
+    scrollToExercise(executionExerciseRefs, pendingExecutionScrollId);
+    setPendingExecutionScrollId(null);
+  }, [ejecucionEjercicios, pendingExecutionScrollId]);
 
   const totalSeriesEjecucion = useMemo(
     () => ejecucionEjercicios.reduce((acc, ejercicio) => acc + ejercicio.series.length, 0),
@@ -509,7 +551,10 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
     setEditorDescripcion("");
     setEditorDuracion("");
     setEditorCarpetaId("");
+    setEditorVisibleEnDescubrir(true);
     setEditorEjercicios([]);
+    setEditorNoteOpenIds({});
+    setDraggedEditorExerciseId(null);
     setFiltroEquipo("");
     setFiltroMusculo("");
     setBusquedaEjercicio("");
@@ -535,6 +580,7 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
           nombre: item.nombre,
           grupo_muscular: item.grupo_muscular,
           tipo_disciplina: item.tipo_disciplina,
+          nota: limitExerciseNote(persisted?.nota ?? ""),
           descansoMin: descanso.min,
           descansoSeg: descanso.sec,
           series: Array.from({ length: Math.max(1, item.series) }, (_, index) => {
@@ -554,10 +600,13 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
 
       setEditorRutinaId(rutina.id_rutina);
       setEditorNombre(rutina.nombre);
-      setEditorDescripcion(rutina.descripcion ?? "");
+      setEditorDescripcion(limitDescription(rutina.descripcion ?? ""));
       setEditorDuracion(rutina.duracion_estimada ? String(rutina.duracion_estimada) : "");
       setEditorCarpetaId(rutina.id_carpeta ? String(rutina.id_carpeta) : "");
+      setEditorVisibleEnDescubrir(Boolean(rutina.visible_en_descubrir));
       setEditorEjercicios(draft);
+      setEditorNoteOpenIds({});
+      setDraggedEditorExerciseId(null);
       setVista("editor");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo abrir la rutina");
@@ -828,6 +877,7 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
   };
 
   const agregarEjercicioAlEditor = (ejercicio: Ejercicio) => {
+    setPendingEditorScrollId(ejercicio.id_ejercicio);
     setEditorEjercicios((prev) => {
       if (prev.some((item) => item.id_ejercicio === ejercicio.id_ejercicio)) {
         return prev;
@@ -840,6 +890,7 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
           nombre: ejercicio.nombre,
           grupo_muscular: ejercicio.grupo_muscular,
           tipo_disciplina: ejercicio.tipo_disciplina,
+          nota: "",
           descansoMin: "1",
           descansoSeg: "30",
           series: [nuevaSerie()],
@@ -850,9 +901,48 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
 
   const removerEjercicioDelEditor = (idEjercicio: number) => {
     setEditorEjercicios((prev) => prev.filter((item) => item.id_ejercicio !== idEjercicio));
+    setEditorNoteOpenIds((prev) => {
+      const next = { ...prev };
+      delete next[idEjercicio];
+      return next;
+    });
+  };
+
+  const toggleNotaEditor = (idEjercicio: number) => {
+    setEditorNoteOpenIds((prev) => ({ ...prev, [idEjercicio]: !prev[idEjercicio] }));
+  };
+
+  const updateNotaEditor = (idEjercicio: number, nota: string) => {
+    setEditorEjercicios((prev) =>
+      prev.map((item) =>
+        item.id_ejercicio === idEjercicio
+          ? { ...item, nota: limitExerciseNote(nota) }
+          : item,
+      ),
+    );
+  };
+
+  const moveEditorExercise = (targetId: number) => {
+    if (draggedEditorExerciseId == null || draggedEditorExerciseId === targetId) {
+      return;
+    }
+
+    setEditorEjercicios((prev) => {
+      const fromIndex = prev.findIndex((item) => item.id_ejercicio === draggedEditorExerciseId);
+      const toIndex = prev.findIndex((item) => item.id_ejercicio === targetId);
+      if (fromIndex < 0 || toIndex < 0) {
+        return prev;
+      }
+
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
   };
 
   const agregarSerieAEjercicio = (idEjercicio: number) => {
+    setPendingEditorScrollId(idEjercicio);
     setEditorEjercicios((prev) =>
       prev.map((item) => {
         if (item.id_ejercicio !== idEjercicio) {
@@ -950,10 +1040,11 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
 
       const body = {
         nombre: editorNombre.trim(),
-        descripcion: editorDescripcion.trim() || null,
+        descripcion: limitDescription(editorDescripcion.trim()) || null,
         duracion_estimada: editorDuracion ? Number(editorDuracion) : null,
         creador_id: usuario.id,
         id_carpeta: editorCarpetaId ? Number(editorCarpetaId) : null,
+        visible_en_descubrir: editorVisibleEnDescubrir,
       };
 
       let rutinaId = editorRutinaId;
@@ -998,6 +1089,7 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
         rutinaId,
         editorEjercicios.map((ejercicio) => ({
           id_ejercicio: ejercicio.id_ejercicio,
+          nota: limitExerciseNote(ejercicio.nota.trim()),
           descansoSegundos: descansoDesdeInputs(ejercicio.descansoMin, ejercicio.descansoSeg),
           series: ejercicio.series.map((serie) => ({
             kg: serie.kg,
@@ -1079,6 +1171,7 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
             nombre: item.nombre,
             grupo_muscular: item.grupo_muscular,
             tipo_disciplina: item.tipo_disciplina,
+            nota: limitExerciseNote(persisted?.nota ?? ""),
             descansoSegundos: Math.max(0, persisted?.descansoSegundos ?? item.descanso ?? 0),
             series: Array.from({ length: Math.max(1, item.series) }, (_, index) => ({
               kg: persistedSeries[index]?.kg ?? "",
@@ -1137,7 +1230,22 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
     );
   };
 
+  const toggleNotaEjecucion = (idEjercicio: number) => {
+    setExecutionNoteOpenIds((prev) => ({ ...prev, [idEjercicio]: !prev[idEjercicio] }));
+  };
+
+  const updateNotaEjecucion = (idEjercicio: number, nota: string) => {
+    setEjecucionEjercicios((prev) =>
+      prev.map((ejercicio) =>
+        ejercicio.id_ejercicio === idEjercicio
+          ? { ...ejercicio, nota: limitExerciseNote(nota) }
+          : ejercicio,
+      ),
+    );
+  };
+
   const agregarSerieEjecucion = (idEjercicio: number) => {
+    setPendingExecutionScrollId(idEjercicio);
     setEjecucionEjercicios((prev) =>
       prev.map((ejercicio) => {
         if (ejercicio.id_ejercicio !== idEjercicio) {
@@ -1269,6 +1377,7 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
           rutinaEnEjecucion.id_rutina,
           ejecucionEjercicios.map((ejercicio) => ({
             id_ejercicio: ejercicio.id_ejercicio,
+            nota: limitExerciseNote(ejercicio.nota.trim()),
             descansoSegundos: Math.max(0, ejercicio.descansoSegundos),
             series: ejercicio.series.map((serie) => ({
               kg: serie.kg,
@@ -1477,7 +1586,12 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
             ← Volver
           </button>
           <h1>{editorRutinaId ? "Editar rutina" : "Crear rutina"}</h1>
-          <button type="button" className="btn" onClick={guardarRutina} disabled={loading}>
+          <button
+            type="button"
+            className="btn"
+            onClick={guardarRutina}
+            disabled={loading || !editorNombre.trim()}
+          >
             Guardar rutina
           </button>
         </section>
@@ -1495,10 +1609,14 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
               <input
                 className="field"
                 placeholder="Descripcion"
+                maxLength={DESCRIPTION_MAX_LENGTH}
                 value={editorDescripcion}
-                onChange={(event) => setEditorDescripcion(event.target.value)}
+                onChange={(event) => setEditorDescripcion(limitDescription(event.target.value))}
               />
-              <div className="form-grid two-inline">
+              <small className="field-counter">
+                {editorDescripcion.length}/{DESCRIPTION_MAX_LENGTH}
+              </small>
+              <div className="routine-editor-meta-row">
                 <input
                   className="field"
                   type="number"
@@ -1519,6 +1637,14 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
                     </option>
                   ))}
                 </select>
+                <label className="routine-discover-toggle">
+                  <input
+                    type="checkbox"
+                    checked={editorVisibleEnDescubrir}
+                    onChange={(event) => setEditorVisibleEnDescubrir(event.target.checked)}
+                  />
+                  Aparecer en Descubrir
+                </label>
               </div>
             </div>
 
@@ -1530,33 +1656,90 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
                 </div>
               ) : (
                 editorEjercicios.map((ejercicio) => (
-                  <article key={ejercicio.id_ejercicio} className="exercise-card">
-                    <div className="exercise-card-head">
-                      <div>
+                  <article
+                    key={ejercicio.id_ejercicio}
+                    className={`exercise-card ${draggedEditorExerciseId === ejercicio.id_ejercicio ? "dragging" : ""}`}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      moveEditorExercise(ejercicio.id_ejercicio);
+                      setDraggedEditorExerciseId(null);
+                    }}
+                    ref={(node) => {
+                      if (node) {
+                        editorExerciseRefs.current.set(ejercicio.id_ejercicio, node);
+                      } else {
+                        editorExerciseRefs.current.delete(ejercicio.id_ejercicio);
+                      }
+                    }}
+                  >
+                    <div className="exercise-card-head exercise-card-head-with-tools">
+                      <button
+                        type="button"
+                        className="drag-handle"
+                        draggable
+                        onDragStart={(event) => {
+                          setDraggedEditorExerciseId(ejercicio.id_ejercicio);
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData("text/plain", String(ejercicio.id_ejercicio));
+                        }}
+                        onDragEnd={() => setDraggedEditorExerciseId(null)}
+                        aria-label={`Reordenar ${ejercicio.nombre}`}
+                        title="Arrastrar para reordenar"
+                      >
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                      </button>
+                      <div className="exercise-title-block">
                         <h3>{ejercicio.nombre}</h3>
                         <small>
                           {ejercicio.grupo_muscular} · {ejercicio.tipo_disciplina}
                         </small>
                       </div>
-                      <button
-                        type="button"
-                        className="exercise-remove-btn"
-                        onClick={() => removerEjercicioDelEditor(ejercicio.id_ejercicio)}
-                        aria-label={`Quitar ${ejercicio.nombre}`}
-                        title="Quitar ejercicio"
-                      >
-                        <TrashIcon />
-                      </button>
-                    </div>
-
-                    <div className="rest-grid">
-                      <span>Descanso</span>
-                      <DurationInput
-                        className="rest-time-input"
-                        seconds={descansoDesdeInputs(ejercicio.descansoMin, ejercicio.descansoSeg)}
-                        onChangeSeconds={(seconds) => updateDescansoEditor(ejercicio.id_ejercicio, seconds)}
-                        ariaLabel={`Descanso de ${ejercicio.nombre}`}
-                      />
+                      <div className="exercise-card-tools">
+                        <div className="exercise-note-control">
+                          <button
+                            type="button"
+                            className="btn tiny secondary"
+                            onClick={() => toggleNotaEditor(ejercicio.id_ejercicio)}
+                          >
+                            Nota
+                          </button>
+                          {(editorNoteOpenIds[ejercicio.id_ejercicio] || ejercicio.nota) && (
+                            <input
+                              className="field exercise-note-input"
+                              placeholder="Descripcion del ejercicio"
+                              maxLength={EXERCISE_NOTE_MAX_LENGTH}
+                              value={ejercicio.nota}
+                              onChange={(event) =>
+                                updateNotaEditor(ejercicio.id_ejercicio, event.target.value)
+                              }
+                            />
+                          )}
+                        </div>
+                        <div className="exercise-rest-control">
+                          <span>Descanso</span>
+                          <DurationInput
+                            className="rest-time-input"
+                            seconds={descansoDesdeInputs(ejercicio.descansoMin, ejercicio.descansoSeg)}
+                            onChangeSeconds={(seconds) => updateDescansoEditor(ejercicio.id_ejercicio, seconds)}
+                            ariaLabel={`Descanso de ${ejercicio.nombre}`}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="exercise-remove-btn"
+                          onClick={() => removerEjercicioDelEditor(ejercicio.id_ejercicio)}
+                          aria-label={`Quitar ${ejercicio.nombre}`}
+                          title="Quitar ejercicio"
+                        >
+                          <TrashIcon />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="set-table">
@@ -1800,24 +1983,55 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
                 </div>
               ) : (
                 ejecucionEjercicios.map((ejercicio) => (
-                  <article key={ejercicio.id_ejercicio} className="exercise-card">
-                    <div className="exercise-card-head">
-                      <div>
+                  <article
+                    key={ejercicio.id_ejercicio}
+                    className="exercise-card"
+                    ref={(node) => {
+                      if (node) {
+                        executionExerciseRefs.current.set(ejercicio.id_ejercicio, node);
+                      } else {
+                        executionExerciseRefs.current.delete(ejercicio.id_ejercicio);
+                      }
+                    }}
+                  >
+                    <div className="exercise-card-head exercise-card-head-with-tools">
+                      <div className="exercise-title-block">
                         <h3>{ejercicio.nombre}</h3>
                         <small>
-                          {ejercicio.grupo_muscular} · Descanso {formatDuration(ejercicio.descansoSegundos)}
+                          {ejercicio.grupo_muscular} · {ejercicio.tipo_disciplina}
                         </small>
                       </div>
-                    </div>
-
-                    <div className="rest-grid">
-                      <span>Descanso</span>
-                      <DurationInput
-                        className="rest-time-input"
-                        seconds={ejercicio.descansoSegundos}
-                        onChangeSeconds={(seconds) => updateDescansoEjecucion(ejercicio.id_ejercicio, seconds)}
-                        ariaLabel={`Descanso de ${ejercicio.nombre}`}
-                      />
+                      <div className="exercise-card-tools">
+                        <div className="exercise-note-control">
+                          <button
+                            type="button"
+                            className="btn tiny secondary"
+                            onClick={() => toggleNotaEjecucion(ejercicio.id_ejercicio)}
+                          >
+                            Nota
+                          </button>
+                          {(executionNoteOpenIds[ejercicio.id_ejercicio] || ejercicio.nota) && (
+                            <input
+                              className="field exercise-note-input"
+                              placeholder="Descripcion del ejercicio"
+                              maxLength={EXERCISE_NOTE_MAX_LENGTH}
+                              value={ejercicio.nota}
+                              onChange={(event) =>
+                                updateNotaEjecucion(ejercicio.id_ejercicio, event.target.value)
+                              }
+                            />
+                          )}
+                        </div>
+                        <div className="exercise-rest-control">
+                          <span>Descanso</span>
+                          <DurationInput
+                            className="rest-time-input"
+                            seconds={ejercicio.descansoSegundos}
+                            onChangeSeconds={(seconds) => updateDescansoEjecucion(ejercicio.id_ejercicio, seconds)}
+                            ariaLabel={`Descanso de ${ejercicio.nombre}`}
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     <div className="set-table execution-mode">
@@ -1905,7 +2119,7 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
                             className={`btn tiny ${serie.completada ? "success" : "secondary"}`}
                             onClick={() => toggleSerieCompletada(ejercicio.id_ejercicio, serie.id)}
                           >
-                            {serie.completada ? "✓" : "○"}
+                            ✓
                           </button>
                         </div>
                         );

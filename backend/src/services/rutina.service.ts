@@ -1,4 +1,5 @@
 import { pool } from "../db";
+import { limitDescription } from "../utils/textLimits";
 
 const CANDIDATE_CARPETA_TABLES = [
   "carpeta_rutina",
@@ -34,6 +35,7 @@ type RutinaRow = {
   fecha_creacion: string | null;
   creador_id: number;
   id_carpeta: number | null;
+  visible_en_descubrir: boolean;
   save_count: number;
   copy_count: number;
   likes_count: number;
@@ -188,6 +190,18 @@ const ensureRutinaLikeTable = async () => {
   );
 };
 
+const ensureRutinaVisibilityColumn = async () => {
+  await pool.query(
+    `ALTER TABLE rutina
+     ADD COLUMN IF NOT EXISTS visible_en_descubrir BOOLEAN NOT NULL DEFAULT TRUE`
+  );
+
+  await pool.query(
+    `ALTER TABLE rutina
+     ALTER COLUMN visible_en_descubrir SET DEFAULT TRUE`
+  );
+};
+
 const getRutinaMetricsSupport = async (): Promise<RutinaMetricSupport> => {
   const result = await pool.query<RutinaMetricSupport>(
     `SELECT
@@ -217,6 +231,7 @@ const buildRutinaSelectSql = (
          ${alias}.fecha_creacion,
          ${alias}.creador_id,
          ${alias}.id_carpeta,
+         ${alias}.visible_en_descubrir,
          ${
            support.has_save
              ? `(SELECT COUNT(*)::int FROM rutina_guardado rg WHERE rg.rutina_id = ${alias}.id_rutina)`
@@ -350,18 +365,29 @@ export const crearRutina = async (data: any) => {
     duracion_estimada,
     creador_id,
     id_carpeta,
+    visible_en_descubrir,
   } = data;
 
+  await ensureRutinaVisibilityColumn();
   const result = await pool.query<RutinaRow>(
-    `INSERT INTO rutina (nombre, descripcion, duracion_estimada, fecha_creacion, creador_id, id_carpeta)
-     VALUES ($1, $2, $3, NOW(), $4, $5)
+    `INSERT INTO rutina (
+       nombre,
+       descripcion,
+       duracion_estimada,
+       fecha_creacion,
+       creador_id,
+       id_carpeta,
+       visible_en_descubrir
+     )
+     VALUES ($1, $2, $3, NOW(), $4, $5, $6)
      RETURNING *`,
     [
       nombre,
-      descripcion ?? null,
+      limitDescription(descripcion),
       duracion_estimada ?? null,
       creador_id,
       id_carpeta ?? null,
+      visible_en_descubrir == null ? true : Boolean(visible_en_descubrir),
     ]
   );
 
@@ -377,6 +403,7 @@ export const crearRutina = async (data: any) => {
 };
 
 export const getRutinas = async (creadorId?: number) => {
+  await ensureRutinaVisibilityColumn();
   const support = await getRutinaMetricsSupport();
   const baseSql = buildRutinaSelectSql("r", support);
   const result = await pool.query<RutinaRow>(
@@ -420,9 +447,10 @@ const getDiscoverOrderSql = (orden: string | undefined) => {
 };
 
 export const getDiscoverRutinas = async (filters: DiscoverRutinasFilters) => {
+  await ensureRutinaVisibilityColumn();
   const support = await getRutinaMetricsSupport();
   const params: Array<number | string | string[]> = [];
-  const whereClauses: string[] = ["TRUE"];
+  const whereClauses: string[] = ["r.visible_en_descubrir = TRUE"];
 
   const {
     viewerId,
@@ -517,6 +545,7 @@ export const getDiscoverRutinas = async (filters: DiscoverRutinasFilters) => {
             r.fecha_creacion,
             r.creador_id,
             r.id_carpeta,
+            r.visible_en_descubrir,
             r.save_count,
             r.copy_count,
             r.likes_count,
@@ -549,6 +578,7 @@ export const getDiscoverRutinas = async (filters: DiscoverRutinasFilters) => {
 };
 
 export const getRutinaPorId = async (id: string, viewerId?: number) => {
+  await ensureRutinaVisibilityColumn();
   const support = await getRutinaMetricsSupport();
   const result = await pool.query<RutinaRow>(
     `${buildRutinaSelectSql("r", support, viewerId != null ? "$2" : undefined)}
@@ -565,24 +595,28 @@ export const updateRutina = async (id: string, data: any) => {
     duracion_estimada,
     creador_id,
     id_carpeta,
+    visible_en_descubrir,
   } = data;
 
+  await ensureRutinaVisibilityColumn();
   const result = await pool.query<RutinaRow>(
     `UPDATE rutina
      SET nombre = $1,
          descripcion = $2,
          duracion_estimada = $3,
          creador_id = $4,
-         id_carpeta = $5
-     WHERE id_rutina = $6
+         id_carpeta = $5,
+         visible_en_descubrir = $6
+     WHERE id_rutina = $7
        AND ($4::int IS NULL OR creador_id = $4)
      RETURNING *`,
     [
       nombre,
-      descripcion ?? null,
+      limitDescription(descripcion),
       duracion_estimada ?? null,
       creador_id ?? null,
       id_carpeta ?? null,
+      Boolean(visible_en_descubrir),
       id,
     ]
   );
