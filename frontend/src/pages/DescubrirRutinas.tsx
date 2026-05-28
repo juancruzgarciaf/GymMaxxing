@@ -18,6 +18,7 @@ type DescubrirRutinasProps = {
 
 type OrdenDiscover = "recientes" | "populares" | "copiadas" | "guardadas" | "random";
 type TipoCreador = "todos" | "usuario" | "entrenador" | "gimnasio";
+type SaveRoutineMode = "guardar" | "copiar";
 
 const API = "http://localhost:3000";
 const ORDEN_OPTIONS: Array<{ value: OrdenDiscover; label: string }> = [
@@ -63,6 +64,7 @@ function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasPr
   const [detalleEjercicios, setDetalleEjercicios] = useState<RoutineExerciseDetailed[]>([]);
   const [detalleLoading, setDetalleLoading] = useState(false);
   const [copiarModalRutinaId, setCopiarModalRutinaId] = useState<number | null>(null);
+  const [saveRoutineMode, setSaveRoutineMode] = useState<SaveRoutineMode>("guardar");
   const [copyNameDraft, setCopyNameDraft] = useState("");
   const [copyingRoutine, setCopyingRoutine] = useState(false);
   const [likeLoadingId, setLikeLoadingId] = useState<number | null>(null);
@@ -162,14 +164,14 @@ function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasPr
     }
   };
 
-  const handleCopiarRutina = async (rutinaId: number) => {
+  const handleCopiarRutina = async (rutinaId: number, customName: string) => {
     try {
       setError("");
       setMensaje("");
       const { seed, routine } = await fetchRoutineSeed(rutinaId);
 
       await saveTrainingSeedAsRoutine(seed, usuario.id, {
-        name: `${routine.nombre} (Copia)`,
+        name: customName.trim() || routine.nombre,
         description: routine.descripcion,
       });
 
@@ -181,8 +183,12 @@ function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasPr
     }
   };
 
-  const openCopyModal = (rutina: Pick<RoutineSummary, "id_rutina" | "nombre">) => {
+  const openSaveRoutineModal = (
+    rutina: Pick<RoutineSummary, "id_rutina" | "nombre">,
+    mode: SaveRoutineMode,
+  ) => {
     setCopiarModalRutinaId(rutina.id_rutina);
+    setSaveRoutineMode(mode);
     setCopyNameDraft(limitTitle(rutina.nombre));
   };
 
@@ -191,6 +197,7 @@ function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasPr
       return;
     }
     setCopiarModalRutinaId(null);
+    setSaveRoutineMode("guardar");
     setCopyNameDraft("");
   };
 
@@ -213,9 +220,14 @@ function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasPr
 
     try {
       setCopyingRoutine(true);
-      await handleGuardarRutina(copiarModalRutinaId, nextName);
+      if (saveRoutineMode === "copiar") {
+        await handleCopiarRutina(copiarModalRutinaId, nextName);
+      } else {
+        await handleGuardarRutina(copiarModalRutinaId, nextName);
+      }
       setCopiarModalRutinaId(null);
       setCopyNameDraft("");
+      setSaveRoutineMode("guardar");
     } finally {
       setCopyingRoutine(false);
     }
@@ -455,7 +467,7 @@ function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasPr
               <button
                 type="button"
                 className="btn"
-                onClick={() => void handleCopiarRutina(rutina.id_rutina)}
+                onClick={() => openSaveRoutineModal(rutina, "copiar")}
               >
                 Copiar rutina
               </button>
@@ -544,7 +556,11 @@ function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasPr
                         <LikeIcon />
                         <span className="social-action-count">{detalleRutina.likes_count}</span>
                       </button>
-                      <button type="button" className="btn" onClick={() => openCopyModal(detalleRutina)}>
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => openSaveRoutineModal(detalleRutina, "guardar")}
+                      >
                         Guardar rutina
                       </button>
                     </div>
@@ -598,7 +614,7 @@ function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasPr
             onClick={(event) => event.stopPropagation()}
           >
             <div className="modal-head">
-              <h2>Guardar rutina</h2>
+              <h2>{saveRoutineMode === "copiar" ? "Copiar rutina" : "Guardar rutina"}</h2>
               <button type="button" className="modal-close" onClick={closeCopyModal} disabled={copyingRoutine}>
                 ×
               </button>
@@ -621,7 +637,13 @@ function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasPr
                 onClick={() => void confirmCopyRoutine()}
                 disabled={copyingRoutine}
               >
-                {copyingRoutine ? "Guardando..." : "Guardar"}
+                {copyingRoutine
+                  ? saveRoutineMode === "copiar"
+                    ? "Copiando..."
+                    : "Guardando..."
+                  : saveRoutineMode === "copiar"
+                    ? "Copiar"
+                    : "Guardar"}
               </button>
             </div>
           </section>

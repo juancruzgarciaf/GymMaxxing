@@ -470,6 +470,9 @@ function App() {
   }
 
   const canTrain = canUseTrainingFeatures(usuario);
+  const isOwnProfileScreen =
+    mainScreen === "perfil" &&
+    (routeProfileUsername == null || routeProfileUsername.toLowerCase() === usuario.username.toLowerCase());
   const showActiveTrainingBar = Boolean(activeTraining && mainScreen !== "entrenamientoLibre");
   const activeRestFinished = Boolean(
     activeTraining?.rest &&
@@ -609,7 +612,7 @@ function App() {
           </button>
           <button
             type="button"
-            className={`nav-btn ${mainScreen === "perfil" ? "active" : ""}`}
+            className={`nav-btn ${isOwnProfileScreen ? "active" : ""}`}
             onClick={() => openProfile(usuario.username)}
           >
             <svg

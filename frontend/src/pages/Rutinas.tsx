@@ -1,6 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import routineDetailEmptyBodybuilder from "../assets/routine-detail-empty-bodybuilder.png";
-import { createRoutineShareUrl } from "../lib/trainingTransfer";
+import {
+  createRoutineShareUrl,
+  ROUTINE_LIBRARY_UPDATED_EVENT,
+  type RoutineLibraryUpdatedDetail,
+} from "../lib/trainingTransfer";
 import { canUseTrainingFeatures } from "../lib/roles";
 import { DESCRIPTION_MAX_LENGTH, TITLE_MAX_LENGTH, limitDescription, limitTitle } from "../lib/textLimits";
 import type { TrainingSeed, Usuario } from "../types";
@@ -300,7 +304,7 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
     [ejecucionEjercicios],
   );
 
-  const cargarRutinas = async () => {
+  const cargarRutinas = useCallback(async () => {
     const res = await fetch(`${API}/rutinas?creador_id=${usuario.id}`);
     if (!res.ok) {
       throw new Error(await parseError(res, "No se pudieron obtener las rutinas"));
@@ -311,7 +315,7 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
     setSelectedRutinaId((prev) =>
       prev != null && !data.some((rutina) => rutina.id_rutina === prev) ? null : prev,
     );
-  };
+  }, [usuario.id]);
 
   useEffect(() => {
     if (canStartTraining || vista !== "ejecucion") {
@@ -460,7 +464,25 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
     };
 
     void init();
-  }, [usuario.id]);
+  }, [cargarRutinas, usuario.id]);
+
+  useEffect(() => {
+    const handleRoutineLibraryUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<RoutineLibraryUpdatedDetail>).detail;
+      if (detail.userId !== usuario.id) {
+        return;
+      }
+
+      void cargarRutinas().catch((err) => {
+        setError(err instanceof Error ? err.message : "No se pudieron actualizar las rutinas");
+      });
+    };
+
+    window.addEventListener(ROUTINE_LIBRARY_UPDATED_EVENT, handleRoutineLibraryUpdated);
+    return () => {
+      window.removeEventListener(ROUTINE_LIBRARY_UPDATED_EVENT, handleRoutineLibraryUpdated);
+    };
+  }, [cargarRutinas, usuario.id]);
 
   useEffect(() => {
     if (selectedRutinaId == null) {

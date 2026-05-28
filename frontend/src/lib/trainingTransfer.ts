@@ -10,6 +10,12 @@ import { limitDescription, limitTitle } from "./textLimits";
 
 const API = "http://localhost:3000";
 const RUTINA_PREFS_KEY = "gymmaxxing_rutina_series_v1";
+export const ROUTINE_LIBRARY_UPDATED_EVENT = "gymmaxxing:routine-library-updated";
+
+export type RoutineLibraryUpdatedDetail = {
+  userId: number;
+  routineId: number;
+};
 
 type PersistedRutinaEjercicio = {
   id_ejercicio: number;
@@ -66,6 +72,14 @@ const savePersistedRutinaEjercicios = (
   const all = readRutinaPrefs();
   all[String(idRutina)] = ejercicios;
   writeRutinaPrefs(all);
+};
+
+const notifyRoutineLibraryUpdated = (detail: RoutineLibraryUpdatedDetail) => {
+  window.dispatchEvent(
+    new CustomEvent<RoutineLibraryUpdatedDetail>(ROUTINE_LIBRARY_UPDATED_EVENT, {
+      detail,
+    }),
+  );
 };
 
 export const createRoutineShareUrl = (routineId: number) => {
@@ -339,6 +353,11 @@ export const saveTrainingSeedAsRoutine = async (
       })),
     })),
   );
+
+  notifyRoutineLibraryUpdated({
+    userId,
+    routineId: routine.id_rutina,
+  });
 
   const sourceRoutineId = getSourceRoutineIdFromSeed(seed);
   if (sourceRoutineId != null) {

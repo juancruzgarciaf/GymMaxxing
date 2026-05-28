@@ -209,19 +209,28 @@ const getExerciseInputMode = (ejercicio: Pick<EjecucionEjercicio, "nombre" | "gr
 
 const formatSerieAnterior = (serie: SerieAnterior, mode: ExerciseInputMode) => {
   if (mode === "repsOnly") {
-    return `${serie.repeticiones} reps`;
+    return serie.repeticiones > 0 ? `${serie.repeticiones} reps` : "-";
   }
 
   if (mode === "timed") {
-    return formatDuration(serie.tiempo_segundos ?? 0);
+    return serie.tiempo_segundos && serie.tiempo_segundos > 0 ? formatDuration(serie.tiempo_segundos) : "-";
   }
 
   if (mode === "cardio") {
-    const km = serie.distancia_km == null ? "-" : `${serie.distancia_km} km`;
+    const hasDistance = serie.distancia_km != null;
+    const hasTime = serie.tiempo_segundos != null && serie.tiempo_segundos > 0;
+    if (!hasDistance && !hasTime) {
+      return "-";
+    }
+    const km = hasDistance ? `${serie.distancia_km} km` : "-";
     return `${km} en ${formatDuration(serie.tiempo_segundos ?? 0)}`;
   }
 
-  const peso = serie.peso == null ? "-" : `${serie.peso}KG`;
+  if (serie.repeticiones <= 0) {
+    return "-";
+  }
+
+  const peso = serie.peso == null ? "0" : String(serie.peso);
   return `${peso}x${serie.repeticiones}`;
 };
 
@@ -1817,6 +1826,9 @@ function Entrenamiento({
                           .filter((item) => item.tipo === "serie").length;
                         const serieAnterior =
                           seriesAnterioresPorEjercicio[ejercicio.id_ejercicio]?.[index] ?? null;
+                        const serieAnteriorLabel = serieAnterior
+                          ? formatSerieAnterior(serieAnterior, inputMode)
+                          : "-";
 
                         return (
                           <div
@@ -1846,7 +1858,7 @@ function Entrenamiento({
                                 <span className="set-order-badge">{numeroSerie}</span>
                               ) : null}
                             </div>
-                            {serieAnterior ? (
+                            {serieAnterior && serieAnteriorLabel !== "-" ? (
                               <button
                                 type="button"
                                 className="previous-set-chip"
@@ -1859,10 +1871,12 @@ function Entrenamiento({
                                   )
                                 }
                               >
-                                {formatSerieAnterior(serieAnterior, inputMode)}
+                                {serieAnteriorLabel}
                               </button>
                             ) : (
-                              <span className="previous-set-empty" aria-label="Sin serie anterior" />
+                              <span className="previous-set-empty" aria-label="Sin serie anterior">
+                                -
+                              </span>
                             )}
                             {inputMode === "strength" ? (
                               <input
