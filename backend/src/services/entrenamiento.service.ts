@@ -1,5 +1,6 @@
 import { pool } from "../db";
 import { limitDescription, limitTitle } from "../utils/textLimits";
+import { createNotificationIfAllowed } from "./notification.service";
 
 type SesionEntrenamientoRow = {
   id_sesion: number;
@@ -596,12 +597,39 @@ export const getSeriesAnterioresDeEjercicio = async (
 };
 
 export const addLikeToSesion = async (sesion_id: string, usuario_id: number) => {
-  await pool.query(
+  const insertResult = await pool.query(
     `INSERT INTO sesion_like (sesion_id, usuario_id, fecha)
      VALUES ($1, $2, NOW())
-     ON CONFLICT (sesion_id, usuario_id) DO NOTHING`,
+     ON CONFLICT (sesion_id, usuario_id) DO NOTHING
+     RETURNING sesion_id`,
     [sesion_id, usuario_id]
   );
+
+  if ((insertResult.rowCount ?? 0) > 0) {
+    const [sesion, actorResult] = await Promise.all([
+      getSesionPorId(sesion_id),
+      pool.query<{ username: string }>(
+        `SELECT username
+         FROM usuario
+         WHERE id = $1`,
+        [usuario_id]
+      ),
+    ]);
+
+    if (sesion) {
+      const actorUsername = actorResult.rows[0]?.username ?? "Alguien";
+
+      await createNotificationIfAllowed({
+        usuario_id: sesion.usuario_id,
+        actor_id: usuario_id,
+        tipo: "training_like",
+        titulo: "Nuevo like en tu entrenamiento",
+        mensaje: `${actorUsername} le dio like a tu entrenamiento`,
+        referencia_tipo: "sesion_entrenamiento",
+        referencia_id: Number(sesion_id),
+      });
+    }
+  }
 
   return getSessionInteractionSummary(sesion_id, usuario_id);
 };
@@ -648,9 +676,24 @@ export const createComentarioDeSesion = async (
   );
 
   const commentId = result.rows[0]?.id_comentario;
-  const comments = await getComentariosDeSesion(sesion_id);
+  const [comments, sesion] = await Promise.all([
+    getComentariosDeSesion(sesion_id),
+    getSesionPorId(sesion_id),
+  ]);
   const comentario = comments.find((item) => item.id_comentario === commentId) ?? null;
   const summary = await getSessionInteractionSummary(sesion_id, usuario_id);
+
+  if (sesion && comentario) {
+    await createNotificationIfAllowed({
+      usuario_id: sesion.usuario_id,
+      actor_id: usuario_id,
+      tipo: "training_comment",
+      titulo: "Nuevo comentario en tu entrenamiento",
+      mensaje: `${comentario.username} comentó tu entrenamiento`,
+      referencia_tipo: "sesion_entrenamiento",
+      referencia_id: Number(sesion_id),
+    });
+  }
 
   return {
     comentario,

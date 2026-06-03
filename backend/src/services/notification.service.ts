@@ -377,3 +377,13 @@ export const createNotification = async (input: CreateNotificationInput) => {
 
   return result.rows[0] ?? null;
 };
+
+export const createNotificationIfAllowed = async (input: CreateNotificationInput) => {
+  const enabled = await isNotificationEnabledForUser(input.usuario_id, input.tipo);
+
+  if (!enabled) {
+    return null;
+  }
+
+  return createNotification(input);
+};

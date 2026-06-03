@@ -1,5 +1,6 @@
 import { pool } from "../db";
 import { limitDescription } from "../utils/textLimits";
+import { createNotificationIfAllowed } from "./notification.service";
 
 type UsuarioRow = {
   id: number;
@@ -959,12 +960,34 @@ export const followUser = async (seguidorId: number, seguidoId: number) => {
     return { error: "No te podes seguir a vos mismo" as const };
   }
 
-  await pool.query(
+  const insertResult = await pool.query(
     `INSERT INTO seguimientousuario (id_seguidor, id_seguido, fecha)
      VALUES ($1, $2, NOW())
-     ON CONFLICT (id_seguidor, id_seguido) DO NOTHING`,
+     ON CONFLICT (id_seguidor, id_seguido) DO NOTHING
+     RETURNING id_seguidor`,
     [seguidorId, seguidoId]
   );
+
+  if ((insertResult.rowCount ?? 0) > 0) {
+    const actorResult = await pool.query<{ username: string }>(
+      `SELECT username
+       FROM usuario
+       WHERE id = $1`,
+      [seguidorId]
+    );
+
+    const actorUsername = actorResult.rows[0]?.username ?? "Alguien";
+
+    await createNotificationIfAllowed({
+      usuario_id: seguidoId,
+      actor_id: seguidorId,
+      tipo: "new_follower",
+      titulo: "Nuevo seguidor",
+      mensaje: `${actorUsername} empezó a seguirte`,
+      referencia_tipo: "usuario",
+      referencia_id: seguidorId,
+    });
+  }
 
   return { ok: true as const };
 };
