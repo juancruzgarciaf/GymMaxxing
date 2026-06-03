@@ -16,6 +16,7 @@ import Buscar from "./pages/Buscar";
 import Descubrir from "./pages/Descubrir";
 import EntrenamientoDetalle from "./pages/EntrenamientoDetalle";
 import Login from "./pages/Login";
+import Notificaciones from "./pages/Notificaciones";
 import Perfil from "./pages/Perfil";
 import Register from "./pages/Register";
 import NotificationSettingsPanel from "./components/NotificationSettingsPanel";
@@ -31,6 +32,7 @@ type MainScreen =
   | "buscar"
   | "descubrir"
   | "perfil"
+  | "notificaciones"
   | "ajustes"
   | "entrenamientoLibre"
   | "entrenamiento";
@@ -75,6 +77,7 @@ const pathForScreen = (screen: RoutedMainScreen) => {
     buscar: "/buscar",
     descubrir: "/descubrir",
     perfil: "/perfil",
+    notificaciones: "/notificaciones",
     ajustes: "/ajustes",
     entrenamientoLibre: "/entrenamiento",
   };
@@ -115,6 +118,9 @@ const getMainScreenFromPath = (pathname: string): MainScreen => {
   }
   if (pathname === "/ajustes") {
     return "ajustes";
+  }
+  if (pathname === "/notificaciones") {
+    return "notificaciones";
   }
   if (pathname === "/rutina-compartida") {
     return "rutinaCompartida";
@@ -206,6 +212,7 @@ function App() {
   const [themeMode, setThemeMode] = useState<ThemeMode>(readStoredTheme);
   const [usuario, setUsuario] = useState<Usuario | null>(initialAuth?.usuario ?? null);
   const [authToken, setAuthToken] = useState<string | null>(initialAuth?.token ?? null);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [selectedTraining, setSelectedTraining] = useState<EntrenamientoResumen | null>(null);
   const [trainingReturnScreen, setTrainingReturnScreen] = useState<RoutedMainScreen>("home");
   const [trainingSeed, setTrainingSeed] = useState<TrainingSeed | null>(null);
@@ -433,6 +440,7 @@ function App() {
   const handleLogout = () => {
     setUsuario(null);
     setAuthToken(null);
+    setUnreadNotifications(0);
     persistAuth(null);
     dismissSharedRoutine();
     setSelectedTraining(null);
@@ -447,6 +455,51 @@ function App() {
   const handleAuthExpired = () => {
     handleLogout();
   };
+
+  const refreshUnreadNotifications = useCallback(async () => {
+    if (!authToken) {
+      setUnreadNotifications(0);
+      return;
+    }
+
+    try {
+      const res = await fetch("http://localhost:3000/notificaciones?limit=1", {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
+      const data = (await res.json()) as { unread_count?: number; error?: string };
+
+      if (res.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo cargar el contador de notificaciones");
+      }
+
+      setUnreadNotifications(data.unread_count ?? 0);
+    } catch (error) {
+      console.error("No se pudo refrescar el contador de notificaciones", error);
+    }
+  }, [authToken]);
+
+  useEffect(() => {
+    if (!usuario || !authToken) {
+      setUnreadNotifications(0);
+      return;
+    }
+
+    void refreshUnreadNotifications();
+
+    const interval = window.setInterval(() => {
+      void refreshUnreadNotifications();
+    }, 30000);
+
+    return () => window.clearInterval(interval);
+  }, [authToken, refreshUnreadNotifications, usuario]);
 
   const toggleTheme = () => {
     setThemeMode((currentTheme) => (currentTheme === "dark" ? "light" : "dark"));
@@ -635,27 +688,56 @@ function App() {
           </button>
         </nav>
 
-        <button
-          type="button"
-          className={`settings-nav-btn ${mainScreen === "ajustes" ? "active" : ""}`}
-          onClick={() => navigateTo("ajustes")}
-          aria-label="Ajustes"
-          title="Ajustes"
-        >
-          <svg
-            className="settings-nav-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
+        <div className="topbar-actions">
+          <button
+            type="button"
+            className={`settings-nav-btn notification-nav-btn ${mainScreen === "notificaciones" ? "active" : ""}`}
+            onClick={() => navigateTo("notificaciones")}
+            aria-label="Notificaciones"
+            title="Notificaciones"
           >
-            <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" />
-            <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.04.04a2 2 0 0 1-2.83 2.83l-.04-.04A1.7 1.7 0 0 0 15 19.37a1.7 1.7 0 0 0-1 .91l-.02.05a2 2 0 0 1-3.66 0l-.02-.05a1.7 1.7 0 0 0-1-.91 1.7 1.7 0 0 0-1.88.34l-.04.04a2 2 0 0 1-2.83-2.83l.04-.04A1.7 1.7 0 0 0 4.63 15a1.7 1.7 0 0 0-.91-1l-.05-.02a2 2 0 0 1 0-3.66l.05-.02a1.7 1.7 0 0 0 .91-1 1.7 1.7 0 0 0-.34-1.88l-.04-.04a2 2 0 0 1 2.83-2.83l.04.04A1.7 1.7 0 0 0 9 4.63a1.7 1.7 0 0 0 1-.91l.02-.05a2 2 0 0 1 3.66 0l.02.05a1.7 1.7 0 0 0 1 .91 1.7 1.7 0 0 0 1.88-.34l.04-.04a2 2 0 0 1 2.83 2.83l-.04.04A1.7 1.7 0 0 0 19.37 9c.38.14.7.45.91.82l.05.02a2 2 0 0 1 0 3.66l-.05.02a1.7 1.7 0 0 0-.88 1.48Z" />
-          </svg>
-        </button>
+            <svg
+              className="settings-nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+              <path d="M9 17a3 3 0 0 0 6 0" />
+            </svg>
+            {unreadNotifications > 0 ? (
+              <span className="notification-badge">
+                {unreadNotifications > 9 ? "9+" : unreadNotifications}
+              </span>
+            ) : null}
+          </button>
+
+          <button
+            type="button"
+            className={`settings-nav-btn ${mainScreen === "ajustes" ? "active" : ""}`}
+            onClick={() => navigateTo("ajustes")}
+            aria-label="Ajustes"
+            title="Ajustes"
+          >
+            <svg
+              className="settings-nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" />
+              <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.04.04a2 2 0 0 1-2.83 2.83l-.04-.04A1.7 1.7 0 0 0 15 19.37a1.7 1.7 0 0 0-1 .91l-.02.05a2 2 0 0 1-3.66 0l-.02-.05a1.7 1.7 0 0 0-1-.91 1.7 1.7 0 0 0-1.88.34l-.04.04a2 2 0 0 1-2.83-2.83l.04-.04A1.7 1.7 0 0 0 4.63 15a1.7 1.7 0 0 0-.91-1l-.05-.02a2 2 0 0 1 0-3.66l.05-.02a1.7 1.7 0 0 0 .91-1 1.7 1.7 0 0 0-.34-1.88l-.04-.04a2 2 0 0 1 2.83-2.83l.04.04A1.7 1.7 0 0 0 9 4.63a1.7 1.7 0 0 0 1-.91l.02-.05a2 2 0 0 1 3.66 0l.02.05a1.7 1.7 0 0 0 1 .91 1.7 1.7 0 0 0 1.88-.34l.04-.04a2 2 0 0 1 2.83 2.83l-.04.04A1.7 1.7 0 0 0 19.37 9c.38.14.7.45.91.82l.05.02a2 2 0 0 1 0 3.66l-.05.02a1.7 1.7 0 0 0-.88 1.48Z" />
+            </svg>
+          </button>
+        </div>
       </header>
 
       <div className="content">
@@ -723,6 +805,13 @@ function App() {
             onQueryChange={setUserSearchQuery}
             onResultadosChange={setUserSearchResults}
             onOpenProfile={openProfile}
+          />
+        ) : null}
+        {mainScreen === "notificaciones" ? (
+          <Notificaciones
+            authToken={authToken}
+            onAuthExpired={handleAuthExpired}
+            onUnreadCountChange={setUnreadNotifications}
           />
         ) : null}
         {mainScreen === "perfil" ? (

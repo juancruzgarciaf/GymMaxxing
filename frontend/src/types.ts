@@ -216,6 +216,21 @@ export type NotificationPreferences = {
   fecha_actualizacion: string;
 };
 
+export type NotificationItem = {
+  id_notificacion: number;
+  usuario_id: number;
+  actor_id: number | null;
+  actor_username: string | null;
+  tipo: "training_like" | "training_comment" | "new_follower";
+  titulo: string;
+  mensaje: string;
+  referencia_tipo: string | null;
+  referencia_id: number | null;
+  leida: boolean;
+  fecha_creacion: string;
+  fecha_lectura: string | null;
+};
+
 export type SuggestedAthlete = Usuario & {
   followers_count: number;
   following_count: number;
