@@ -1,4 +1,5 @@
 import { pool } from "../db";
+import { sendMail } from "./mail.service";
 
 export type NotificationType = "training_like" | "training_comment" | "new_follower";
 
@@ -194,6 +195,18 @@ const getPreferenceColumnForType = (tipo: NotificationType) => {
   }
 };
 
+const isSpecificNotificationEnabled = (
+  row: NotificationPreferenceRow,
+  tipo: NotificationType
+) => {
+  const column = getPreferenceColumnForType(tipo);
+  if (!column) {
+    return false;
+  }
+
+  return Boolean(row[column]);
+};
+
 export const listNotifications = async (
   usuarioId: number,
   options?: { limit?: number; offset?: number }
@@ -329,12 +342,7 @@ export const isNotificationEnabledForUser = async (usuarioId: number, tipo: Noti
     return false;
   }
 
-  const column = getPreferenceColumnForType(tipo);
-  if (!column) {
-    return false;
-  }
-
-  return Boolean(row[column]);
+  return isSpecificNotificationEnabled(row, tipo);
 };
 
 export const createNotification = async (input: CreateNotificationInput) => {
@@ -383,11 +391,36 @@ export const createNotification = async (input: CreateNotificationInput) => {
 };
 
 export const createNotificationIfAllowed = async (input: CreateNotificationInput) => {
-  const enabled = await isNotificationEnabledForUser(input.usuario_id, input.tipo);
-
-  if (!enabled) {
+  if (input.actor_id != null && input.actor_id === input.usuario_id) {
     return null;
   }
 
-  return createNotification(input);
+  const preferences = await getPreferencesRow(input.usuario_id);
+
+  if (!preferences || !isSpecificNotificationEnabled(preferences, input.tipo)) {
+    return null;
+  }
+
+  const notification =
+    preferences.recibir_en_app
+      ? await createNotification(input)
+      : null;
+
+  if (preferences.recibir_por_email && preferences.email) {
+    try {
+      const safeTitle = input.titulo.trim();
+      const safeMessage = input.mensaje.trim();
+
+      await sendMail({
+        to: preferences.email,
+        subject: `GymMaxxing | ${safeTitle}`,
+        text: `${safeTitle}\n\n${safeMessage}`,
+        html: `<h2>${safeTitle}</h2><p>${safeMessage}</p>`,
+      });
+    } catch (error) {
+      console.error("No se pudo enviar el email de notificacion", error);
+    }
+  }
+
+  return notification;
 };

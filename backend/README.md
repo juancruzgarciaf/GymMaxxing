@@ -106,6 +106,28 @@ DB_PORT=5432
 
 Cada integrante del equipo puede necesitar valores distintos en `DB_USER`, `DB_PASSWORD`, `DB_NAME` o `DB_PORT`, según cómo tenga configurado PostgreSQL.
 
+### Variables para notificaciones por email
+
+Si queres habilitar envios por correo para las notificaciones, suma estas variables en `backend/.env`:
+
+```env
+MAIL_ENABLED=false
+MAIL_FROM=no-reply@gymmaxxing.local
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=tu_usuario_smtp
+SMTP_PASS=tu_password_o_app_password_smtp
+```
+
+Notas:
+
+* `MAIL_ENABLED=true` activa el intento de envio.
+* Si `MAIL_ENABLED=false`, la app sigue funcionando y solo crea notificaciones internas.
+* Para Gmail SMTP normalmente conviene usar una `App Password`, no tu contraseña común.
+* `MAIL_FROM` es el remitente visible.
+* `SMTP_SECURE=true` suele usarse con puerto `465`; `false` suele ir con `587`.
+
 ---
 
 ## 📌 Estado del proyecto
