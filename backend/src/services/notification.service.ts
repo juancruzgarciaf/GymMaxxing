@@ -24,6 +24,7 @@ type NotificationRow = {
 type NotificationPreferenceRow = {
   usuario_id: number;
   email: string | null;
+  google_vinculado: boolean;
   recibir_en_app: boolean;
   recibir_por_email: boolean;
   notificar_like_entrenamiento: boolean;
@@ -38,6 +39,7 @@ export type NotificationPreferences = {
   usuario_id: number;
   email: string | null;
   email_disponible: boolean;
+  google_vinculado: boolean;
   recibir_en_app: boolean;
   recibir_por_email: boolean;
   notificar_like_entrenamiento: boolean;
@@ -73,6 +75,7 @@ const mapPreferences = (row: NotificationPreferenceRow): NotificationPreferences
   usuario_id: row.usuario_id,
   email: row.email,
   email_disponible: Boolean(row.email),
+  google_vinculado: row.google_vinculado,
   recibir_en_app: row.recibir_en_app,
   recibir_por_email: row.recibir_por_email,
   notificar_like_entrenamiento: row.notificar_like_entrenamiento,
@@ -162,6 +165,7 @@ const getPreferencesRow = async (
   const result = await queryable.query<NotificationPreferenceRow>(
     `SELECT pnu.usuario_id,
             NULLIF(TRIM(u.email), '') AS email,
+            COALESCE(u.password LIKE 'google:%', FALSE) AS google_vinculado,
             pnu.recibir_en_app,
             pnu.recibir_por_email,
             pnu.notificar_like_entrenamiento,

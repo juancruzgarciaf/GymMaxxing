@@ -203,6 +203,19 @@ export type SocialUser = Usuario & {
   viewer_follows: boolean;
 };
 
+export type NotificationPreferences = {
+  usuario_id: number;
+  email: string | null;
+  email_disponible: boolean;
+  google_vinculado: boolean;
+  recibir_en_app: boolean;
+  recibir_por_email: boolean;
+  notificar_like_entrenamiento: boolean;
+  notificar_comentario_entrenamiento: boolean;
+  notificar_nuevo_seguidor: boolean;
+  fecha_actualizacion: string;
+};
+
 export type SuggestedAthlete = Usuario & {
   followers_count: number;
   following_count: number;

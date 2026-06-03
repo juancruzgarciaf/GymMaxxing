@@ -18,6 +18,7 @@ import EntrenamientoDetalle from "./pages/EntrenamientoDetalle";
 import Login from "./pages/Login";
 import Perfil from "./pages/Perfil";
 import Register from "./pages/Register";
+import NotificationSettingsPanel from "./components/NotificationSettingsPanel";
 
 import RutinaCompartida from "./pages/RutinaCompartida";
 import Rutinas from "./pages/Rutinas";
@@ -762,6 +763,7 @@ function App() {
                 </button>
               </div>
             </section>
+            <NotificationSettingsPanel authToken={authToken} onAuthExpired={handleAuthExpired} />
           </main>
         ) : null}
         {mainScreen === "entrenamiento" && currentTraining ? (

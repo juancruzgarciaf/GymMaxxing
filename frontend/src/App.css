@@ -1947,6 +1947,71 @@ h2 {
   background: #2a1a1d;
 }
 
+.notification-settings-card {
+  gap: 18px;
+}
+
+.settings-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-info-item {
+  border: 1px solid rgba(151, 183, 202, 0.14);
+  border-radius: 14px;
+  background: rgba(5, 12, 22, 0.42);
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.settings-info-item small {
+  color: #91a8b8;
+}
+
+.settings-info-item strong {
+  color: #e5f8ff;
+  font-size: 0.98rem;
+}
+
+.settings-toggle-list {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-toggle-row {
+  border: 1px solid rgba(151, 183, 202, 0.14);
+  border-radius: 14px;
+  background: rgba(5, 12, 22, 0.42);
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+}
+
+.settings-toggle-row.disabled {
+  opacity: 0.62;
+}
+
+.settings-toggle-row strong {
+  color: #e5f8ff;
+}
+
+.settings-toggle-row p {
+  margin: 6px 0 0;
+  color: #9fb3c1;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.settings-toggle-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #5aa9ff;
+}
+
 .feed-page-shell {
   width: min(1240px, 100%);
 }
@@ -4531,6 +4596,14 @@ button.discover-module-card:hover,
     justify-content: flex-end;
   }
 
+  .settings-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-toggle-row {
+    grid-template-columns: 1fr;
+  }
+
   .profile-modern-header {
     grid-template-columns: 1fr;
     padding: 18px;
@@ -4959,6 +5032,16 @@ button.discover-module-card:hover,
 :root[data-theme="light"] .logout-action-btn:hover {
   border-color: #e26c78;
   background: #fff1f2;
+}
+
+:root[data-theme="light"] .settings-toggle-row p,
+:root[data-theme="light"] .settings-info-item small {
+  color: #4b5563;
+}
+
+:root[data-theme="light"] .settings-toggle-row strong,
+:root[data-theme="light"] .settings-info-item strong {
+  color: #111827;
 }
 
 :root[data-theme="light"] :is(.helper-text, .subtitle, .auth-subtitle, .settings-card-head p) {
