@@ -18,6 +18,7 @@ import EntrenamientoDetalle from "./pages/EntrenamientoDetalle";
 import Login from "./pages/Login";
 import Notificaciones from "./pages/Notificaciones";
 import Perfil from "./pages/Perfil";
+import Pro from "./pages/Pro";
 import Register from "./pages/Register";
 import NotificationSettingsPanel from "./components/NotificationSettingsPanel";
 
@@ -34,6 +35,7 @@ type MainScreen =
   | "perfil"
   | "notificaciones"
   | "ajustes"
+  | "pro"
   | "entrenamientoLibre"
   | "entrenamiento";
 
@@ -79,6 +81,7 @@ const pathForScreen = (screen: RoutedMainScreen) => {
     perfil: "/perfil",
     notificaciones: "/notificaciones",
     ajustes: "/ajustes",
+    pro: "/pro",
     entrenamientoLibre: "/entrenamiento",
   };
 
@@ -121,6 +124,9 @@ const getMainScreenFromPath = (pathname: string): MainScreen => {
   }
   if (pathname === "/notificaciones") {
     return "notificaciones";
+  }
+  if (pathname === "/pro") {
+    return "pro";
   }
   if (pathname === "/rutina-compartida") {
     return "rutinaCompartida";
@@ -691,6 +697,15 @@ function App() {
         <div className="topbar-actions">
           <button
             type="button"
+            className={`pro-nav-btn ${mainScreen === "pro" ? "active" : ""}`}
+            onClick={() => navigateTo("pro")}
+            aria-label="GymMaxxing PRO"
+            title="GymMaxxing PRO"
+          >
+            PRO
+          </button>
+          <button
+            type="button"
             className={`settings-nav-btn notification-nav-btn ${mainScreen === "notificaciones" ? "active" : ""}`}
             onClick={() => navigateTo("notificaciones")}
             aria-label="Notificaciones"
@@ -814,6 +829,7 @@ function App() {
             onUnreadCountChange={setUnreadNotifications}
           />
         ) : null}
+        {mainScreen === "pro" ? <Pro onClose={() => navigateTo("home")} /> : null}
         {mainScreen === "perfil" ? (
           <Perfil
             usuario={usuario}
