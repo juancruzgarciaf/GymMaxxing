@@ -2063,7 +2063,12 @@ h2 {
 }
 
 .pro-comparison-pro-title {
-  color: #89c2ff !important;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 5px 11px;
+  background: #5aa9ff;
+  color: #071626 !important;
+  box-shadow: 0 8px 20px rgba(90, 169, 255, 0.22);
 }
 
 .pro-comparison-row {
@@ -2108,8 +2113,20 @@ h2 {
 }
 
 .pro-comparison-value.pro-value {
-  color: #e5f8ff;
+  align-self: stretch;
+  border: 1px solid rgba(90, 169, 255, 0.48);
+  border-radius: 12px;
+  padding: 11px;
+  background: linear-gradient(135deg, rgba(90, 169, 255, 0.23), rgba(47, 126, 210, 0.1));
+  color: #f1f8ff;
   font-weight: 700;
+  box-shadow: 0 8px 20px rgba(3, 12, 24, 0.16);
+}
+
+.pro-comparison-value.pro-value .pro-comparison-icon {
+  background: #5aa9ff;
+  color: #071626;
+  box-shadow: 0 6px 14px rgba(90, 169, 255, 0.24);
 }
 
 .pro-comparison-icon {
@@ -2396,7 +2413,10 @@ h2 {
 }
 
 :root[data-theme="light"] .pro-comparison-value.pro-value {
-  color: #111827;
+  border-color: #5aa9ff;
+  background: linear-gradient(135deg, #dceeff, #eff7ff);
+  color: #0f2740;
+  box-shadow: 0 8px 20px rgba(90, 169, 255, 0.12);
 }
 
 :root[data-theme="light"] .pro-comparison-value.unavailable {
