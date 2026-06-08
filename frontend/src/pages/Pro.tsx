@@ -38,11 +38,6 @@ const plans: Plan[] = [
 
 const planComparison = [
   {
-    feature: "Rutinas",
-    common: "Hasta 5 rutinas",
-    pro: "Rutinas ilimitadas",
-  },
-  {
     feature: "Ejercicios personalizados",
     common: "Hasta 10 ejercicios",
     pro: "Ejercicios ilimitados",
@@ -56,16 +51,6 @@ const planComparison = [
     feature: "Progreso por ejercicio",
     common: "Ultimos registros",
     pro: "Evolucion de peso, reps y volumen",
-  },
-  {
-    feature: "Medidas corporales",
-    common: "No incluido",
-    pro: "Seguimiento completo",
-  },
-  {
-    feature: "Historial",
-    common: "Ultimos 90 dias",
-    pro: "Historial completo",
   },
   {
     feature: "Calculadora de calentamiento",
@@ -131,14 +116,14 @@ function Pro({ onClose }: ProProps) {
         <div className="pro-benefits-panel">
           <div className="pro-section-head">
             <p className="eyebrow">Compara los planes</p>
-            <h2>Comun o PRO: elige hasta donde quieres llegar</h2>
+            <h2>Plan gratuito o PRO: elige hasta donde quieres llegar</h2>
             <p>Empieza gratis y desbloquea mas control sobre tu progreso cuando lo necesites.</p>
           </div>
 
           <div className="pro-comparison">
             <div className="pro-comparison-head" aria-hidden="true">
               <span>Funcionalidad</span>
-              <strong>Plan comun</strong>
+              <strong>Plan gratuito</strong>
               <strong className="pro-comparison-pro-title">PRO</strong>
             </div>
 
@@ -153,7 +138,7 @@ function Pro({ onClose }: ProProps) {
                       {commonUnavailable ? <MinusIcon /> : <CheckIcon />}
                     </span>
                     <span>
-                      <small>Plan comun</small>
+                      <small>Plan gratuito</small>
                       {item.common}
                     </span>
                   </div>
