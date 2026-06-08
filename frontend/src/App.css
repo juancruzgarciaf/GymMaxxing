@@ -2123,12 +2123,6 @@ h2 {
   box-shadow: 0 8px 20px rgba(3, 12, 24, 0.16);
 }
 
-.pro-comparison-value.pro-value .pro-comparison-icon {
-  background: #5aa9ff;
-  color: #071626;
-  box-shadow: 0 6px 14px rgba(90, 169, 255, 0.24);
-}
-
 .pro-comparison-icon {
   width: 26px;
   height: 26px;
