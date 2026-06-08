@@ -60,6 +60,10 @@ type SesionEntrenamiento = {
   usuario_id: number;
   rutina_id: number | null;
   descripcion: string | null;
+  fecha_inicio?: string | null;
+  fecha_fin?: string | null;
+  estado?: string;
+  duracion_segundos?: number | null;
   nombre_rutina_snapshot?: string | null;
 };
 
@@ -94,6 +98,7 @@ type VistaEntrenamiento = "inicio" | "ejecucion" | "guardar";
 const API = "http://localhost:3000";
 const ACTIVE_TRAINING_STORAGE_PREFIX = "gymmaxxing_active_training_v1";
 const TRAINING_DELETED_EVENT = "gymmaxxing:training-deleted";
+const STALE_ACTIVE_TRAINING_THRESHOLD_MS = 6 * 60 * 60 * 1000;
 const EXERCISE_NOTE_MAX_LENGTH = 120;
 
 const SET_TIPO_OPTIONS: Array<{ value: TrainingSetType; label: string }> = [
@@ -117,8 +122,20 @@ const limitExerciseNote = (value: string) => value.slice(0, EXERCISE_NOTE_MAX_LE
 const twoDigits = (value: number) => String(value).padStart(2, "0");
 
 const formatDuration = (totalSeconds: number) => {
-  const min = Math.floor(totalSeconds / 60);
-  const sec = totalSeconds % 60;
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const days = Math.floor(safeSeconds / 86400);
+  const hours = Math.floor((safeSeconds % 86400) / 3600);
+  const min = Math.floor((safeSeconds % 3600) / 60);
+  const sec = safeSeconds % 60;
+
+  if (days > 0) {
+    return `${days}d ${twoDigits(hours)}:${twoDigits(min)}:${twoDigits(sec)}`;
+  }
+
+  if (hours > 0) {
+    return `${hours}:${twoDigits(min)}:${twoDigits(sec)}`;
+  }
+
   return `${twoDigits(min)}:${twoDigits(sec)}`;
 };
 
@@ -159,6 +176,7 @@ type ExerciseInputMode = "strength" | "repsOnly" | "timed" | "cardio";
 type PersistedActiveTraining = {
   usuarioId: number;
   savedAt: number;
+  startedAt: number;
   vista: Extract<VistaEntrenamiento, "ejecucion" | "guardar">;
   sesionActiva: SesionEntrenamiento;
   sourceRoutineIdContext: number | null;
@@ -175,8 +193,48 @@ type PersistedActiveTraining = {
   busquedaEjercicio: string;
 };
 
+type RestoredActiveTraining = Omit<PersistedActiveTraining, "usuarioId" | "savedAt">;
+
 const activeTrainingStorageKey = (usuarioId: number) =>
   `${ACTIVE_TRAINING_STORAGE_PREFIX}:${usuarioId}`;
+
+const parseTimestamp = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  return null;
+};
+
+const secondsBetween = (fromMs: number, toMs = Date.now()) =>
+  Math.max(0, Math.floor((toMs - fromMs) / 1000));
+
+const getPersistedTrainingStartedAt = (
+  parsed: Partial<PersistedActiveTraining>,
+  savedAt: number,
+) => {
+  const explicitStartedAt = parseTimestamp(parsed.startedAt);
+  if (explicitStartedAt != null) {
+    return explicitStartedAt;
+  }
+
+  const sessionStartedAt = parseTimestamp(parsed.sesionActiva?.fecha_inicio);
+  if (sessionStartedAt != null) {
+    return sessionStartedAt;
+  }
+
+  const elapsedSeconds =
+    typeof parsed.elapsedSesionSegundos === "number" && Number.isFinite(parsed.elapsedSesionSegundos)
+      ? Math.max(0, Math.floor(parsed.elapsedSesionSegundos))
+      : 0;
+
+  return Math.max(0, savedAt - elapsedSeconds * 1000);
+};
 
 const normalizeText = (value: string) =>
   value
@@ -285,6 +343,7 @@ function Entrenamiento({
   >({});
   const [descansoActivo, setDescansoActivo] = useState<DescansoActivo | null>(null);
   const [elapsedSesionSegundos, setElapsedSesionSegundos] = useState(0);
+  const [trainingStartedAt, setTrainingStartedAt] = useState<number | null>(null);
   const [totalTrofeosEntrenamiento, setTotalTrofeosEntrenamiento] = useState(0);
 
   const [guardarNombre, setGuardarNombre] = useState("");
@@ -293,6 +352,7 @@ function Entrenamiento({
   const [guardarComoRutina, setGuardarComoRutina] = useState(false);
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
   const [activeTrainingHydrated, setActiveTrainingHydrated] = useState(false);
+  const [staleTrainingRestore, setStaleTrainingRestore] = useState<RestoredActiveTraining | null>(null);
   const handledDiscardRequestKey = useRef(0);
   const descartarEntrenamientoRef = useRef<(() => Promise<void>) | null>(null);
   const catalogoAutoReloadTriedRef = useRef(false);
@@ -403,6 +463,27 @@ function Entrenamiento({
     setCarpetas(data);
   };
 
+  const applyRestoredTraining = (restored: RestoredActiveTraining) => {
+    setVista(restored.vista);
+    setSesionActiva(restored.sesionActiva);
+    setTrainingStartedAt(restored.startedAt);
+    setSourceRoutineIdContext(restored.sourceRoutineIdContext ?? null);
+    setEjecucionEjercicios(restored.ejecucionEjercicios);
+    setSeriesAnterioresPorEjercicio({});
+    setDescansoActivo(restored.descansoActivo);
+    setElapsedSesionSegundos(restored.elapsedSesionSegundos);
+    setTotalTrofeosEntrenamiento(restored.totalTrofeosEntrenamiento);
+    setGuardarNombre(limitTitle(restored.guardarNombre ?? ""));
+    setGuardarDescripcion(limitDescription(restored.guardarDescripcion ?? ""));
+    setGuardarCarpetaId(restored.guardarCarpetaId ?? "");
+    setGuardarComoRutina(Boolean(restored.guardarComoRutina));
+    setFiltroEquipo(restored.filtroEquipo ?? "");
+    setFiltroMusculo(restored.filtroMusculo ?? "");
+    setBusquedaEjercicio(restored.busquedaEjercicio ?? "");
+    setConfirmDiscardOpen(false);
+    setStaleTrainingRestore(null);
+  };
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -421,6 +502,7 @@ function Entrenamiento({
 
   useEffect(() => {
     setActiveTrainingHydrated(false);
+    setStaleTrainingRestore(null);
     const storageKey = activeTrainingStorageKey(usuario.id);
 
     try {
@@ -439,19 +521,26 @@ function Entrenamiento({
         return;
       }
 
-      const savedAt = typeof parsed.savedAt === "number" ? parsed.savedAt : Date.now();
-      const elapsedAway = Math.max(0, Math.floor((Date.now() - savedAt) / 1000));
+      const now = Date.now();
+      const savedAt = parseTimestamp(parsed.savedAt) ?? now;
+      const startedAt = getPersistedTrainingStartedAt(parsed, savedAt);
+      const elapsedAway = secondsBetween(savedAt, now);
+      const elapsedSinceStart = secondsBetween(startedAt, now);
       const restoredVista = parsed.vista === "guardar" ? "guardar" : "ejecucion";
+      const persistedElapsed =
+        typeof parsed.elapsedSesionSegundos === "number" && Number.isFinite(parsed.elapsedSesionSegundos)
+          ? Math.max(0, Math.floor(parsed.elapsedSesionSegundos))
+          : elapsedSinceStart;
       const restoredExercises = Array.isArray(parsed.ejecucionEjercicios)
         ? parsed.ejecucionEjercicios.map((ejercicio) => ({
             ...ejercicio,
             instanceId: ejercicio.instanceId ?? crypto.randomUUID(),
             nota: limitExerciseNote(ejercicio.nota ?? ""),
-            series: ejercicio.series.map((serie) =>
+            series: Array.isArray(ejercicio.series) ? ejercicio.series.map((serie) =>
               restoredVista === "ejecucion" && serie.timerActivo
                 ? { ...serie, tiempoSegundos: serie.tiempoSegundos + elapsedAway }
                 : serie,
-            ),
+            ) : [],
           }))
         : [];
 
@@ -465,24 +554,36 @@ function Entrenamiento({
             }
           : storedRest;
 
-      setVista(restoredVista);
-      setSesionActiva(parsed.sesionActiva);
-      setSourceRoutineIdContext(parsed.sourceRoutineIdContext ?? null);
-      setEjecucionEjercicios(restoredExercises);
-      setSeriesAnterioresPorEjercicio({});
-      setDescansoActivo(restoredRest);
-      setElapsedSesionSegundos(
-        Math.max(0, (parsed.elapsedSesionSegundos ?? 0) + (restoredVista === "ejecucion" ? elapsedAway : 0)),
-      );
-      setTotalTrofeosEntrenamiento(parsed.totalTrofeosEntrenamiento ?? 0);
-      setGuardarNombre(limitTitle(parsed.guardarNombre ?? ""));
-      setGuardarDescripcion(limitDescription(parsed.guardarDescripcion ?? ""));
-      setGuardarCarpetaId(parsed.guardarCarpetaId ?? "");
-      setGuardarComoRutina(Boolean(parsed.guardarComoRutina));
-      setFiltroEquipo(parsed.filtroEquipo ?? "");
-      setFiltroMusculo(parsed.filtroMusculo ?? "");
-      setBusquedaEjercicio(parsed.busquedaEjercicio ?? "");
-      setConfirmDiscardOpen(false);
+      const restoredTraining: RestoredActiveTraining = {
+        startedAt,
+        vista: restoredVista,
+        sesionActiva: parsed.sesionActiva,
+        sourceRoutineIdContext: parsed.sourceRoutineIdContext ?? null,
+        ejecucionEjercicios: restoredExercises,
+        descansoActivo: restoredRest,
+        elapsedSesionSegundos:
+          restoredVista === "ejecucion" ? elapsedSinceStart : persistedElapsed,
+        totalTrofeosEntrenamiento: parsed.totalTrofeosEntrenamiento ?? 0,
+        guardarNombre: limitTitle(parsed.guardarNombre ?? ""),
+        guardarDescripcion: limitDescription(parsed.guardarDescripcion ?? ""),
+        guardarCarpetaId: parsed.guardarCarpetaId ?? "",
+        guardarComoRutina: Boolean(parsed.guardarComoRutina),
+        filtroEquipo: parsed.filtroEquipo ?? "",
+        filtroMusculo: parsed.filtroMusculo ?? "",
+        busquedaEjercicio: parsed.busquedaEjercicio ?? "",
+      };
+
+      if (
+        restoredVista === "ejecucion" &&
+        now - startedAt > STALE_ACTIVE_TRAINING_THRESHOLD_MS
+      ) {
+        setStaleTrainingRestore(restoredTraining);
+        setConfirmDiscardOpen(false);
+        setMensaje("");
+        return;
+      }
+
+      applyRestoredTraining(restoredTraining);
       setMensaje("Entrenamiento restaurado");
     } catch (err) {
       console.error("No se pudo restaurar el entrenamiento activo", err);
@@ -497,15 +598,21 @@ function Entrenamiento({
       return;
     }
 
+    if (staleTrainingRestore) {
+      return;
+    }
+
     const storageKey = activeTrainingStorageKey(usuario.id);
     if (!sesionActiva || (vista !== "ejecucion" && vista !== "guardar")) {
       localStorage.removeItem(storageKey);
       return;
     }
 
+    const startedAt = trainingStartedAt ?? Math.max(0, Date.now() - elapsedSesionSegundos * 1000);
     const payload: PersistedActiveTraining = {
       usuarioId: usuario.id,
       savedAt: Date.now(),
+      startedAt,
       vista,
       sesionActiva,
       sourceRoutineIdContext,
@@ -536,6 +643,8 @@ function Entrenamiento({
     guardarNombre,
     sesionActiva,
     sourceRoutineIdContext,
+    staleTrainingRestore,
+    trainingStartedAt,
     totalTrofeosEntrenamiento,
     usuario.id,
     vista,
@@ -586,12 +695,23 @@ function Entrenamiento({
       return;
     }
 
+    if (trainingStartedAt != null) {
+      const tick = () => {
+        setElapsedSesionSegundos(secondsBetween(trainingStartedAt));
+      };
+
+      tick();
+      const timer = window.setInterval(tick, 1000);
+
+      return () => window.clearInterval(timer);
+    }
+
     const timer = window.setInterval(() => {
       setElapsedSesionSegundos((prev) => prev + 1);
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [sesionActiva, vista]);
+  }, [sesionActiva, trainingStartedAt, vista]);
 
   useEffect(() => {
     if (vista !== "ejecucion") {
@@ -652,6 +772,7 @@ function Entrenamiento({
     setSeriesAnterioresPorEjercicio({});
     setDescansoActivo(null);
     setElapsedSesionSegundos(0);
+    setTrainingStartedAt(null);
     setTotalTrofeosEntrenamiento(0);
     setGuardarNombre("");
     setGuardarDescripcion("");
@@ -661,6 +782,7 @@ function Entrenamiento({
     setFiltroMusculo("");
     setBusquedaEjercicio("");
     setConfirmDiscardOpen(false);
+    setStaleTrainingRestore(null);
   };
 
   useEffect(() => {
@@ -762,8 +884,11 @@ function Entrenamiento({
     }
   };
 
-  const syncSeriesDeSesion = async (sesionId: number) => {
-    const series = ejecucionEjercicios.flatMap((ejercicio) =>
+  const syncSeriesDeSesion = async (
+    sesionId: number,
+    ejercicios: EjecucionEjercicio[] = ejecucionEjercicios,
+  ) => {
+    const series = ejercicios.flatMap((ejercicio) =>
       ejercicio.series
         .filter((serie) => serie.completada)
         .map((serie) => {
@@ -869,10 +994,12 @@ function Entrenamiento({
       setMensaje("");
       setDescansoActivo(null);
       setElapsedSesionSegundos(0);
+      setTrainingStartedAt(null);
       setTotalTrofeosEntrenamiento(0);
       setGuardarNombre("");
       setGuardarDescripcion("");
       setGuardarCarpetaId("");
+      setStaleTrainingRestore(null);
 
       const sourceRoutineId =
         nextSeed?.sourceRoutineId ?? (nextSeed?.origin === "rutina" ? nextSeed.sourceId : null);
@@ -892,6 +1019,7 @@ function Entrenamiento({
 
       const sesion = (await startRes.json()) as SesionEntrenamiento;
       setSesionActiva(sesion);
+      setTrainingStartedAt(parseTimestamp(sesion.fecha_inicio) ?? Date.now());
       setSourceRoutineIdContext(sourceRoutineId);
       const nextEjecucion = nextSeed ? seedToExecution(nextSeed) : [];
       setEjecucionEjercicios(nextEjecucion);
@@ -1347,6 +1475,95 @@ function Entrenamiento({
     setVista("ejecucion");
   };
 
+  const continuarEntrenamientoRestaurado = () => {
+    if (!staleTrainingRestore) {
+      return;
+    }
+
+    applyRestoredTraining(staleTrainingRestore);
+    setMensaje("Entrenamiento restaurado");
+  };
+
+  const finalizarEntrenamientoRestaurado = async () => {
+    if (!staleTrainingRestore) {
+      return;
+    }
+
+    const restored = staleTrainingRestore;
+
+    try {
+      setLoading(true);
+      setError("");
+      await syncSeriesDeSesion(restored.sesionActiva.id_sesion, restored.ejecucionEjercicios);
+
+      const res = await fetch(`${API}/entrenamientos/${restored.sesionActiva.id_sesion}/finalizar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (res.status === 404) {
+        resetEntrenamiento();
+        setMensaje("El entrenamiento ya no existe");
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(await parseError(res, "No se pudo completar el entrenamiento"));
+      }
+
+      const data = (await res.json()) as { total_trofeos?: number };
+      applyRestoredTraining({
+        ...restored,
+        vista: "guardar",
+        descansoActivo: null,
+        totalTrofeosEntrenamiento: data.total_trofeos ?? 0,
+      });
+      setMensaje("Entrenamiento completado");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error completando entrenamiento";
+      if (message.toLowerCase().includes("sesión no encontrada") || message.toLowerCase().includes("sesion no encontrada")) {
+        resetEntrenamiento();
+        setMensaje("El entrenamiento ya no existe");
+        return;
+      }
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const descartarEntrenamientoRestaurado = async () => {
+    if (!staleTrainingRestore) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+
+      const res = await fetch(`${API}/entrenamientos/${staleTrainingRestore.sesionActiva.id_sesion}/abandonar`, {
+        method: "POST",
+      });
+
+      if (res.status === 404) {
+        resetEntrenamiento();
+        setMensaje("El entrenamiento ya no existe");
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(await parseError(res, "No se pudo descartar el entrenamiento"));
+      }
+
+      resetEntrenamiento();
+      setMensaje("Entrenamiento descartado");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error descartando entrenamiento");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const guardarEntrenamiento = async () => {
     if (!sesionActiva) {
       return;
@@ -1405,6 +1622,10 @@ function Entrenamiento({
       return;
     }
 
+    if (!activeTrainingHydrated || staleTrainingRestore) {
+      return;
+    }
+
     if (!canTrain) {
       setError("Las cuentas gimnasio no pueden iniciar entrenamientos");
       onSeedConsumed?.();
@@ -1414,7 +1635,7 @@ function Entrenamiento({
     void comenzarEntrenamiento(seed).finally(() => {
       onSeedConsumed?.();
     });
-  }, [canTrain, seed, seedKey]);
+  }, [activeTrainingHydrated, canTrain, seed, seedKey, staleTrainingRestore]);
 
   useEffect(() => {
     if (!sesionActiva || vista !== "ejecucion") {
@@ -1509,6 +1730,56 @@ function Entrenamiento({
               disabled={loading}
             >
               {loading ? "Descartando..." : "Descartar"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderStaleTrainingModal = () => {
+    if (!staleTrainingRestore) {
+      return null;
+    }
+
+    return (
+      <div className="modal-backdrop" role="presentation">
+        <div
+          className="modal-card save-name-modal stale-training-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Recuperar entrenamiento"
+        >
+          <div className="modal-head">
+            <h2>Recuperar entrenamiento</h2>
+          </div>
+          <p className="helper-text">
+            Detectamos un entrenamiento iniciado hace mucho tiempo. ¿Deseas recuperarlo?
+          </p>
+          <div className="modal-actions stale-training-actions">
+            <button
+              type="button"
+              className="btn"
+              onClick={continuarEntrenamientoRestaurado}
+              disabled={loading}
+            >
+              Continuar entrenamiento
+            </button>
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => void finalizarEntrenamientoRestaurado()}
+              disabled={loading}
+            >
+              {loading ? "Finalizando..." : "Finalizar entrenamiento"}
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              onClick={() => void descartarEntrenamientoRestaurado()}
+              disabled={loading}
+            >
+              {loading ? "Descartando..." : "Descartar entrenamiento"}
             </button>
           </div>
         </div>
@@ -1626,6 +1897,7 @@ function Entrenamiento({
           </article>
         </section>
         {renderDiscardModal()}
+        {renderStaleTrainingModal()}
       </main>
     );
   }
@@ -2108,6 +2380,7 @@ function Entrenamiento({
           </aside>
         </section>
         {renderDiscardModal()}
+        {renderStaleTrainingModal()}
       </main>
     );
   }
@@ -2163,6 +2436,7 @@ function Entrenamiento({
         </article>
       </section>
       {renderDiscardModal()}
+      {renderStaleTrainingModal()}
     </main>
   );
 }

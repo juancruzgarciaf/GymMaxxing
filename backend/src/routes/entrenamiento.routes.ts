@@ -14,6 +14,7 @@ import {
   deleteComentarioDeSesion,
   replaceSeriesDeSesion,
   finalizarSesion,
+  abandonarSesion,
   deleteSesionEntrenamiento,
 } from "../controllers/entrenamiento.controller";
 
@@ -28,6 +29,7 @@ router.put("/:id", updateSesionEntrenamiento);
 router.put("/:id/series", replaceSeriesDeSesion);
 router.post("/end", finalizarSesion);
 router.post("/:id/finalizar", finalizarSesion);
+router.post("/:id/abandonar", abandonarSesion);
 router.post("/:id/like", addLikeToSesion);
 router.delete("/:id/like", removeLikeFromSesion);
 router.post("/:id/comentarios", createComentarioDeSesion);

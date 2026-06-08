@@ -837,6 +837,19 @@ export const finalizarSesion = async (sesion_id: string) => {
   };
 };
 
+export const abandonarSesion = async (sesion_id: string) => {
+  const result = await pool.query<SesionEntrenamientoRow>(
+    `UPDATE sesionentrenamiento
+     SET fecha_fin = COALESCE(fecha_fin, NOW()),
+         estado = 'abandonada'
+     WHERE id_sesion = $1
+     RETURNING *`,
+    [sesion_id]
+  );
+
+  return result.rows[0] ?? null;
+};
+
 export const deleteSesionEntrenamiento = async (sesion_id: string) => {
   await ensureRecordTables(pool);
   const client = await pool.connect();

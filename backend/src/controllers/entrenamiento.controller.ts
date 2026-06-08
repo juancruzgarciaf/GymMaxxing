@@ -519,6 +519,49 @@ export const finalizarSesion = async (req: Request, res: Response) => {
   }
 };
 
+export const abandonarSesion = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (!id || Array.isArray(id)) {
+      return res.status(400).json({
+        error: "id inválido",
+      });
+    }
+
+    const sesion = await entrenamientoService.getSesionPorId(id);
+    if (!sesion) {
+      return res.status(404).json({
+        error: "Sesión no encontrada",
+      });
+    }
+
+    const allowed = await ensureTrainingAllowed(res, sesion.usuario_id);
+    if (!allowed) {
+      return;
+    }
+
+    const sesionAbandonada = await entrenamientoService.abandonarSesion(id);
+
+    if (!sesionAbandonada) {
+      return res.status(404).json({
+        error: "Sesión no encontrada",
+      });
+    }
+
+    return res.json({
+      mensaje: "Sesión abandonada",
+      sesion: sesionAbandonada,
+      estado: "abandonada",
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error abandonando sesión",
+    });
+  }
+};
+
 export const deleteSesionEntrenamiento = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

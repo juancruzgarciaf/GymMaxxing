@@ -4990,6 +4990,18 @@ button.discover-module-card:hover,
   color: #d8e2ea;
 }
 
+.stale-training-modal {
+  gap: 18px;
+}
+
+.stale-training-actions {
+  flex-wrap: wrap;
+}
+
+.stale-training-actions .btn {
+  min-width: 180px;
+}
+
 @media (max-width: 1050px) {
   .auth-grid {
     grid-template-columns: 1fr;

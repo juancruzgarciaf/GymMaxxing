@@ -206,8 +206,19 @@ const twoDigits = (value: number) => String(value).padStart(2, "0");
 
 const formatDuration = (totalSeconds: number) => {
   const safeSeconds = Math.max(0, Math.floor(totalSeconds));
-  const min = Math.floor(safeSeconds / 60);
+  const days = Math.floor(safeSeconds / 86400);
+  const hours = Math.floor((safeSeconds % 86400) / 3600);
+  const min = Math.floor((safeSeconds % 3600) / 60);
   const sec = safeSeconds % 60;
+
+  if (days > 0) {
+    return `${days}d ${twoDigits(hours)}:${twoDigits(min)}:${twoDigits(sec)}`;
+  }
+
+  if (hours > 0) {
+    return `${hours}:${twoDigits(min)}:${twoDigits(sec)}`;
+  }
+
   return `${twoDigits(min)}:${twoDigits(sec)}`;
 };
 
@@ -298,11 +309,11 @@ function App() {
     }
   }, [activeTraining, mainScreen, navigate, usuario]);
 
-  const dismissSharedRoutine = () => {
+  const dismissSharedRoutine = useCallback(() => {
     if (sharedRoutineId == null) {
       return;
     }
-  };
+  }, [sharedRoutineId]);
 
   const navigateTo = (screen: Exclude<MainScreen, "entrenamiento">) => {
     if (screen !== "rutinaCompartida") {
@@ -443,7 +454,7 @@ function App() {
     navigate(pathForScreen(routeState?.returnScreen ?? trainingReturnScreen), { replace: true });
   };
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     setUsuario(null);
     setAuthToken(null);
     setUnreadNotifications(0);
@@ -456,11 +467,11 @@ function App() {
     setUserSearchResults([]);
     setDiscardTrainingModalOpen(false);
     navigate("/login", { replace: true });
-  };
+  }, [dismissSharedRoutine, navigate]);
 
-  const handleAuthExpired = () => {
+  const handleAuthExpired = useCallback(() => {
     handleLogout();
-  };
+  }, [handleLogout]);
 
   const refreshUnreadNotifications = useCallback(async () => {
     if (!authToken) {
@@ -490,7 +501,7 @@ function App() {
     } catch (error) {
       console.error("No se pudo refrescar el contador de notificaciones", error);
     }
-  }, [authToken]);
+  }, [authToken, handleAuthExpired]);
 
   useEffect(() => {
     if (!usuario || !authToken) {
