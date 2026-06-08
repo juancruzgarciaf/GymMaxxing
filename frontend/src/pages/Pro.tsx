@@ -43,7 +43,7 @@ const planComparison = [
     pro: "Ejercicios ilimitados",
   },
   {
-    feature: "Estadisticas",
+    feature: "Estadisticas avanzadas",
     common: "Resumen general",
     pro: "Graficos mensuales y comparaciones",
   },
@@ -51,6 +51,16 @@ const planComparison = [
     feature: "Progreso por ejercicio",
     common: "Ultimos registros",
     pro: "Evolucion de peso, reps y volumen",
+  },
+  {
+    feature: "Medidas corporales",
+    common: "No incluido",
+    pro: "Seguimiento completo",
+  },
+  {
+    feature: "Historial de entrenamientos",
+    common: "Ultimos 90 dias",
+    pro: "Historial completo",
   },
   {
     feature: "Calculadora de calentamiento",
@@ -143,9 +153,6 @@ function Pro({ onClose }: ProProps) {
                     </span>
                   </div>
                   <div className="pro-comparison-value pro-value">
-                    <span className="pro-comparison-icon" aria-hidden="true">
-                      <CheckIcon />
-                    </span>
                     <span>
                       <small>PRO</small>
                       {item.pro}
