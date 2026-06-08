@@ -36,34 +36,41 @@ const plans: Plan[] = [
   },
 ];
 
-const benefits = [
+const planComparison = [
   {
-    title: "Rutinas ilimitadas",
-    description: "Crea y organiza todas las rutinas que necesites.",
+    feature: "Rutinas",
+    common: "Hasta 5 rutinas",
+    pro: "Rutinas ilimitadas",
   },
   {
-    title: "Ejercicios personalizados ilimitados",
-    description: "Arma una biblioteca de ejercicios completamente tuya.",
+    feature: "Ejercicios personalizados",
+    common: "Hasta 10 ejercicios",
+    pro: "Ejercicios ilimitados",
   },
   {
-    title: "Estadisticas avanzadas",
-    description: "Analiza tu progreso, volumen y rendimiento con mas detalle.",
+    feature: "Estadisticas",
+    common: "Resumen general",
+    pro: "Graficos mensuales y comparaciones",
   },
   {
-    title: "Seguimiento de medidas corporales",
-    description: "Registra cambios fisicos y acompana tu evolucion.",
+    feature: "Progreso por ejercicio",
+    common: "Ultimos registros",
+    pro: "Evolucion de peso, reps y volumen",
   },
   {
-    title: "Historial completo de entrenamientos",
-    description: "Consulta todas tus sesiones sin limites.",
+    feature: "Medidas corporales",
+    common: "No incluido",
+    pro: "Seguimiento completo",
   },
   {
-    title: "Calculadora de calentamiento",
-    description: "Prepara tus series de aproximacion de manera practica.",
+    feature: "Historial",
+    common: "Ultimos 90 dias",
+    pro: "Historial completo",
   },
   {
-    title: "Soporte al desarrollo del proyecto",
-    description: "Ayuda a que GymMaxxing siga creciendo y mejorando.",
+    feature: "Calculadora de calentamiento",
+    common: "No incluido",
+    pro: "Incluida",
   },
 ];
 
@@ -75,6 +82,14 @@ function CheckIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="m5 12 4 4L19 6" />
+    </svg>
+  );
+}
+
+function MinusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 12h12" />
     </svg>
   );
 }
@@ -115,24 +130,50 @@ function Pro({ onClose }: ProProps) {
       <section className="pro-layout">
         <div className="pro-benefits-panel">
           <div className="pro-section-head">
-            <p className="eyebrow">Todo incluido</p>
-            <h2>Mas herramientas para avanzar</h2>
-            <p>Entrena, registra y analiza tu progreso sin limites.</p>
+            <p className="eyebrow">Compara los planes</p>
+            <h2>Comun o PRO: elige hasta donde quieres llegar</h2>
+            <p>Empieza gratis y desbloquea mas control sobre tu progreso cuando lo necesites.</p>
           </div>
 
-          <div className="pro-benefit-grid">
-            {benefits.map((benefit) => (
-              <article className="pro-benefit-card" key={benefit.title}>
-                <span className="pro-benefit-icon">
-                  <CheckIcon />
-                </span>
-                <div>
-                  <h3>{benefit.title}</h3>
-                  <p>{benefit.description}</p>
-                </div>
-              </article>
-            ))}
+          <div className="pro-comparison">
+            <div className="pro-comparison-head" aria-hidden="true">
+              <span>Funcionalidad</span>
+              <strong>Plan comun</strong>
+              <strong className="pro-comparison-pro-title">PRO</strong>
+            </div>
+
+            {planComparison.map((item) => {
+              const commonUnavailable = item.common === "No incluido";
+
+              return (
+                <article className="pro-comparison-row" key={item.feature}>
+                  <h3>{item.feature}</h3>
+                  <div className={`pro-comparison-value ${commonUnavailable ? "unavailable" : ""}`}>
+                    <span className="pro-comparison-icon" aria-hidden="true">
+                      {commonUnavailable ? <MinusIcon /> : <CheckIcon />}
+                    </span>
+                    <span>
+                      <small>Plan comun</small>
+                      {item.common}
+                    </span>
+                  </div>
+                  <div className="pro-comparison-value pro-value">
+                    <span className="pro-comparison-icon" aria-hidden="true">
+                      <CheckIcon />
+                    </span>
+                    <span>
+                      <small>PRO</small>
+                      {item.pro}
+                    </span>
+                  </div>
+                </article>
+              );
+            })}
           </div>
+
+          <p className="pro-support-note">
+            Con PRO tambien apoyas el desarrollo y las nuevas funciones de GymMaxxing.
+          </p>
         </div>
 
         <aside className="pro-checkout-card">
