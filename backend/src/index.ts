@@ -9,6 +9,7 @@ import entrenamientoRoutes from "./routes/entrenamiento.routes";
 import ejercicioRoutes from "./routes/ejercicio.routes";
 import gimnasioRoutes from "./routes/gimnasio.routes";
 import notificationRoutes from "./routes/notification.routes";
+import subscriptionRoutes from "./routes/subscription.routes";
 
 
 const app = express();
@@ -24,6 +25,14 @@ app.use("/entrenamientos", entrenamientoRoutes);
 app.use("/ejercicios", ejercicioRoutes);
 app.use("/gimnasios", gimnasioRoutes);
 app.use("/notificaciones", notificationRoutes);
+app.use("/suscripciones", subscriptionRoutes);
+
+// En desarrollo, Mercado Pago necesita una URL publica y luego volvemos al Vite local.
+app.get("/pro", (req, res) => {
+  const queryIndex = req.originalUrl.indexOf("?");
+  const query = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : "";
+  res.redirect(`http://localhost:5173/pro${query}`);
+});
 
 // test DB
 pool.query("SELECT NOW()")
