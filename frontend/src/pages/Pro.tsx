@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type PlanId = "monthly" | "yearly" | "lifetime";
 
@@ -71,6 +71,8 @@ const planComparison = [
 
 type ProProps = {
   onClose: () => void;
+  authToken: string;
+  onAuthExpired: () => void;
 };
 
 function CheckIcon() {
@@ -81,32 +83,74 @@ function CheckIcon() {
   );
 }
 
-function MinusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M6 12h12" />
-    </svg>
-  );
-}
-
-function Pro({ onClose }: ProProps) {
+function Pro({ onClose, authToken, onAuthExpired }: ProProps) {
   const [selectedPlanId, setSelectedPlanId] = useState<PlanId>("yearly");
-  const [discountCode, setDiscountCode] = useState("");
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [isPro, setIsPro] = useState(false);
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? plans[1];
 
-  const handleGoToPayment = (plan: Plan) => {
-    console.log("Plan seleccionado para futuro pago:", plan);
-    setMessage(`Proximamente se habilitara el pago para el plan ${plan.name}.`);
-  };
+  useEffect(() => {
+    let cancelled = false;
 
-  const handleAddDiscount = () => {
-    setMessage(
-      discountCode.trim()
-        ? "Los codigos de descuento estaran disponibles proximamente."
-        : "Ingresa un codigo de descuento.",
-    );
+    const loadSubscription = async () => {
+      try {
+        const response = await fetch("http://localhost:3000/suscripciones/me", {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        if (response.status === 401) {
+          onAuthExpired();
+          return;
+        }
+        if (!response.ok) {
+          return;
+        }
+
+        const data = (await response.json()) as { isPro?: boolean };
+        if (!cancelled) {
+          setIsPro(Boolean(data.isPro));
+        }
+      } catch {
+        // El checkout sigue disponible aunque falle esta consulta informativa.
+      }
+    };
+
+    void loadSubscription();
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken, onAuthExpired]);
+
+  const handleGoToPayment = async (plan: Plan) => {
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const response = await fetch("http://localhost:3000/suscripciones/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ plan: plan.id }),
+      });
+      const data = (await response.json()) as { checkoutUrl?: string; error?: string };
+
+      if (response.status === 401) {
+        onAuthExpired();
+        return;
+      }
+      if (!response.ok || !data.checkoutUrl) {
+        throw new Error(data.error || "No se pudo iniciar el pago");
+      }
+
+      window.location.assign(data.checkoutUrl);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo iniciar el pago");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -144,15 +188,15 @@ function Pro({ onClose }: ProProps) {
                 <article className="pro-comparison-row" key={item.feature}>
                   <h3>{item.feature}</h3>
                   <div className={`pro-comparison-value ${commonUnavailable ? "unavailable" : ""}`}>
-                    <span className="pro-comparison-icon" aria-hidden="true">
-                      {commonUnavailable ? <MinusIcon /> : <CheckIcon />}
-                    </span>
                     <span>
                       <small>Plan gratuito</small>
                       {item.common}
                     </span>
                   </div>
                   <div className="pro-comparison-value pro-value">
+                    <span className="pro-comparison-icon" aria-hidden="true">
+                      <CheckIcon />
+                    </span>
                     <span>
                       <small>PRO</small>
                       {item.pro}
@@ -186,6 +230,7 @@ function Pro({ onClose }: ProProps) {
                     setSelectedPlanId(plan.id);
                     setMessage("");
                   }}
+                  disabled={loading}
                   role="radio"
                   aria-checked={isSelected}
                   key={plan.id}
@@ -204,25 +249,14 @@ function Pro({ onClose }: ProProps) {
             })}
           </div>
 
-          <div className="pro-discount">
-            <label htmlFor="pro-discount-code">Codigo de descuento</label>
-            <div className="pro-discount-row">
-              <input
-                id="pro-discount-code"
-                className="field"
-                value={discountCode}
-                onChange={(event) => setDiscountCode(event.target.value)}
-                placeholder="Ingresa tu codigo"
-              />
-              <button type="button" className="btn secondary" onClick={handleAddDiscount}>
-                Anadir
-              </button>
-            </div>
-          </div>
-
           {message ? (
-            <p className="status ok pro-payment-message" role="status">
+            <p className="status error pro-payment-message" role="alert">
               {message}
+            </p>
+          ) : null}
+          {isPro ? (
+            <p className="status ok pro-payment-message" role="status">
+              Ya tienes GymMaxxing PRO activo.
             </p>
           ) : null}
 
@@ -230,10 +264,20 @@ function Pro({ onClose }: ProProps) {
             type="button"
             className="btn pro-payment-button"
             onClick={() => handleGoToPayment(selectedPlan)}
+            disabled={loading || isPro}
           >
-            Ir a pagar - Plan {selectedPlan.name}
+            {isPro
+              ? "Plan PRO activo"
+              : loading
+                ? "Preparando pago..."
+                : `Ir a pagar - Plan ${selectedPlan.name}`}
           </button>
-          <button type="button" className="btn secondary pro-later-button" onClick={onClose}>
+          <button
+            type="button"
+            className="btn secondary pro-later-button"
+            onClick={onClose}
+            disabled={loading}
+          >
             Quiza mas tarde
           </button>
           <p className="pro-cancel-note">Cancela tu suscripcion en cualquier momento.</p>

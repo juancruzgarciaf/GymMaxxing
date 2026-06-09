@@ -840,7 +840,13 @@ function App() {
             onUnreadCountChange={setUnreadNotifications}
           />
         ) : null}
-        {mainScreen === "pro" ? <Pro onClose={() => navigateTo("home")} /> : null}
+        {mainScreen === "pro" && authToken ? (
+          <Pro
+            onClose={() => navigateTo("home")}
+            authToken={authToken}
+            onAuthExpired={handleAuthExpired}
+          />
+        ) : null}
         {mainScreen === "perfil" ? (
           <Perfil
             usuario={usuario}

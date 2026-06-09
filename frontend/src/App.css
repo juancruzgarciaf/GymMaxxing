@@ -2113,14 +2113,23 @@ h2 {
 }
 
 .pro-comparison-value.pro-value {
-  align-self: stretch;
-  border: 1px solid rgba(90, 169, 255, 0.48);
-  border-radius: 12px;
-  padding: 11px;
-  background: linear-gradient(135deg, rgba(90, 169, 255, 0.23), rgba(47, 126, 210, 0.1));
   color: #f1f8ff;
   font-weight: 700;
-  box-shadow: 0 8px 20px rgba(3, 12, 24, 0.16);
+}
+
+.pro-comparison-value.pro-value .pro-comparison-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: #5aa9ff;
+  color: #061524;
+  box-shadow: 0 6px 16px rgba(90, 169, 255, 0.3);
+}
+
+.pro-comparison-value.pro-value .pro-comparison-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.8;
 }
 
 .pro-comparison-icon {
@@ -2239,23 +2248,6 @@ h2 {
   font-size: 1rem;
   font-weight: 850;
   white-space: nowrap;
-}
-
-.pro-discount {
-  display: grid;
-  gap: 8px;
-}
-
-.pro-discount label {
-  color: #b8cad7;
-  font-size: 0.82rem;
-  font-weight: 750;
-}
-
-.pro-discount-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
 }
 
 .pro-payment-message {
@@ -2407,10 +2399,7 @@ h2 {
 }
 
 :root[data-theme="light"] .pro-comparison-value.pro-value {
-  border-color: #5aa9ff;
-  background: linear-gradient(135deg, #dceeff, #eff7ff);
   color: #0f2740;
-  box-shadow: 0 8px 20px rgba(90, 169, 255, 0.12);
 }
 
 :root[data-theme="light"] .pro-comparison-value.unavailable {
