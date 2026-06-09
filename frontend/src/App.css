@@ -1706,6 +1706,13 @@ h2 {
   border-radius: 14px;
   padding: 14px 16px;
   line-height: 1.5;
+  display: grid;
+  gap: 12px;
+}
+
+.gemini-panel-error-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .gemini-panel-result {

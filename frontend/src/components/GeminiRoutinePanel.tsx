@@ -1,4 +1,4 @@
-import type { FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 type GeminiRoutinePanelProps = {
   open: boolean;
@@ -63,14 +63,16 @@ function GeminiRoutinePanelBody({
   onViewGeneratedRoutine,
   errorMessage,
 }: GeminiRoutinePanelBodyProps) {
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const prompt = String(formData.get("prompt") ?? "").trim();
-    const objetivo = String(formData.get("objetivo") ?? "").trim();
-    const diasRaw = String(formData.get("dias_por_semana") ?? "").trim();
+  const [prompt, setPrompt] = useState("");
+  const [objetivo, setObjetivo] = useState("");
+  const [diasPorSemana, setDiasPorSemana] = useState("");
 
-    if (!prompt) {
+  const submitWithCurrentValues = () => {
+    const nextPrompt = prompt.trim();
+    const nextObjetivo = objetivo.trim();
+    const diasRaw = diasPorSemana.trim();
+
+    if (!nextPrompt) {
       return;
     }
 
@@ -78,10 +80,10 @@ function GeminiRoutinePanelBody({
       prompt: string;
       objetivo?: string;
       diasPorSemana?: number;
-    } = { prompt };
+    } = { prompt: nextPrompt };
 
-    if (objetivo) {
-      payload.objetivo = objetivo;
+    if (nextObjetivo) {
+      payload.objetivo = nextObjetivo;
     }
 
     if (diasRaw) {
@@ -92,6 +94,11 @@ function GeminiRoutinePanelBody({
     }
 
     onGenerate(payload);
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    submitWithCurrentValues();
   };
 
   return (
@@ -115,10 +122,11 @@ function GeminiRoutinePanelBody({
           <span>Pedido</span>
           <textarea
             className="field gemini-panel-textarea"
-            name="prompt"
             placeholder="Quiero una rutina de piernas para hipertrofia"
             rows={5}
             disabled={loading}
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
             required
           />
         </label>
@@ -127,9 +135,10 @@ function GeminiRoutinePanelBody({
           <span>Objetivo opcional</span>
           <input
             className="field"
-            name="objetivo"
             placeholder="ganar masa muscular"
             disabled={loading}
+            value={objetivo}
+            onChange={(event) => setObjetivo(event.target.value)}
           />
         </label>
 
@@ -137,12 +146,13 @@ function GeminiRoutinePanelBody({
           <span>Días por semana</span>
           <input
             className="field"
-            name="dias_por_semana"
             type="number"
             min="1"
             max="7"
             placeholder="3"
             disabled={loading}
+            value={diasPorSemana}
+            onChange={(event) => setDiasPorSemana(event.target.value)}
           />
         </label>
 
@@ -151,7 +161,21 @@ function GeminiRoutinePanelBody({
           rutina que el backend guarda como una rutina real.
         </div>
 
-        {errorMessage ? <div className="gemini-panel-error">{errorMessage}</div> : null}
+        {errorMessage ? (
+          <div className="gemini-panel-error">
+            <div>{errorMessage}</div>
+            <div className="gemini-panel-error-actions">
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={submitWithCurrentValues}
+                disabled={loading || !prompt.trim()}
+              >
+                Reintentar
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {lastGeneratedRoutine ? (
           <div className="gemini-panel-result">
