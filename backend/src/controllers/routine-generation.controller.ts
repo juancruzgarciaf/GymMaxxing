@@ -69,8 +69,39 @@ export const generateRoutineDraft = async (req: Request, res: Response) => {
     return res.json(result);
   } catch (error) {
     console.error(error);
+
+    if (error instanceof Error) {
+      if (
+        error.message.includes('"status":"UNAVAILABLE"') ||
+        error.message.includes('"code":503') ||
+        error.message.includes("high demand")
+      ) {
+        return res.status(503).json({
+          error: "Gemini esta con alta demanda en este momento. Intenta de nuevo en unos minutos.",
+        });
+      }
+
+      if (
+        error.message.includes("GEMINI_API_KEY") ||
+        error.message.includes("Gemini no esta configurado")
+      ) {
+        return res.status(503).json({
+          error: "Gemini no esta configurado en el backend",
+        });
+      }
+
+      if (
+        error.message.includes("Gemini devolvio un JSON invalido") ||
+        error.message.includes("Gemini no devolvio contenido")
+      ) {
+        return res.status(502).json({
+          error: "Gemini devolvio una respuesta invalida para la rutina",
+        });
+      }
+    }
+
     return res.status(500).json({
-      error: "Error generando borrador de rutina",
+      error: "Error generando rutina estructurada con Gemini",
     });
   }
 };

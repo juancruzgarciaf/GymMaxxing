@@ -1,6 +1,6 @@
 import { pool } from "../db";
 import { getTrends, getUsuarioPorId } from "./user.service";
-import { getGeminiModel, isGeminiConfigured } from "./gemini.service";
+import { getGeminiClient, getGeminiModel, isGeminiConfigured } from "./gemini.service";
 
 export type GenerateRoutineDraftInput = {
   usuarioId: number;
@@ -10,11 +10,11 @@ export type GenerateRoutineDraftInput = {
 };
 
 export type RoutineGenerationDraftResponse = {
-  status: "prompt_ready";
+  status: "structured_json_ready";
   proveedor: "gemini";
   usuario_id: number;
   gemini_configurado: boolean;
-  modelo_sugerido: string;
+  modelo_usado: string;
   solicitud_usuario: {
     prompt: string;
     objetivo: string | null;
@@ -86,6 +86,23 @@ export type RoutineGenerationDraftResponse = {
   };
   prompt_sistema: string;
   prompt_usuario: string;
+  rutina_generada: {
+    nombre: string;
+    descripcion: string;
+    objetivo: string;
+    dias_por_semana_recomendados: number | null;
+    duracion_estimada: number | null;
+    advertencias: string[];
+    ejercicios: Array<{
+      id_ejercicio: number;
+      nombre: string;
+      grupo_muscular: string | null;
+      series: number;
+      repeticiones: number;
+      descanso: number;
+      orden: number;
+    }>;
+  };
   siguiente_paso: string;
 };
 
@@ -105,14 +122,35 @@ type TrainerExerciseUsageRow = {
   veces_usado_por_entrenadores: number;
 };
 
+type GeneratedRoutineExercise = {
+  id_ejercicio: number;
+  nombre: string;
+  grupo_muscular: string | null;
+  series: number;
+  repeticiones: number;
+  descanso: number;
+  orden: number;
+};
+
+type GeneratedRoutineProposal = {
+  nombre: string;
+  descripcion: string;
+  objetivo: string;
+  dias_por_semana_recomendados: number | null;
+  duracion_estimada: number | null;
+  advertencias: string[];
+  ejercicios: GeneratedRoutineExercise[];
+};
+
 const buildSystemPrompt = () =>
   [
     "Sos Gemini integrado en GymMaxxing como motor de generacion de rutinas.",
     "No respondas como chatbot conversacional ni expliques de mas.",
     "Tu tarea es generar una propuesta de rutina personalizada usando el perfil del usuario y datos reales de la plataforma.",
     "Prioriza ejercicios existentes en GymMaxxing y patrones observados en rutinas populares, guardadas o copiadas.",
+    "Debes responder unicamente JSON valido siguiendo exactamente el schema solicitado.",
+    "No agregues markdown, comentarios ni texto fuera del JSON.",
     "No inventes ejercicios fuera del catalogo de referencia si hay equivalentes disponibles.",
-    "Todavia no devuelvas texto libre final para usuario: la siguiente etapa te pedira JSON estructurado.",
   ].join(" ");
 
 const buildUserPrompt = (payload: {
@@ -190,10 +228,180 @@ const buildUserPrompt = (payload: {
         `- ${exercise.nombre} [id ${exercise.id_ejercicio}] | grupo: ${exercise.grupo_muscular ?? "sin grupo"} | disciplina: ${exercise.tipo_disciplina ?? "sin disciplina"} | usos: ${exercise.veces_usado_en_rutinas}`
     ),
     "",
-    "Usa este contexto para preparar una rutina alineada con GymMaxxing y lista para convertirse luego en JSON estructurado.",
+    "Genera una propuesta de rutina alineada con GymMaxxing.",
+    "Responde solo con JSON estructurado.",
   ];
 
   return lines.join("\n");
+};
+
+const routineProposalJsonSchema = {
+  type: "object",
+  properties: {
+    nombre: {
+      type: "string",
+      description: "Nombre corto de la rutina propuesta.",
+    },
+    descripcion: {
+      type: "string",
+      description: "Descripcion breve y concreta de la rutina.",
+    },
+    objetivo: {
+      type: "string",
+      description: "Objetivo principal de la rutina.",
+    },
+    dias_por_semana_recomendados: {
+      anyOf: [{ type: "integer" }, { type: "null" }],
+      description: "Cantidad sugerida de dias por semana.",
+    },
+    duracion_estimada: {
+      anyOf: [{ type: "integer" }, { type: "null" }],
+      description: "Duracion estimada en minutos.",
+    },
+    advertencias: {
+      type: "array",
+      items: { type: "string" },
+      description: "Advertencias o aclaraciones breves.",
+    },
+    ejercicios: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id_ejercicio: {
+            type: "integer",
+            description: "ID real del ejercicio en GymMaxxing.",
+          },
+          nombre: {
+            type: "string",
+            description: "Nombre del ejercicio.",
+          },
+          grupo_muscular: {
+            anyOf: [{ type: "string" }, { type: "null" }],
+            description: "Grupo muscular principal.",
+          },
+          series: {
+            type: "integer",
+            description: "Cantidad total de series.",
+          },
+          repeticiones: {
+            type: "integer",
+            description: "Repeticiones objetivo por serie.",
+          },
+          descanso: {
+            type: "integer",
+            description: "Descanso entre series en segundos.",
+          },
+          orden: {
+            type: "integer",
+            description: "Orden del ejercicio dentro de la rutina.",
+          },
+        },
+        required: [
+          "id_ejercicio",
+          "nombre",
+          "grupo_muscular",
+          "series",
+          "repeticiones",
+          "descanso",
+          "orden",
+        ],
+      },
+    },
+  },
+  required: [
+    "nombre",
+    "descripcion",
+    "objetivo",
+    "dias_por_semana_recomendados",
+    "duracion_estimada",
+    "advertencias",
+    "ejercicios",
+  ],
+} as const;
+
+const parsePositiveInteger = (value: unknown, fallback: number) => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+};
+
+const normalizeGeneratedRoutineProposal = (
+  raw: unknown,
+  input: GenerateRoutineDraftInput
+): GeneratedRoutineProposal => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("Gemini devolvio un JSON invalido para la rutina");
+  }
+
+  const data = raw as Record<string, unknown>;
+  const nombre =
+    typeof data.nombre === "string" && data.nombre.trim()
+      ? data.nombre.trim()
+      : `Rutina generada para ${input.prompt}`;
+  const descripcion =
+    typeof data.descripcion === "string" && data.descripcion.trim()
+      ? data.descripcion.trim()
+      : "Rutina generada automaticamente con Gemini para GymMaxxing.";
+  const objetivo =
+    typeof data.objetivo === "string" && data.objetivo.trim()
+      ? data.objetivo.trim()
+      : input.objetivo ?? "Mejorar rendimiento general";
+  const diasPorSemana =
+    data.dias_por_semana_recomendados == null
+      ? input.diasPorSemana ?? null
+      : parsePositiveInteger(data.dias_por_semana_recomendados, input.diasPorSemana ?? 3);
+  const duracionEstimada =
+    data.duracion_estimada == null
+      ? null
+      : parsePositiveInteger(data.duracion_estimada, 60);
+  const advertencias = Array.isArray(data.advertencias)
+    ? data.advertencias
+        .filter(
+          (item): item is string =>
+            typeof item === "string" && item.trim().length > 0
+        )
+        .map((item) => item.trim())
+    : [];
+
+  const ejerciciosRaw = Array.isArray(data.ejercicios) ? data.ejercicios : [];
+  const ejercicios = ejerciciosRaw
+    .map((exercise, index) => {
+      if (!exercise || typeof exercise !== "object" || Array.isArray(exercise)) {
+        return null;
+      }
+
+      const item = exercise as Record<string, unknown>;
+      return {
+        id_ejercicio: parsePositiveInteger(item.id_ejercicio, index + 1),
+        nombre:
+          typeof item.nombre === "string" && item.nombre.trim()
+            ? item.nombre.trim()
+            : `Ejercicio ${index + 1}`,
+        grupo_muscular:
+          typeof item.grupo_muscular === "string" && item.grupo_muscular.trim()
+            ? item.grupo_muscular.trim()
+            : null,
+        series: parsePositiveInteger(item.series, 3),
+        repeticiones: parsePositiveInteger(item.repeticiones, 10),
+        descanso: parsePositiveInteger(item.descanso, 90),
+        orden: parsePositiveInteger(item.orden, index + 1),
+      };
+    })
+    .filter((item): item is GeneratedRoutineExercise => item != null)
+    .sort((a, b) => a.orden - b.orden);
+
+  return {
+    nombre,
+    descripcion,
+    objetivo,
+    dias_por_semana_recomendados: diasPorSemana,
+    duracion_estimada: duracionEstimada,
+    advertencias,
+    ejercicios,
+  };
 };
 
 const getPopularExercisesByMuscleGroup = async () => {
@@ -292,6 +500,10 @@ export const generateRoutineDraftFromPrompt = async (
   input: GenerateRoutineDraftInput
 ): Promise<RoutineGenerationDraftResponse> => {
   const geminiConfigured = isGeminiConfigured();
+  if (!geminiConfigured) {
+    throw new Error("Gemini no esta configurado en backend/.env");
+  }
+
   const [user, trends, popularExercisesByGroup, popularExercisesByTrainers, referenceCatalog] =
     await Promise.all([
       getUsuarioPorId(input.usuarioId),
@@ -358,12 +570,34 @@ export const generateRoutineDraftFromPrompt = async (
     catalogoReferencia: referenceCatalog,
   });
 
+  const ai = getGeminiClient();
+  const model = getGeminiModel();
+  const response = await ai.models.generateContent({
+    model,
+    contents: promptUsuario,
+    config: {
+      systemInstruction: promptSistema,
+      responseMimeType: "application/json",
+      responseJsonSchema: routineProposalJsonSchema,
+      temperature: 0.4,
+      maxOutputTokens: 1600,
+    },
+  });
+
+  const rawText = response.text;
+  if (!rawText || !rawText.trim()) {
+    throw new Error("Gemini no devolvio contenido para la rutina");
+  }
+
+  const parsed = JSON.parse(rawText);
+  const rutinaGenerada = normalizeGeneratedRoutineProposal(parsed, input);
+
   return {
-    status: "prompt_ready",
+    status: "structured_json_ready",
     proveedor: "gemini",
     usuario_id: input.usuarioId,
     gemini_configurado: geminiConfigured,
-    modelo_sugerido: getGeminiModel(),
+    modelo_usado: model,
     solicitud_usuario: {
       prompt: input.prompt,
       objetivo: input.objetivo ?? null,
@@ -378,7 +612,8 @@ export const generateRoutineDraftFromPrompt = async (
     },
     prompt_sistema: promptSistema,
     prompt_usuario: promptUsuario,
+    rutina_generada: rutinaGenerada,
     siguiente_paso:
-      "Etapa 5: pedirle a Gemini una respuesta en JSON estructurado para convertirla en rutina real.",
+      "Etapa 6: transformar este JSON estructurado en una rutina real de GymMaxxing y guardarla reutilizando la logica actual.",
   };
 };
