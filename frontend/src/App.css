@@ -130,6 +130,23 @@
   background: #07111f;
 }
 
+.gemini-nav-btn {
+  border-color: rgba(90, 169, 255, 0.18);
+  background: rgba(90, 169, 255, 0.08);
+  color: #9ad0ff;
+}
+
+.gemini-nav-btn:hover {
+  border-color: rgba(90, 169, 255, 0.34);
+  background: rgba(90, 169, 255, 0.14);
+}
+
+.gemini-nav-btn.active {
+  color: #89c2ff;
+  border-color: #3b6084;
+  background: #0b1a2c;
+}
+
 .settings-nav-icon {
   width: 21px;
   height: 21px;

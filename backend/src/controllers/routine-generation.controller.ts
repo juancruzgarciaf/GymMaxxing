@@ -106,7 +106,9 @@ export const generateRoutineDraft = async (req: Request, res: Response) => {
 
       if (
         error.message.includes("Gemini devolvio un JSON invalido") ||
-        error.message.includes("Gemini no devolvio contenido")
+        error.message.includes("Gemini no devolvio contenido") ||
+        error.message.includes("Unexpected end of JSON input") ||
+        error.message.includes("Unterminated string in JSON")
       ) {
         return res.status(502).json({
           error: "Gemini devolvio una respuesta invalida para la rutina",
@@ -115,10 +117,13 @@ export const generateRoutineDraft = async (req: Request, res: Response) => {
 
       if (
         error.message.includes("no contiene ejercicios validos") ||
-        error.message.includes("No se pudo crear la rutina generada por Gemini")
+        error.message.includes("No se pudo crear la rutina generada por Gemini") ||
+        error.message.includes("No hay ejercicios cargados en GymMaxxing")
       ) {
         return res.status(422).json({
-          error: "Gemini devolvio una rutina que no se pudo convertir en una rutina valida de GymMaxxing",
+          error: error.message.includes("No hay ejercicios cargados en GymMaxxing")
+            ? "No hay ejercicios cargados en GymMaxxing todavía. Carga ejercicios primero para poder generar rutinas con Gemini."
+            : "Gemini devolvio ejercicios que no coinciden bien con el catalogo de GymMaxxing. Intenta de nuevo con un pedido mas concreto.",
         });
       }
     }

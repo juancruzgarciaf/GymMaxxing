@@ -240,6 +240,7 @@ function App() {
   const [appToast, setAppToast] = useState<{ type: "error" | "ok"; text: string } | null>(null);
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [userSearchResults, setUserSearchResults] = useState<SearchUser[]>([]);
+  const [rutinasOpenGeminiRequestKey, setRutinasOpenGeminiRequestKey] = useState(0);
   const authScreen: AuthScreen = location.pathname === "/register" ? "register" : "login";
   const mainScreen = getMainScreenFromPath(location.pathname);
   const routeState = location.state as TrainingRouteState | null;
@@ -328,6 +329,12 @@ function App() {
     }
 
     navigate(pathForScreen(screen));
+  };
+
+  const openGeminiFromTopbar = () => {
+    dismissSharedRoutine();
+    setRutinasOpenGeminiRequestKey((prev) => prev + 1);
+    navigate(pathForScreen("rutinas"));
   };
 
   const handleActiveTrainingChange = useCallback((snapshot: ActiveTrainingSnapshot | null) => {
@@ -708,6 +715,26 @@ function App() {
         <div className="topbar-actions">
           <button
             type="button"
+            className={`settings-nav-btn gemini-nav-btn ${mainScreen === "rutinas" ? "active" : ""}`}
+            onClick={openGeminiFromTopbar}
+            aria-label="Abrir Gemini"
+            title="Abrir Gemini"
+          >
+            <svg
+              className="settings-nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 2.5c.8 3.3 1.7 4.9 3 6.2s2.9 2.2 6.2 3c-3.3.8-4.9 1.7-6.2 3s-2.2 2.9-3 6.2c-.8-3.3-1.7-4.9-3-6.2s-2.9-2.2-6.2-3c3.3-.8 4.9-1.7 6.2-3s2.2-2.9 3-6.2Z" />
+            </svg>
+          </button>
+          <button
+            type="button"
             className={`pro-nav-btn ${mainScreen === "pro" ? "active" : ""}`}
             onClick={() => navigateTo("pro")}
             aria-label="GymMaxxing PRO"
@@ -793,6 +820,7 @@ function App() {
             usuario={usuario}
             canTrain={canTrain}
             onStartTraining={(seed) => openTrainingFromSeed(seed, { recordCopy: false })}
+            openGeminiPanelRequestKey={rutinasOpenGeminiRequestKey}
           />
         </div>
         {mainScreen === "descubrir" ? (

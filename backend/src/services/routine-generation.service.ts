@@ -374,21 +374,43 @@ const isRetryableGeminiError = (error: unknown) => {
   );
 };
 
+const getGeminiRateLimitRetryDelayMs = (error: unknown) => {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+
+  const message = error.message;
+  if (
+    !message.includes('"status":"RESOURCE_EXHAUSTED"') &&
+    !message.includes('"code":429') &&
+    !message.toLowerCase().includes("please retry in")
+  ) {
+    return null;
+  }
+
+  const retryDelayMatch = message.match(/"retryDelay":"(\d+)s"/);
+  if (retryDelayMatch?.[1]) {
+    return Number(retryDelayMatch[1]) * 1000;
+  }
+
+  const plainTextMatch = message.match(/Please retry in ([\d.]+)s/i);
+  if (plainTextMatch?.[1]) {
+    return Math.ceil(Number(plainTextMatch[1]) * 1000);
+  }
+
+  return null;
+};
+
 const generateGeminiContentWithRetry = async (params: {
   model: string;
   promptSistema: string;
   promptUsuario: string;
 }) => {
   const ai = getGeminiClient();
-  const retryDelays = [0, 1200, 2500];
+  const maxAttempts = 4;
   let lastError: unknown;
 
-  for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
-    const delay = retryDelays[attempt] ?? 0;
-    if (delay > 0) {
-      await sleep(delay);
-    }
-
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
       return await ai.models.generateContent({
         model: params.model,
@@ -403,9 +425,17 @@ const generateGeminiContentWithRetry = async (params: {
       });
     } catch (error) {
       lastError = error;
-      if (!isRetryableGeminiError(error) || attempt === retryDelays.length - 1) {
+      const rateLimitDelay = getGeminiRateLimitRetryDelayMs(error);
+      const shouldRetry =
+        isRetryableGeminiError(error) || rateLimitDelay != null;
+
+      if (!shouldRetry || attempt === maxAttempts - 1) {
         throw error;
       }
+
+      const fallbackDelays = [1200, 2500, 4000];
+      const delay = rateLimitDelay ?? fallbackDelays[attempt] ?? 2500;
+      await sleep(delay);
     }
   }
 
@@ -418,6 +448,79 @@ const parsePositiveInteger = (value: unknown, fallback: number) => {
     return fallback;
   }
   return parsed;
+};
+
+const normalizeExerciseNameKey = (value: unknown) => {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+};
+
+const getExerciseNameSimilarityScore = (
+  requestedName: string,
+  existingName: string
+) => {
+  if (!requestedName || !existingName) {
+    return 0;
+  }
+
+  if (requestedName === existingName) {
+    return 100;
+  }
+
+  if (
+    requestedName.includes(existingName) ||
+    existingName.includes(requestedName)
+  ) {
+    return 80;
+  }
+
+  const requestedTokens = new Set(requestedName.split(" ").filter(Boolean));
+  const existingTokens = new Set(existingName.split(" ").filter(Boolean));
+  const shared = Array.from(requestedTokens).filter((token) =>
+    existingTokens.has(token)
+  ).length;
+
+  if (shared === 0) {
+    return 0;
+  }
+
+  return Math.round(
+    (shared / Math.max(requestedTokens.size, existingTokens.size)) * 70
+  );
+};
+
+const parseGeminiJsonResponse = (rawText: string) => {
+  const trimmed = rawText.trim();
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    try {
+      const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      if (fencedMatch?.[1]) {
+        return JSON.parse(fencedMatch[1].trim());
+      }
+
+      const firstBrace = trimmed.indexOf("{");
+      const lastBrace = trimmed.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
+      }
+    } catch {
+      throw new Error("Gemini devolvio un JSON invalido para la rutina");
+    }
+
+    throw new Error("Gemini devolvio un JSON invalido para la rutina");
+  }
 };
 
 const normalizeGeneratedRoutineProposal = (
@@ -499,6 +602,14 @@ const normalizeGeneratedRoutineProposal = (
 const sanitizeExercisesForPersistence = async (
   ejercicios: GeneratedRoutineExercise[]
 ) => {
+  const requestedNames = Array.from(
+    new Set(
+      ejercicios
+        .map((exercise) => normalizeExerciseNameKey(exercise.nombre))
+        .filter(Boolean)
+    )
+  );
+
   const requestedIds = Array.from(
     new Set(
       ejercicios
@@ -507,7 +618,7 @@ const sanitizeExercisesForPersistence = async (
     )
   );
 
-  if (requestedIds.length === 0) {
+  if (requestedIds.length === 0 && requestedNames.length === 0) {
     throw new Error("La rutina generada no contiene ejercicios validos");
   }
 
@@ -517,35 +628,88 @@ const sanitizeExercisesForPersistence = async (
     grupo_muscular: string | null;
   }>(
     `SELECT id_ejercicio, nombre, grupo_muscular
-     FROM ejercicio
-     WHERE id_ejercicio = ANY($1::int[])`,
-    [requestedIds]
+     FROM ejercicio`
   );
+
+  if (result.rows.length === 0) {
+    throw new Error("No hay ejercicios cargados en GymMaxxing para generar rutinas con Gemini");
+  }
 
   const existingExercises = new Map(
     result.rows.map((row) => [row.id_ejercicio, row] as const)
   );
+  const existingExercisesByName = new Map(
+    result.rows.map((row) => [normalizeExerciseNameKey(row.nombre), row] as const)
+  );
 
   const seenIds = new Set<number>();
   const sanitized = ejercicios
-    .filter((exercise) => {
-      if (seenIds.has(exercise.id_ejercicio)) {
+    .map((exercise) => {
+      const byId = existingExercises.get(exercise.id_ejercicio);
+      const byName = existingExercisesByName.get(
+        normalizeExerciseNameKey(exercise.nombre)
+      );
+      let matched = byId ?? byName;
+
+      if (!matched) {
+        const requestedName = normalizeExerciseNameKey(exercise.nombre);
+        let bestMatch: (typeof result.rows)[number] | null = null;
+        let bestScore = 0;
+
+        for (const candidate of result.rows) {
+          const score = getExerciseNameSimilarityScore(
+            requestedName,
+            normalizeExerciseNameKey(candidate.nombre)
+          );
+          if (score > bestScore) {
+            bestScore = score;
+            bestMatch = candidate;
+          }
+        }
+
+        if (bestMatch && bestScore >= 50) {
+          matched = bestMatch;
+        }
+      }
+
+      if (!matched) {
+        return null;
+      }
+
+      if (seenIds.has(matched.id_ejercicio)) {
         return false;
       }
 
-      if (!existingExercises.has(exercise.id_ejercicio)) {
-        return false;
-      }
-
-      seenIds.add(exercise.id_ejercicio);
-      return true;
+      seenIds.add(matched.id_ejercicio);
+      return {
+        id_ejercicio: matched.id_ejercicio,
+        nombre: matched.nombre,
+        grupo_muscular: matched.grupo_muscular,
+        series: parsePositiveInteger(exercise.series, 3),
+        repeticiones: parsePositiveInteger(exercise.repeticiones, 10),
+        descanso: Math.max(0, Number(exercise.descanso) || 0),
+        orden: exercise.orden,
+      };
     })
+    .filter(
+      (
+        exercise
+      ): exercise is {
+        id_ejercicio: number;
+        nombre: string;
+        grupo_muscular: string | null;
+        series: number;
+        repeticiones: number;
+        descanso: number;
+        orden: number;
+      } => exercise != null
+    )
+    .sort((a, b) => a.orden - b.orden)
     .map((exercise, index) => {
-      const existing = existingExercises.get(exercise.id_ejercicio)!;
       return {
         id_ejercicio: exercise.id_ejercicio,
-        nombre: existing.nombre,
-        grupo_muscular: existing.grupo_muscular,
+        nombre: exercise.nombre,
+        grupo_muscular: exercise.grupo_muscular,
         series: parsePositiveInteger(exercise.series, 3),
         repeticiones: parsePositiveInteger(exercise.repeticiones, 10),
         descanso: Math.max(0, Number(exercise.descanso) || 0),
@@ -673,6 +837,10 @@ export const generateRoutineDraftFromPrompt = async (
     throw new Error("Usuario no encontrado para generar rutina");
   }
 
+  if (referenceCatalog.length === 0) {
+    throw new Error("No hay ejercicios cargados en GymMaxxing para generar rutinas con Gemini");
+  }
+
   const perfilUsuario = {
     username: user.username,
     edad: user.edad ?? null,
@@ -738,7 +906,7 @@ export const generateRoutineDraftFromPrompt = async (
     throw new Error("Gemini no devolvio contenido para la rutina");
   }
 
-  const parsed = JSON.parse(rawText);
+  const parsed = parseGeminiJsonResponse(rawText);
   const rutinaGenerada = normalizeGeneratedRoutineProposal(parsed, input);
   const ejerciciosValidados = await sanitizeExercisesForPersistence(
     rutinaGenerada.ejercicios

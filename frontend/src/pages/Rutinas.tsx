@@ -107,6 +107,7 @@ type RutinasProps = {
   usuario: Usuario;
   canTrain?: boolean;
   onStartTraining?: (seed: TrainingSeed) => void;
+  openGeminiPanelRequestKey?: number;
 };
 
 type VistaRutinas = "lista" | "editor" | "ejecucion";
@@ -213,7 +214,12 @@ const SET_TIPO_OPTIONS: Array<{ value: SetTipo; label: string }> = [
   { value: "failure", label: "Failure" },
 ];
 
-function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
+function Rutinas({
+  usuario,
+  canTrain,
+  onStartTraining,
+  openGeminiPanelRequestKey = 0,
+}: RutinasProps) {
   const canStartTraining = canTrain ?? canUseTrainingFeatures(usuario);
   const [vista, setVista] = useState<VistaRutinas>("lista");
   const [loading, setLoading] = useState(false);
@@ -263,6 +269,15 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
     }>;
   } | null>(null);
   const [geminiPanelError, setGeminiPanelError] = useState("");
+
+  useEffect(() => {
+    if (openGeminiPanelRequestKey <= 0) {
+      return;
+    }
+
+    setGeminiPanelOpen(true);
+    setGeminiPanelError("");
+  }, [openGeminiPanelRequestKey]);
 
   const [editorRutinaId, setEditorRutinaId] = useState<number | null>(null);
   const [editorNombre, setEditorNombre] = useState("");
@@ -2355,9 +2370,6 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
             />
             <button className="btn" type="button" onClick={abrirEditorNuevaRutina}>
               Crear rutina
-            </button>
-            <button className="btn secondary" type="button" onClick={() => setGeminiPanelOpen(true)}>
-              Panel Gemini
             </button>
             <button
               className="btn secondary"
