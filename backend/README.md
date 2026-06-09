@@ -106,6 +106,22 @@ DB_PORT=5432
 
 Cada integrante del equipo puede necesitar valores distintos en `DB_USER`, `DB_PASSWORD`, `DB_NAME` o `DB_PORT`, según cómo tenga configurado PostgreSQL.
 
+### Variables para Gemini
+
+Para dejar lista la integración con generación inteligente de rutinas, sumá estas variables en `backend/.env`:
+
+```env
+GEMINI_API_KEY=tu_api_key_de_google_ai_studio
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+Notas:
+
+* `GEMINI_API_KEY` se obtiene desde Google AI Studio y es la credencial que usa el backend para llamar a Gemini.
+* `GEMINI_MODEL` es opcional en la práctica: si no lo definís, el backend usa `gemini-2.5-flash` por defecto.
+* `GOOGLE_CLIENT_ID` y `GEMINI_API_KEY` no son lo mismo.
+  `GOOGLE_CLIENT_ID` se usa para login con Google y `GEMINI_API_KEY` para la API de Gemini.
+
 ### Variables para notificaciones por email
 
 Si queres habilitar envios por correo para las notificaciones, suma estas variables en `backend/.env`:
