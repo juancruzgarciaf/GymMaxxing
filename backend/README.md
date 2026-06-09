@@ -113,11 +113,30 @@ Si queres habilitar envios por correo para las notificaciones, suma estas variab
 ```env
 MAIL_ENABLED=false
 MAIL_FROM=no-reply@gymmaxxing.local
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_SECURE=false
+MAIL_USER=tu_mail@gmail.com
+MAIL_PASS=tu_password_o_app_password
+```
+
+También acepta estas variantes equivalentes:
+
+```env
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=tu_usuario_smtp
 SMTP_PASS=tu_password_o_app_password_smtp
+```
+
+O, si prefieres nombrarlo específico para Gmail:
+
+```env
+GMAIL_USER=tu_mail@gmail.com
+GMAIL_APP_PASSWORD=tu_app_password_de_google
+MAIL_FROM=tu_mail@gmail.com
+MAIL_ENABLED=true
 ```
 
 Notas:
@@ -126,7 +145,8 @@ Notas:
 * Si `MAIL_ENABLED=false`, la app sigue funcionando y solo crea notificaciones internas.
 * Para Gmail SMTP normalmente conviene usar una `App Password`, no tu contraseña común.
 * `MAIL_FROM` es el remitente visible.
-* `SMTP_SECURE=true` suele usarse con puerto `465`; `false` suele ir con `587`.
+* `MAIL_SECURE=true` o `SMTP_SECURE=true` suele usarse con puerto `465`; `false` suele ir con `587`.
+* El backend acepta aliases: `MAIL_HOST/MAIL_PORT/MAIL_USER/MAIL_PASS`, `SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS` y `GMAIL_USER/GMAIL_APP_PASSWORD`.
 
 ---
 

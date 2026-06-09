@@ -207,6 +207,13 @@ const isSpecificNotificationEnabled = (
   return Boolean(row[column]);
 };
 
+const logNotificationEmailDecision = (
+  event: string,
+  details: Record<string, unknown>
+) => {
+  console.info(`[notifications] ${event}`, details);
+};
+
 export const listNotifications = async (
   usuarioId: number,
   options?: { limit?: number; offset?: number }
@@ -392,12 +399,31 @@ export const createNotification = async (input: CreateNotificationInput) => {
 
 export const createNotificationIfAllowed = async (input: CreateNotificationInput) => {
   if (input.actor_id != null && input.actor_id === input.usuario_id) {
+    logNotificationEmailDecision("email_skipped_same_actor", {
+      usuario_id: input.usuario_id,
+      actor_id: input.actor_id,
+      tipo: input.tipo,
+    });
     return null;
   }
 
   const preferences = await getPreferencesRow(input.usuario_id);
 
-  if (!preferences || !isSpecificNotificationEnabled(preferences, input.tipo)) {
+  if (!preferences) {
+    logNotificationEmailDecision("email_skipped_missing_preferences", {
+      usuario_id: input.usuario_id,
+      tipo: input.tipo,
+    });
+    return null;
+  }
+
+  if (!isSpecificNotificationEnabled(preferences, input.tipo)) {
+    logNotificationEmailDecision("email_skipped_specific_preference_disabled", {
+      usuario_id: input.usuario_id,
+      tipo: input.tipo,
+      recibir_por_email: preferences.recibir_por_email,
+      email: preferences.email,
+    });
     return null;
   }
 
@@ -406,10 +432,42 @@ export const createNotificationIfAllowed = async (input: CreateNotificationInput
       ? await createNotification(input)
       : null;
 
+  if (!preferences.recibir_en_app) {
+    logNotificationEmailDecision("internal_notification_skipped", {
+      usuario_id: input.usuario_id,
+      tipo: input.tipo,
+      reason: "recibir_en_app=false",
+    });
+  }
+
+  if (!preferences.recibir_por_email) {
+    logNotificationEmailDecision("email_skipped_channel_disabled", {
+      usuario_id: input.usuario_id,
+      tipo: input.tipo,
+      email: preferences.email,
+    });
+    return notification;
+  }
+
+  if (!preferences.email) {
+    logNotificationEmailDecision("email_skipped_missing_recipient_email", {
+      usuario_id: input.usuario_id,
+      tipo: input.tipo,
+    });
+    return notification;
+  }
+
   if (preferences.recibir_por_email && preferences.email) {
     try {
       const safeTitle = input.titulo.trim();
       const safeMessage = input.mensaje.trim();
+
+      logNotificationEmailDecision("email_attempt", {
+        usuario_id: input.usuario_id,
+        tipo: input.tipo,
+        email: preferences.email,
+        titulo: safeTitle,
+      });
 
       await sendMail({
         to: preferences.email,
@@ -417,10 +475,74 @@ export const createNotificationIfAllowed = async (input: CreateNotificationInput
         text: `${safeTitle}\n\n${safeMessage}`,
         html: `<h2>${safeTitle}</h2><p>${safeMessage}</p>`,
       });
+
+      logNotificationEmailDecision("email_sent", {
+        usuario_id: input.usuario_id,
+        tipo: input.tipo,
+        email: preferences.email,
+      });
     } catch (error) {
-      console.error("No se pudo enviar el email de notificacion", error);
+      console.error("Error enviando email de notificación:", error);
     }
   }
 
   return notification;
+};
+
+export const sendTestNotificationEmail = async (usuarioId: number) => {
+  const preferences = await getPreferencesRow(usuarioId);
+
+  if (!preferences) {
+    return {
+      ok: false as const,
+      reason: "missing_preferences" as const,
+    };
+  }
+
+  if (!preferences.recibir_por_email) {
+    logNotificationEmailDecision("test_email_skipped_channel_disabled", {
+      usuario_id: usuarioId,
+    });
+    return {
+      ok: false as const,
+      reason: "email_preference_disabled" as const,
+    };
+  }
+
+  if (!preferences.email) {
+    logNotificationEmailDecision("test_email_skipped_missing_recipient_email", {
+      usuario_id: usuarioId,
+    });
+    return {
+      ok: false as const,
+      reason: "missing_email" as const,
+    };
+  }
+
+  try {
+    await sendMail({
+      to: preferences.email,
+      subject: "GymMaxxing | Prueba de notificaciones por email",
+      text:
+        "Esta es una prueba del sistema de notificaciones por email de GymMaxxing.",
+      html:
+        "<h2>Prueba de notificaciones por email</h2><p>Esta es una prueba del sistema de notificaciones por email de GymMaxxing.</p>",
+    });
+
+    logNotificationEmailDecision("test_email_sent", {
+      usuario_id: usuarioId,
+      email: preferences.email,
+    });
+
+    return {
+      ok: true as const,
+      email: preferences.email,
+    };
+  } catch (error) {
+    console.error("Error enviando email de prueba:", error);
+    return {
+      ok: false as const,
+      reason: "send_failed" as const,
+    };
+  }
 };

@@ -211,3 +211,47 @@ export const updateNotificationPreferences = async (req: Request, res: Response)
     });
   }
 };
+
+export const sendTestNotificationEmail = async (req: Request, res: Response) => {
+  try {
+    const authUser = req.authUser;
+
+    if (!authUser) {
+      return res.status(401).json({
+        error: "No autorizado",
+      });
+    }
+
+    const result = await notificationService.sendTestNotificationEmail(authUser.id);
+
+    if (!result.ok) {
+      const reasonToStatus: Record<string, number> = {
+        missing_preferences: 404,
+        email_preference_disabled: 400,
+        missing_email: 400,
+        send_failed: 500,
+      };
+
+      const reasonToMessage: Record<string, string> = {
+        missing_preferences: "No se encontraron preferencias de notificacion",
+        email_preference_disabled: "El usuario tiene desactivadas las notificaciones por email",
+        missing_email: "El usuario no tiene email valido para enviar",
+        send_failed: "Fallo el envio del email de prueba",
+      };
+
+      return res.status(reasonToStatus[result.reason] ?? 400).json({
+        error: reasonToMessage[result.reason] ?? "No se pudo enviar el email de prueba",
+      });
+    }
+
+    return res.json({
+      mensaje: "Email de prueba enviado",
+      email: result.email,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Error enviando email de prueba",
+    });
+  }
+};
