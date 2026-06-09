@@ -39,7 +39,8 @@ export const getGeminiClient = () => {
   return geminiClient;
 };
 
-export const getGeminiModel = () => getGeminiConfig().model;
+export const getGeminiModel = () =>
+  readOptionalEnv("GEMINI_MODEL") ?? DEFAULT_GEMINI_MODEL;
 
 export const resetGeminiClient = () => {
   geminiClient = null;
