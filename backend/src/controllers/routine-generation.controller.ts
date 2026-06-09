@@ -74,10 +74,14 @@ export const generateRoutineDraft = async (req: Request, res: Response) => {
       if (
         error.message.includes('"status":"UNAVAILABLE"') ||
         error.message.includes('"code":503') ||
-        error.message.includes("high demand")
+        error.message.includes("high demand") ||
+        error.message.includes("fetch failed") ||
+        error.message.includes("ECONNRESET") ||
+        error.message.includes("ENOTFOUND") ||
+        error.message.includes("ETIMEDOUT")
       ) {
         return res.status(503).json({
-          error: "Gemini esta con alta demanda en este momento. Intenta de nuevo en unos minutos.",
+          error: "No se pudo conectar con Gemini en este momento. Intenta de nuevo en unos minutos.",
         });
       }
 

@@ -353,6 +353,65 @@ const routineProposalJsonSchema = {
   ],
 } as const;
 
+const sleep = (ms: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const isRetryableGeminiError = (error: unknown) => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.message.includes('"status":"UNAVAILABLE"') ||
+    error.message.includes('"code":503') ||
+    error.message.includes("high demand") ||
+    error.message.includes("fetch failed") ||
+    error.message.includes("ECONNRESET") ||
+    error.message.includes("ENOTFOUND") ||
+    error.message.includes("ETIMEDOUT")
+  );
+};
+
+const generateGeminiContentWithRetry = async (params: {
+  model: string;
+  promptSistema: string;
+  promptUsuario: string;
+}) => {
+  const ai = getGeminiClient();
+  const retryDelays = [0, 1200, 2500];
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+    const delay = retryDelays[attempt] ?? 0;
+    if (delay > 0) {
+      await sleep(delay);
+    }
+
+    try {
+      return await ai.models.generateContent({
+        model: params.model,
+        contents: params.promptUsuario,
+        config: {
+          systemInstruction: params.promptSistema,
+          responseMimeType: "application/json",
+          responseJsonSchema: routineProposalJsonSchema,
+          temperature: 0.4,
+          maxOutputTokens: 1600,
+        },
+      });
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableGeminiError(error) || attempt === retryDelays.length - 1) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError ?? new Error("No se pudo generar contenido con Gemini");
+};
+
 const parsePositiveInteger = (value: unknown, fallback: number) => {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) {
@@ -667,18 +726,11 @@ export const generateRoutineDraftFromPrompt = async (
     catalogoReferencia: referenceCatalog,
   });
 
-  const ai = getGeminiClient();
   const model = getGeminiModel();
-  const response = await ai.models.generateContent({
+  const response = await generateGeminiContentWithRetry({
     model,
-    contents: promptUsuario,
-    config: {
-      systemInstruction: promptSistema,
-      responseMimeType: "application/json",
-      responseJsonSchema: routineProposalJsonSchema,
-      temperature: 0.4,
-      maxOutputTokens: 1600,
-    },
+    promptSistema,
+    promptUsuario,
   });
 
   const rawText = response.text;

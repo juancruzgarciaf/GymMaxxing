@@ -7,9 +7,10 @@ import {
 } from "../lib/trainingTransfer";
 import { canUseTrainingFeatures } from "../lib/roles";
 import { DESCRIPTION_MAX_LENGTH, TITLE_MAX_LENGTH, limitDescription, limitTitle } from "../lib/textLimits";
-import type { TrainingSeed, Usuario } from "../types";
+import type { GeminiGeneratedRoutineResponse, TrainingSeed, Usuario } from "../types";
 import TrashIcon from "../components/TrashIcon";
 import DurationInput from "../components/DurationInput";
+import GeminiRoutinePanel from "../components/GeminiRoutinePanel";
 
 type Rutina = {
   id_rutina: number;
@@ -128,6 +129,7 @@ type PersistedRutinaEjercicio = {
 };
 
 const API = "http://localhost:3000";
+const AUTH_STORAGE_KEY = "gymmaxxing_auth_v1";
 const RUTINA_PREFS_KEY = "gymmaxxing_rutina_series_v1";
 const EXERCISE_NOTE_MAX_LENGTH = 120;
 
@@ -190,6 +192,20 @@ const writeRutinaPrefs = (next: Record<string, PersistedRutinaEjercicio[]>) => {
   localStorage.setItem(RUTINA_PREFS_KEY, JSON.stringify(next));
 };
 
+const getStoredAuthToken = () => {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as { token?: string };
+    return typeof parsed.token === "string" && parsed.token.trim() ? parsed.token : null;
+  } catch {
+    return null;
+  }
+};
+
 const SET_TIPO_OPTIONS: Array<{ value: SetTipo; label: string }> = [
   { value: "warmup", label: "WarmUp" },
   { value: "serie", label: "Serie" },
@@ -234,6 +250,14 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
   const [busquedaRutina, setBusquedaRutina] = useState("");
   const [resumenLoading, setResumenLoading] = useState(false);
   const [resumenEjercicios, setResumenEjercicios] = useState<ResumenEjercicio[]>([]);
+  const [geminiPanelOpen, setGeminiPanelOpen] = useState(false);
+  const [geminiGenerating, setGeminiGenerating] = useState(false);
+  const [geminiLastRoutine, setGeminiLastRoutine] = useState<{
+    id_rutina: number;
+    nombre: string;
+    totalEjercicios: number;
+  } | null>(null);
+  const [geminiPanelError, setGeminiPanelError] = useState("");
 
   const [editorRutinaId, setEditorRutinaId] = useState<number | null>(null);
   const [editorNombre, setEditorNombre] = useState("");
@@ -2225,11 +2249,88 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
   const carpetasRaiz = carpetasPorPadre.get(null) ?? [];
   const rutinasSueltas = rutinasPorCarpeta.get(null) ?? [];
 
+  const handleGenerateRoutineWithGemini = async (payload: {
+    prompt: string;
+    objetivo?: string;
+    diasPorSemana?: number;
+  }) => {
+    const token = getStoredAuthToken();
+    if (!token) {
+      setGeminiPanelError("No hay token activo. Volve a iniciar sesion.");
+      return;
+    }
+
+    try {
+      setGeminiGenerating(true);
+      setError("");
+      setMensaje("");
+      setGeminiPanelError("");
+
+      const res = await fetch(`${API}/rutinas/generar`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          prompt: payload.prompt,
+          objetivo: payload.objetivo ?? undefined,
+          dias_por_semana: payload.diasPorSemana ?? undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(await parseError(res, "No se pudo generar la rutina con Gemini"));
+      }
+
+      const data = (await res.json()) as GeminiGeneratedRoutineResponse;
+      const routine = data.rutina_creada;
+
+      savePersistedRutinaEjercicios(
+        routine.id_rutina,
+        routine.ejercicios.map((exercise) => ({
+          id_ejercicio: exercise.id_ejercicio,
+          descansoSegundos: Math.max(0, exercise.descanso ?? 0),
+          series: Array.from({ length: Math.max(1, exercise.series) }, () => ({
+            kg: "",
+            reps: String(Math.max(1, exercise.repeticiones || 10)),
+            tipo: "serie" as const,
+          })),
+        })),
+      );
+
+      await Promise.all([cargarRutinas(), cargarCarpetas()]);
+      setSelectedRutinaId(routine.id_rutina);
+      setGeminiLastRoutine({
+        id_rutina: routine.id_rutina,
+        nombre: routine.nombre,
+        totalEjercicios: routine.ejercicios.length,
+      });
+      setMensaje("Rutina generada con Gemini");
+      setGeminiPanelError("");
+    } catch (err) {
+      setGeminiPanelError(
+        err instanceof Error ? err.message : "No se pudo generar la rutina con Gemini",
+      );
+    } finally {
+      setGeminiGenerating(false);
+    }
+  };
+
   return (
     <main className="app">
       {renderToast()}
       <section className="hero">
-        <h1>Tus rutinas</h1>
+        <div className="rutinas-hero-copy">
+          <h1>Tus rutinas</h1>
+          <p className="helper-text">
+            Crea rutinas manuales o pedile una propuesta a Gemini para que GymMaxxing la guarde
+            directo en tu biblioteca.
+          </p>
+        </div>
+        <button className="btn" type="button" onClick={() => setGeminiPanelOpen(true)}>
+          Generar con Gemini
+        </button>
       </section>
 
       {loading && <p className="status">Cargando datos...</p>}
@@ -2244,6 +2345,9 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
             />
             <button className="btn" type="button" onClick={abrirEditorNuevaRutina}>
               Crear rutina
+            </button>
+            <button className="btn secondary" type="button" onClick={() => setGeminiPanelOpen(true)}>
+              Panel Gemini
             </button>
             <button
               className="btn secondary"
@@ -2374,6 +2478,29 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
           )}
         </article>
       </section>
+
+      <GeminiRoutinePanel
+        open={geminiPanelOpen}
+        loading={geminiGenerating}
+        onClose={() => {
+          setGeminiPanelOpen(false);
+          setGeminiPanelError("");
+        }}
+        onGenerate={(payload) => {
+          void handleGenerateRoutineWithGemini(payload);
+        }}
+        lastGeneratedRoutine={geminiLastRoutine}
+        errorMessage={geminiPanelError}
+        onViewGeneratedRoutine={
+          geminiLastRoutine
+            ? () => {
+                setSelectedRutinaId(geminiLastRoutine.id_rutina);
+                setGeminiPanelOpen(false);
+                setGeminiPanelError("");
+              }
+            : null
+        }
+      />
 
       {renameModal.open && (
         <div className="modal-backdrop" role="presentation" onClick={cerrarModalRenombrarCarpeta}>

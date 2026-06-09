@@ -231,6 +231,65 @@ export type NotificationItem = {
   fecha_lectura: string | null;
 };
 
+export type GeminiGeneratedRoutineResponse = {
+  status: "routine_created";
+  proveedor: "gemini";
+  usuario_id: number;
+  gemini_configurado: boolean;
+  modelo_usado: string;
+  solicitud_usuario: {
+    prompt: string;
+    objetivo: string | null;
+    dias_por_semana: number | null;
+  };
+  prompt_sistema: string;
+  prompt_usuario: string;
+  rutina_generada: {
+    nombre: string;
+    descripcion: string;
+    objetivo: string;
+    dias_por_semana_recomendados: number | null;
+    duracion_estimada: number | null;
+    advertencias: string[];
+    ejercicios: Array<{
+      id_ejercicio: number;
+      nombre: string;
+      grupo_muscular: string | null;
+      series: number;
+      repeticiones: number;
+      descanso: number;
+      orden: number;
+    }>;
+  };
+  rutina_creada: {
+    id_rutina: number;
+    nombre: string;
+    descripcion: string | null;
+    duracion_estimada: number | null;
+    fecha_creacion: string | null;
+    creador_id: number;
+    id_carpeta: number | null;
+    visible_en_descubrir: boolean;
+    save_count: number;
+    copy_count: number;
+    likes_count: number;
+    viewer_liked: boolean;
+    ejercicios: Array<{
+      id_ejercicio: number;
+      id_rutina: number;
+      series: number;
+      repeticiones: number;
+      descanso: number;
+      orden: number;
+      nombre: string;
+      descripcion: string | null;
+      grupo_muscular: string | null;
+      tipo_disciplina: string | null;
+    }>;
+  };
+  siguiente_paso: string;
+};
+
 export type SuggestedAthlete = Usuario & {
   followers_count: number;
   following_count: number;
