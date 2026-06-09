@@ -98,6 +98,15 @@ export const generateRoutineDraft = async (req: Request, res: Response) => {
           error: "Gemini devolvio una respuesta invalida para la rutina",
         });
       }
+
+      if (
+        error.message.includes("no contiene ejercicios validos") ||
+        error.message.includes("No se pudo crear la rutina generada por Gemini")
+      ) {
+        return res.status(422).json({
+          error: "Gemini devolvio una rutina que no se pudo convertir en una rutina valida de GymMaxxing",
+        });
+      }
     }
 
     return res.status(500).json({
