@@ -9,6 +9,7 @@ import entrenamientoRoutes from "./routes/entrenamiento.routes";
 import ejercicioRoutes from "./routes/ejercicio.routes";
 import gimnasioRoutes from "./routes/gimnasio.routes";
 import notificationRoutes from "./routes/notification.routes";
+import routineGenerationRoutes from "./routes/routine-generation.routes";
 import subscriptionRoutes from "./routes/subscription.routes";
 
 
@@ -25,6 +26,7 @@ app.use("/entrenamientos", entrenamientoRoutes);
 app.use("/ejercicios", ejercicioRoutes);
 app.use("/gimnasios", gimnasioRoutes);
 app.use("/notificaciones", notificationRoutes);
+app.use("/rutinas/generar", routineGenerationRoutes);
 app.use("/suscripciones", subscriptionRoutes);
 
 // En desarrollo, Mercado Pago necesita una URL publica y luego volvemos al Vite local.
