@@ -1732,6 +1732,31 @@ h2 {
   color: #aad8be;
 }
 
+.gemini-panel-result-list {
+  display: grid;
+  gap: 8px;
+}
+
+.gemini-panel-result-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(9, 31, 23, 0.54);
+}
+
+.gemini-panel-result-item span {
+  color: #effcf4;
+  font-weight: 600;
+}
+
+.gemini-panel-result-item small {
+  color: #94c9ab;
+  text-align: right;
+}
+
 .gemini-panel-actions {
   display: flex;
   justify-content: flex-end;

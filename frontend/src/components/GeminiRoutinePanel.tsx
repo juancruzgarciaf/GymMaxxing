@@ -13,6 +13,11 @@ type GeminiRoutinePanelProps = {
     id_rutina: number;
     nombre: string;
     totalEjercicios: number;
+    ejerciciosPreview: Array<{
+      id_ejercicio: number;
+      nombre: string;
+      grupo_muscular: string | null;
+    }>;
   } | null;
   onViewGeneratedRoutine: (() => void) | null;
   errorMessage: string;
@@ -181,6 +186,16 @@ function GeminiRoutinePanelBody({
           <div className="gemini-panel-result">
             <strong>{lastGeneratedRoutine.nombre}</strong>
             <small>{lastGeneratedRoutine.totalEjercicios} ejercicios generados</small>
+            {lastGeneratedRoutine.ejerciciosPreview.length > 0 ? (
+              <div className="gemini-panel-result-list">
+                {lastGeneratedRoutine.ejerciciosPreview.map((exercise) => (
+                  <div key={exercise.id_ejercicio} className="gemini-panel-result-item">
+                    <span>{exercise.nombre}</span>
+                    <small>{exercise.grupo_muscular ?? "Sin grupo muscular"}</small>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {onViewGeneratedRoutine ? (
               <button type="button" className="btn secondary" onClick={onViewGeneratedRoutine}>
                 Ver rutina creada

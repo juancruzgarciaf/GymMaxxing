@@ -256,6 +256,11 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
     id_rutina: number;
     nombre: string;
     totalEjercicios: number;
+    ejerciciosPreview: Array<{
+      id_ejercicio: number;
+      nombre: string;
+      grupo_muscular: string | null;
+    }>;
   } | null>(null);
   const [geminiPanelError, setGeminiPanelError] = useState("");
 
@@ -2305,6 +2310,11 @@ function Rutinas({ usuario, canTrain, onStartTraining }: RutinasProps) {
         id_rutina: routine.id_rutina,
         nombre: routine.nombre,
         totalEjercicios: routine.ejercicios.length,
+        ejerciciosPreview: routine.ejercicios.slice(0, 6).map((exercise) => ({
+          id_ejercicio: exercise.id_ejercicio,
+          nombre: exercise.nombre,
+          grupo_muscular: exercise.grupo_muscular,
+        })),
       });
       setMensaje("Rutina generada con Gemini");
       setGeminiPanelError("");

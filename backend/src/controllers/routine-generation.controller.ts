@@ -72,6 +72,16 @@ export const generateRoutineDraft = async (req: Request, res: Response) => {
 
     if (error instanceof Error) {
       if (
+        error.message.includes('"status":"RESOURCE_EXHAUSTED"') ||
+        error.message.includes('"code":429') ||
+        error.message.toLowerCase().includes("quota exceeded")
+      ) {
+        return res.status(429).json({
+          error: "Se agotó la cuota de Gemini para esta API key. Espera un poco o usa otra key/proyecto con cuota disponible.",
+        });
+      }
+
+      if (
         error.message.includes('"status":"UNAVAILABLE"') ||
         error.message.includes('"code":503') ||
         error.message.includes("high demand") ||
