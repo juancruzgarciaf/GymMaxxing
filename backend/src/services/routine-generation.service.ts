@@ -1230,6 +1230,7 @@ export const generateRoutineDraftFromPrompt = async (
 
   const model = getGeminiModel();
   let rutinaGenerada: GeneratedRoutineProposal | null = null;
+  let routineFromGemini = false;
 
   if (geminiConfigured) {
     try {
@@ -1246,6 +1247,7 @@ export const generateRoutineDraftFromPrompt = async (
 
       const parsed = parseGeminiJsonResponse(rawText);
       rutinaGenerada = normalizeGeneratedRoutineProposal(parsed, input);
+      routineFromGemini = true;
     } catch (error) {
       console.warn("Gemini fallo; se usara rutina fallback", error);
     }
@@ -1255,17 +1257,50 @@ export const generateRoutineDraftFromPrompt = async (
     rutinaGenerada = buildFallbackRoutineProposal(input, referenceCatalog);
   }
 
-  return persistGeneratedRoutine({
-    input,
-    geminiConfigured,
-    model,
-    perfilUsuario,
-    tendencias,
-    popularExercisesByGroup,
-    popularExercisesByTrainers,
-    referenceCatalog,
-    promptSistema,
-    promptUsuario,
-    rutinaGenerada,
-  });
+  try {
+    return await persistGeneratedRoutine({
+      input,
+      geminiConfigured,
+      model,
+      perfilUsuario,
+      tendencias,
+      popularExercisesByGroup,
+      popularExercisesByTrainers,
+      referenceCatalog,
+      promptSistema,
+      promptUsuario,
+      rutinaGenerada,
+    });
+  } catch (error) {
+    if (!routineFromGemini) {
+      throw error;
+    }
+
+    console.warn(
+      "La rutina devuelta por Gemini no se pudo persistir; se intentara rutina fallback",
+      error
+    );
+
+    const fallbackRoutine = buildFallbackRoutineProposal(input, referenceCatalog);
+
+    try {
+      return await persistGeneratedRoutine({
+        input,
+        geminiConfigured,
+        model,
+        perfilUsuario,
+        tendencias,
+        popularExercisesByGroup,
+        popularExercisesByTrainers,
+        referenceCatalog,
+        promptSistema,
+        promptUsuario,
+        rutinaGenerada: fallbackRoutine,
+      });
+    } catch {
+      throw new Error(
+        "No se pudo crear una rutina valida de GymMaxxing ni con Gemini ni con el fallback."
+      );
+    }
+  }
 };

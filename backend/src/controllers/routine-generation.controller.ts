@@ -127,11 +127,14 @@ export const generateRoutineDraft = async (req: Request, res: Response) => {
       if (
         error.message.includes("no contiene ejercicios validos") ||
         error.message.includes("No se pudo crear la rutina generada por Gemini") ||
-        error.message.includes("No hay ejercicios cargados en GymMaxxing")
+        error.message.includes("No hay ejercicios cargados en GymMaxxing") ||
+        error.message.includes("No se pudo crear una rutina valida de GymMaxxing")
       ) {
         return res.status(422).json({
           error: error.message.includes("No hay ejercicios cargados en GymMaxxing")
             ? "No hay ejercicios cargados en GymMaxxing todavía. Carga ejercicios primero para poder generar rutinas con Gemini."
+            : error.message.includes("No se pudo crear una rutina valida de GymMaxxing")
+            ? "No se pudo convertir el pedido en una rutina valida con el catalogo actual de GymMaxxing."
             : "Gemini devolvio ejercicios que no coinciden bien con el catalogo de GymMaxxing. Intenta de nuevo con un pedido mas concreto.",
         });
       }
