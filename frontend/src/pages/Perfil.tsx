@@ -1143,6 +1143,7 @@ function Perfil({
               profileIsOwn={perfil.is_own_profile}
               viewerId={usuario.id}
               onClose={cerrarModalSocial}
+              onOpenProfile={onOpenProfile}
               onFollow={seguirUsuarioSocial}
               onUnfollow={dejarDeSeguirUsuarioSocial}
             />

@@ -13,6 +13,7 @@ type ProfileSocialModalProps = {
   profileIsOwn: boolean;
   viewerId: number;
   onClose: () => void;
+  onOpenProfile: (username: string) => void;
   onFollow: (user: SocialUser) => void | Promise<void>;
   onUnfollow: (user: SocialUser) => void | Promise<void>;
 };
@@ -28,6 +29,7 @@ function ProfileSocialModal({
   profileIsOwn,
   viewerId,
   onClose,
+  onOpenProfile,
   onFollow,
   onUnfollow,
 }: ProfileSocialModalProps) {
@@ -78,7 +80,10 @@ function ProfileSocialModal({
           type="button"
           className="btn danger compact"
           disabled={actionLoadingId === user.id}
-          onClick={() => void onUnfollow(user)}
+          onClick={(event) => {
+            event.stopPropagation();
+            void onUnfollow(user);
+          }}
         >
           {actionLoadingId === user.id ? "..." : "Eliminar"}
         </button>
@@ -90,7 +95,10 @@ function ProfileSocialModal({
         type="button"
         className={`btn compact ${user.viewer_follows ? "secondary" : ""}`}
         disabled={actionLoadingId === user.id}
-        onClick={() => void (user.viewer_follows ? onUnfollow(user) : onFollow(user))}
+        onClick={(event) => {
+          event.stopPropagation();
+          void (user.viewer_follows ? onUnfollow(user) : onFollow(user));
+        }}
       >
         {actionLoadingId === user.id ? "..." : user.viewer_follows ? "Siguiendo" : "Seguir"}
       </button>
@@ -132,7 +140,23 @@ function ProfileSocialModal({
 
           {!loading && !error
             ? filteredUsers.map((user) => (
-                <article key={user.id} className="profile-social-user">
+                <article
+                  key={user.id}
+                  className="profile-social-user"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    onClose();
+                    onOpenProfile(user.username);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onClose();
+                      onOpenProfile(user.username);
+                    }
+                  }}
+                >
                   <div className="profile-social-user-main">
                     <span className="profile-social-avatar">{getInitial(user.username)}</span>
                     <span>
