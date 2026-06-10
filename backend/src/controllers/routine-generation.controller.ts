@@ -105,6 +105,15 @@ export const generateRoutineDraft = async (req: Request, res: Response) => {
       }
 
       if (
+        error.message.includes("Solo hago rutinas") ||
+        error.message.includes("no parece una rutina")
+      ) {
+        return res.status(400).json({
+          error: "Solo hago rutinas. Pedime una rutina o entrenamiento y la armo.",
+        });
+      }
+
+      if (
         error.message.includes("Gemini devolvio un JSON invalido") ||
         error.message.includes("Gemini no devolvio contenido") ||
         error.message.includes("Unexpected end of JSON input") ||

@@ -175,6 +175,242 @@ type GeneratedRoutineProposal = {
   ejercicios: GeneratedRoutineExercise[];
 };
 
+type CatalogExercise = RoutineGenerationCreateResponse["contexto"]["catalogo_referencia"][number];
+
+const ROUTINE_INTENT_KEYWORDS = [
+  "rutina",
+  "entrenamiento",
+  "ejercicio",
+  "hipertrofia",
+  "fuerza",
+  "masa muscular",
+  "volumen",
+  "full body",
+  "push",
+  "pull",
+  "legs",
+  "ppl",
+  "upper",
+  "lower",
+  "pierna",
+  "piernas",
+  "pecho",
+  "espalda",
+  "hombro",
+  "hombros",
+  "biceps",
+  "triceps",
+  "gluteo",
+  "gluteos",
+  "core",
+  "abdomen",
+  "ganar musculo",
+  "ganar masa",
+  "musculacion",
+];
+
+const looksLikeRoutineRequest = (prompt: string, objetivo?: string) => {
+  const base = `${prompt} ${objetivo ?? ""}`.toLowerCase();
+  return ROUTINE_INTENT_KEYWORDS.some((keyword) => base.includes(keyword));
+};
+
+const getRequestedRoutineStyle = (prompt: string, objetivo?: string) => {
+  const content = `${prompt} ${objetivo ?? ""}`.toLowerCase();
+
+  if (
+    content.includes("push pull legs") ||
+    content.includes("ppl") ||
+    (content.includes("push") && content.includes("pull") && content.includes("legs"))
+  ) {
+    return "push-pull-legs";
+  }
+
+  if (content.includes("full body")) {
+    return "full-body";
+  }
+
+  if (content.includes("upper") || content.includes("torso")) {
+    return "upper";
+  }
+
+  if (content.includes("lower")) {
+    return "lower";
+  }
+
+  if (content.includes("push")) {
+    return "push";
+  }
+
+  if (content.includes("pull")) {
+    return "pull";
+  }
+
+  if (
+    content.includes("pierna") ||
+    content.includes("piernas") ||
+    content.includes("gluteo") ||
+    content.includes("gluteos")
+  ) {
+    return "legs";
+  }
+
+  if (content.includes("pecho") || content.includes("triceps")) {
+    return "chest-triceps";
+  }
+
+  if (content.includes("espalda") || content.includes("biceps")) {
+    return "back-biceps";
+  }
+
+  return "general";
+};
+
+const getFallbackObjective = (input: GenerateRoutineDraftInput) => {
+  const content = `${input.prompt} ${input.objetivo ?? ""}`.toLowerCase();
+
+  if (content.includes("fuerza")) {
+    return "fuerza";
+  }
+
+  if (
+    content.includes("hipertrofia") ||
+    content.includes("masa muscular") ||
+    content.includes("volumen")
+  ) {
+    return "hipertrofia";
+  }
+
+  if (
+    content.includes("resistencia") ||
+    content.includes("definicion") ||
+    content.includes("quemar grasa")
+  ) {
+    return "resistencia";
+  }
+
+  return input.objetivo?.trim() || "hipertrofia";
+};
+
+const pickDistinctExercises = (
+  catalog: CatalogExercise[],
+  groups: string[],
+  maxExercises: number
+) => {
+  const picked: CatalogExercise[] = [];
+  const usedIds = new Set<number>();
+
+  const pushExercise = (exercise: CatalogExercise | undefined) => {
+    if (!exercise || usedIds.has(exercise.id_ejercicio)) {
+      return;
+    }
+
+    usedIds.add(exercise.id_ejercicio);
+    picked.push(exercise);
+  };
+
+  groups.forEach((group) => {
+    const candidates = catalog.filter(
+      (exercise) => (exercise.grupo_muscular ?? "").toLowerCase() === group.toLowerCase()
+    );
+
+    candidates.slice(0, 2).forEach(pushExercise);
+  });
+
+  if (picked.length < maxExercises) {
+    catalog.forEach((exercise) => {
+      if (picked.length >= maxExercises) {
+        return;
+      }
+      pushExercise(exercise);
+    });
+  }
+
+  return picked.slice(0, maxExercises);
+};
+
+const buildFallbackRoutineProposal = (
+  input: GenerateRoutineDraftInput,
+  catalog: CatalogExercise[]
+): GeneratedRoutineProposal => {
+  const style = getRequestedRoutineStyle(input.prompt, input.objetivo);
+  const objective = getFallbackObjective(input);
+
+  const groupMap: Record<string, string[]> = {
+    "push-pull-legs": ["Pecho", "Espalda", "Piernas", "Hombros", "Triceps", "Biceps"],
+    "full-body": ["Piernas", "Pecho", "Espalda", "Hombros", "Core"],
+    upper: ["Pecho", "Espalda", "Hombros", "Biceps", "Triceps"],
+    lower: ["Piernas", "Gluteos", "Core"],
+    push: ["Pecho", "Hombros", "Triceps"],
+    pull: ["Espalda", "Biceps", "Hombros"],
+    legs: ["Piernas", "Gluteos", "Core"],
+    "chest-triceps": ["Pecho", "Triceps", "Hombros"],
+    "back-biceps": ["Espalda", "Biceps", "Hombros"],
+    general: ["Piernas", "Pecho", "Espalda", "Hombros", "Core"],
+  };
+
+  const selectedGroups =
+    groupMap[style] ?? ["Piernas", "Pecho", "Espalda", "Hombros", "Core"];
+  const maxExercises =
+    style === "push-pull-legs" || style === "full-body" ? 6 : 5;
+  const selectedExercises = pickDistinctExercises(
+    catalog,
+    selectedGroups,
+    maxExercises
+  );
+
+  if (selectedExercises.length === 0) {
+    throw new Error("No se pudo armar una rutina fallback con el catalogo actual");
+  }
+
+  let series = 4;
+  let repeticiones = 10;
+  let descanso = 90;
+
+  if (objective.toLowerCase().includes("fuerza")) {
+    series = 4;
+    repeticiones = 5;
+    descanso = 150;
+  } else if (objective.toLowerCase().includes("resistencia")) {
+    series = 3;
+    repeticiones = 15;
+    descanso = 60;
+  }
+
+  const styleLabelMap: Record<string, string> = {
+    "push-pull-legs": "Push Pull Legs",
+    "full-body": "Full Body",
+    upper: "Upper",
+    lower: "Lower",
+    push: "Push",
+    pull: "Pull",
+    legs: "Piernas",
+    "chest-triceps": "Pecho y Triceps",
+    "back-biceps": "Espalda y Biceps",
+    general: "General",
+  };
+
+  return {
+    nombre: `Rutina ${styleLabelMap[style] ?? "General"} generada`,
+    descripcion:
+      "Rutina generada en modo fallback usando el catalogo real de ejercicios de GymMaxxing.",
+    objetivo: objective,
+    dias_por_semana_recomendados: input.diasPorSemana ?? null,
+    duracion_estimada: selectedExercises.length >= 6 ? 75 : 60,
+    advertencias: [
+      "Se uso una generacion de respaldo para evitar que el pedido falle.",
+    ],
+    ejercicios: selectedExercises.map((exercise, index) => ({
+      id_ejercicio: exercise.id_ejercicio,
+      nombre: exercise.nombre,
+      grupo_muscular: exercise.grupo_muscular,
+      series,
+      repeticiones,
+      descanso,
+      orden: index + 1,
+    })),
+  };
+};
+
 const buildSystemPrompt = () =>
   [
     "Sos Gemini integrado en GymMaxxing como motor de generacion de rutinas.",
@@ -816,13 +1052,111 @@ const getReferenceExerciseCatalog = async () => {
   return result.rows;
 };
 
+const persistGeneratedRoutine = async (params: {
+  input: GenerateRoutineDraftInput;
+  geminiConfigured: boolean;
+  model: string;
+  perfilUsuario: RoutineGenerationCreateResponse["contexto"]["perfil_usuario"];
+  tendencias: RoutineGenerationCreateResponse["contexto"]["tendencias_plataforma"];
+  popularExercisesByGroup: RoutineGenerationCreateResponse["contexto"]["ejercicios_populares_por_grupo"];
+  popularExercisesByTrainers: RoutineGenerationCreateResponse["contexto"]["ejercicios_populares_de_entrenadores"];
+  referenceCatalog: RoutineGenerationCreateResponse["contexto"]["catalogo_referencia"];
+  promptSistema: string;
+  promptUsuario: string;
+  rutinaGenerada: GeneratedRoutineProposal;
+}) => {
+  const ejerciciosValidados = await sanitizeExercisesForPersistence(
+    params.rutinaGenerada.ejercicios
+  );
+
+  const rutinaCreada = await crearRutina({
+    nombre: params.rutinaGenerada.nombre,
+    descripcion: params.rutinaGenerada.descripcion,
+    duracion_estimada: params.rutinaGenerada.duracion_estimada,
+    creador_id: params.input.usuarioId,
+    id_carpeta: null,
+    visible_en_descubrir: true,
+  });
+
+  if (!rutinaCreada) {
+    throw new Error("No se pudo crear la rutina generada por Gemini");
+  }
+
+  try {
+    for (const exercise of ejerciciosValidados) {
+      await agregarEjercicioARutina({
+        id_rutina: rutinaCreada.id_rutina,
+        id_ejercicio: exercise.id_ejercicio,
+        series: exercise.series,
+        repeticiones: exercise.repeticiones,
+        descanso: exercise.descanso,
+        orden: exercise.orden,
+      });
+    }
+  } catch (error) {
+    await deleteRutina(String(rutinaCreada.id_rutina), params.input.usuarioId);
+    throw error;
+  }
+
+  const rutinaPersistida =
+    (await getRutinaPorId(String(rutinaCreada.id_rutina), params.input.usuarioId)) ??
+    rutinaCreada;
+  const ejerciciosPersistidos = await getEjerciciosDeRutina(
+    String(rutinaCreada.id_rutina)
+  );
+
+  return {
+    status: "routine_created" as const,
+    proveedor: "gemini" as const,
+    usuario_id: params.input.usuarioId,
+    gemini_configurado: params.geminiConfigured,
+    modelo_usado: params.model,
+    solicitud_usuario: {
+      prompt: params.input.prompt,
+      objetivo: params.input.objetivo ?? null,
+      dias_por_semana: params.input.diasPorSemana ?? null,
+    },
+    contexto: {
+      perfil_usuario: params.perfilUsuario,
+      tendencias_plataforma: params.tendencias,
+      ejercicios_populares_por_grupo: params.popularExercisesByGroup,
+      ejercicios_populares_de_entrenadores: params.popularExercisesByTrainers,
+      catalogo_referencia: params.referenceCatalog,
+    },
+    prompt_sistema: params.promptSistema,
+    prompt_usuario: params.promptUsuario,
+    rutina_generada: {
+      ...params.rutinaGenerada,
+      ejercicios: ejerciciosValidados,
+    },
+    rutina_creada: {
+      id_rutina: rutinaPersistida.id_rutina,
+      nombre: rutinaPersistida.nombre,
+      descripcion: rutinaPersistida.descripcion,
+      duracion_estimada: rutinaPersistida.duracion_estimada,
+      fecha_creacion: rutinaPersistida.fecha_creacion,
+      creador_id: rutinaPersistida.creador_id,
+      id_carpeta: rutinaPersistida.id_carpeta,
+      visible_en_descubrir: rutinaPersistida.visible_en_descubrir,
+      save_count: rutinaPersistida.save_count,
+      copy_count: rutinaPersistida.copy_count,
+      likes_count: rutinaPersistida.likes_count,
+      viewer_liked: rutinaPersistida.viewer_liked ?? false,
+      ejercicios: ejerciciosPersistidos,
+    },
+    siguiente_paso:
+      "La rutina ya fue creada en GymMaxxing usando Gemini o un fallback seguro.",
+  };
+};
+
 export const generateRoutineDraftFromPrompt = async (
   input: GenerateRoutineDraftInput
 ): Promise<RoutineGenerationCreateResponse> => {
-  const geminiConfigured = isGeminiConfigured();
-  if (!geminiConfigured) {
-    throw new Error("Gemini no esta configurado en backend/.env");
+  if (!looksLikeRoutineRequest(input.prompt, input.objetivo)) {
+    throw new Error("Solo hago rutinas. Pedime una rutina o entrenamiento y la armo.");
   }
+
+  const geminiConfigured = isGeminiConfigured();
 
   const [user, trends, popularExercisesByGroup, popularExercisesByTrainers, referenceCatalog] =
     await Promise.all([
@@ -895,98 +1229,43 @@ export const generateRoutineDraftFromPrompt = async (
   });
 
   const model = getGeminiModel();
-  const response = await generateGeminiContentWithRetry({
+  let rutinaGenerada: GeneratedRoutineProposal | null = null;
+
+  if (geminiConfigured) {
+    try {
+      const response = await generateGeminiContentWithRetry({
+        model,
+        promptSistema,
+        promptUsuario,
+      });
+
+      const rawText = response.text;
+      if (!rawText || !rawText.trim()) {
+        throw new Error("Gemini no devolvio contenido para la rutina");
+      }
+
+      const parsed = parseGeminiJsonResponse(rawText);
+      rutinaGenerada = normalizeGeneratedRoutineProposal(parsed, input);
+    } catch (error) {
+      console.warn("Gemini fallo; se usara rutina fallback", error);
+    }
+  }
+
+  if (!rutinaGenerada) {
+    rutinaGenerada = buildFallbackRoutineProposal(input, referenceCatalog);
+  }
+
+  return persistGeneratedRoutine({
+    input,
+    geminiConfigured,
     model,
+    perfilUsuario,
+    tendencias,
+    popularExercisesByGroup,
+    popularExercisesByTrainers,
+    referenceCatalog,
     promptSistema,
     promptUsuario,
+    rutinaGenerada,
   });
-
-  const rawText = response.text;
-  if (!rawText || !rawText.trim()) {
-    throw new Error("Gemini no devolvio contenido para la rutina");
-  }
-
-  const parsed = parseGeminiJsonResponse(rawText);
-  const rutinaGenerada = normalizeGeneratedRoutineProposal(parsed, input);
-  const ejerciciosValidados = await sanitizeExercisesForPersistence(
-    rutinaGenerada.ejercicios
-  );
-
-  const rutinaCreada = await crearRutina({
-    nombre: rutinaGenerada.nombre,
-    descripcion: rutinaGenerada.descripcion,
-    duracion_estimada: rutinaGenerada.duracion_estimada,
-    creador_id: input.usuarioId,
-    id_carpeta: null,
-    visible_en_descubrir: true,
-  });
-
-  if (!rutinaCreada) {
-    throw new Error("No se pudo crear la rutina generada por Gemini");
-  }
-
-  try {
-    for (const exercise of ejerciciosValidados) {
-      await agregarEjercicioARutina({
-        id_rutina: rutinaCreada.id_rutina,
-        id_ejercicio: exercise.id_ejercicio,
-        series: exercise.series,
-        repeticiones: exercise.repeticiones,
-        descanso: exercise.descanso,
-        orden: exercise.orden,
-      });
-    }
-  } catch (error) {
-    await deleteRutina(String(rutinaCreada.id_rutina), input.usuarioId);
-    throw error;
-  }
-
-  const rutinaPersistida =
-    (await getRutinaPorId(String(rutinaCreada.id_rutina), input.usuarioId)) ?? rutinaCreada;
-  const ejerciciosPersistidos = await getEjerciciosDeRutina(
-    String(rutinaCreada.id_rutina)
-  );
-
-  return {
-    status: "routine_created",
-    proveedor: "gemini",
-    usuario_id: input.usuarioId,
-    gemini_configurado: geminiConfigured,
-    modelo_usado: model,
-    solicitud_usuario: {
-      prompt: input.prompt,
-      objetivo: input.objetivo ?? null,
-      dias_por_semana: input.diasPorSemana ?? null,
-    },
-    contexto: {
-      perfil_usuario: perfilUsuario,
-      tendencias_plataforma: tendencias,
-      ejercicios_populares_por_grupo: popularExercisesByGroup,
-      ejercicios_populares_de_entrenadores: popularExercisesByTrainers,
-      catalogo_referencia: referenceCatalog,
-    },
-    prompt_sistema: promptSistema,
-    prompt_usuario: promptUsuario,
-    rutina_generada: {
-      ...rutinaGenerada,
-      ejercicios: ejerciciosValidados,
-    },
-    rutina_creada: {
-      id_rutina: rutinaPersistida.id_rutina,
-      nombre: rutinaPersistida.nombre,
-      descripcion: rutinaPersistida.descripcion,
-      duracion_estimada: rutinaPersistida.duracion_estimada,
-      fecha_creacion: rutinaPersistida.fecha_creacion,
-      creador_id: rutinaPersistida.creador_id,
-      id_carpeta: rutinaPersistida.id_carpeta,
-      visible_en_descubrir: rutinaPersistida.visible_en_descubrir,
-      save_count: rutinaPersistida.save_count,
-      copy_count: rutinaPersistida.copy_count,
-      likes_count: rutinaPersistida.likes_count,
-      viewer_liked: rutinaPersistida.viewer_liked ?? false,
-      ejercicios: ejerciciosPersistidos,
-    },
-    siguiente_paso:
-      "Etapa 7: agregar la interfaz en Rutinas para solicitar y mostrar la rutina generada con Gemini.",
-  };
 };
