@@ -5,6 +5,7 @@ import ProfileTrainingSearch from "../components/ProfileTrainingSearch";
 import RoutinePostCard from "../components/RoutinePostCard";
 import TrainingCalendar from "../components/TrainingCalendar";
 import UserTrainingFeed from "../components/UserTrainingFeed";
+import ProEvolution from "../components/ProEvolution";
 import { COUNTRY_OPTIONS } from "../lib/countries";
 import { isGymUser } from "../lib/roles";
 import { DESCRIPTION_MAX_LENGTH, USERNAME_MAX_LENGTH, limitDescription, limitUsername } from "../lib/textLimits";
@@ -176,6 +177,8 @@ function Perfil({
   const [socialLoading, setSocialLoading] = useState(false);
   const [socialError, setSocialError] = useState("");
   const [socialActionLoadingId, setSocialActionLoadingId] = useState<number | null>(null);
+  const [isPro, setIsPro] = useState(false);
+  const [proStatsOpen, setProStatsOpen] = useState(false);
   const [gymPublicSection, setGymPublicSection] = useState<GymPublicSection>("servicios");
   const [form, setForm] = useState({
     username: "",
@@ -218,6 +221,45 @@ function Perfil({
   useEffect(() => {
     void cargarPerfil();
   }, [profileUsername]);
+
+  useEffect(() => {
+    if (!perfil?.is_own_profile || !authToken || isGymUser(perfil.usuario)) {
+      setIsPro(false);
+      setProStatsOpen(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadProStatus = async () => {
+      try {
+        const response = await fetch(`${API}/suscripciones/me`, {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        if (response.status === 401) {
+          onAuthExpired();
+          return;
+        }
+        if (!response.ok) {
+          return;
+        }
+
+        const data = (await response.json()) as { isPro?: boolean };
+        if (!cancelled) {
+          setIsPro(Boolean(data.isPro));
+        }
+      } catch {
+        if (!cancelled) {
+          setIsPro(false);
+        }
+      }
+    };
+
+    void loadProStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken, onAuthExpired, perfil?.is_own_profile, perfil?.usuario.id]);
 
   const cargarUsuariosSociales = async (mode: SocialModalMode) => {
     if (!perfil) {
@@ -698,6 +740,33 @@ function Perfil({
             onOpenFollowers={() => abrirModalSocial("followers")}
             onOpenFollowing={() => abrirModalSocial("following")}
           />
+
+          {perfil.is_own_profile && isPro && !profileIsGym ? (
+            <>
+              <section className="profile-pro-entry">
+                <div>
+                  <p className="eyebrow">GymMaxxing PRO</p>
+                  <h2>Tu progreso, con mas detalle</h2>
+                  <p>Analiza duracion, volumen y repeticiones semana a semana.</p>
+                </div>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setProStatsOpen((prev) => !prev)}
+                >
+                  {proStatsOpen ? "Ocultar estadisticas" : "Ver estadisticas PRO"}
+                </button>
+              </section>
+
+              {proStatsOpen && authToken ? (
+                <ProEvolution
+                  authToken={authToken}
+                  onAuthExpired={onAuthExpired}
+                  onClose={() => setProStatsOpen(false)}
+                />
+              ) : null}
+            </>
+          ) : null}
 
           {perfil.is_own_profile && editMode && !profileIsGym ? (
             <section className="feed-card">
