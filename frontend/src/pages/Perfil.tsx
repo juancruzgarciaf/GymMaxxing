@@ -7,6 +7,7 @@ import TrainingCalendar from "../components/TrainingCalendar";
 import UserTrainingFeed from "../components/UserTrainingFeed";
 import ProEvolution from "../components/ProEvolution";
 import ProMuscleDistribution from "../components/ProMuscleDistribution";
+import ProExerciseProgress from "../components/ProExerciseProgress";
 import { COUNTRY_OPTIONS } from "../lib/countries";
 import { isGymUser } from "../lib/roles";
 import { DESCRIPTION_MAX_LENGTH, USERNAME_MAX_LENGTH, limitDescription, limitUsername } from "../lib/textLimits";
@@ -767,6 +768,10 @@ function Perfil({
                     onClose={() => setProStatsOpen(false)}
                   />
                   <ProMuscleDistribution
+                    authToken={authToken}
+                    onAuthExpired={onAuthExpired}
+                  />
+                  <ProExerciseProgress
                     authToken={authToken}
                     onAuthExpired={onAuthExpired}
                   />

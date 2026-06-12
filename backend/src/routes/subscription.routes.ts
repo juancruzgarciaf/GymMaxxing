@@ -8,7 +8,9 @@ import {
 import { requireAuth } from "../middleware/auth.middleware";
 import { requirePro } from "../middleware/pro.middleware";
 import {
+  getMyExerciseProgress,
   getMyMuscleDistribution,
+  getMyTrainedExercises,
   getMyWeeklyEvolution,
 } from "../controllers/pro-stats.controller";
 
@@ -22,6 +24,13 @@ router.get(
   requireAuth,
   requirePro,
   getMyMuscleDistribution,
+);
+router.get("/stats/exercises", requireAuth, requirePro, getMyTrainedExercises);
+router.get(
+  "/stats/exercise-progress",
+  requireAuth,
+  requirePro,
+  getMyExerciseProgress,
 );
 router.post("/checkout", requireAuth, startCheckout);
 router.post("/cancel", requireAuth, cancelSubscription);
