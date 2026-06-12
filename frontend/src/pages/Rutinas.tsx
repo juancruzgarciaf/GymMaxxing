@@ -2385,7 +2385,7 @@ function Rutinas({
   return (
     <main className="app">
       {renderToast()}
-      <section className="hero">
+      <section className="hero rutinas-hero">
         <div className="rutinas-hero-copy">
           <h1>Tus rutinas</h1>
           <p className="helper-text">

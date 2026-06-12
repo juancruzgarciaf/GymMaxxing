@@ -1627,9 +1627,22 @@ h2 {
   color: #9eb2c0;
 }
 
+.rutinas-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.rutinas-hero > .btn {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 .rutinas-hero-copy {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .rutinas-hero-copy .helper-text {
@@ -5428,6 +5441,15 @@ button.discover-module-card:hover,
 
   .topbar-actions {
     margin-left: auto;
+  }
+
+  .rutinas-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .rutinas-hero > .btn {
+    margin-left: 0;
   }
 
   .settings-info-grid {
