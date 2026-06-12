@@ -1,0 +1,186 @@
+.pro-muscle-distribution {
+  margin-top: 24px;
+  padding: 28px;
+  border: 1px solid #284762;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 18% 20%, rgba(39, 151, 244, 0.13), transparent 34%),
+    linear-gradient(145deg, #0c1d2d, #0a1825);
+}
+
+.pro-muscle-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.pro-muscle-header h2 {
+  margin: 4px 0 6px;
+}
+
+.pro-muscle-header p:last-child {
+  margin: 0;
+  color: #9db0c0;
+}
+
+.pro-muscle-header label {
+  display: grid;
+  gap: 6px;
+  color: #9db0c0;
+  font-size: 0.82rem;
+}
+
+.pro-muscle-header .field {
+  min-width: 190px;
+}
+
+.pro-muscle-content {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.25fr) minmax(260px, 0.75fr);
+  gap: 28px;
+  align-items: center;
+  margin-top: 24px;
+}
+
+.pro-radar-wrap {
+  min-width: 0;
+}
+
+.pro-radar {
+  display: block;
+  width: min(100%, 560px);
+  margin: 0 auto;
+  overflow: visible;
+}
+
+.pro-radar-grid,
+.pro-radar-axis {
+  fill: none;
+  stroke: #29445b;
+  stroke-width: 1.5;
+}
+
+.pro-radar-current {
+  fill: rgba(35, 153, 248, 0.3);
+  stroke: #36a7ff;
+  stroke-width: 3;
+}
+
+.pro-radar-previous {
+  fill: rgba(190, 201, 210, 0.13);
+  stroke: #91a3b1;
+  stroke-width: 2;
+}
+
+.pro-radar-label {
+  fill: #b8c7d2;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.pro-radar-legend {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  color: #a9bac7;
+}
+
+.pro-radar-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pro-radar-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.pro-radar-legend .current {
+  background: #36a7ff;
+}
+
+.pro-radar-legend .previous {
+  background: #91a3b1;
+}
+
+.pro-muscle-list {
+  display: grid;
+  gap: 10px;
+}
+
+.pro-muscle-list article,
+.pro-muscle-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid #29465f;
+  border-radius: 14px;
+  background: rgba(7, 19, 30, 0.68);
+}
+
+.pro-muscle-list article div {
+  display: grid;
+  gap: 3px;
+}
+
+.pro-muscle-list article span,
+.pro-muscle-list article small,
+.pro-muscle-total span {
+  color: #91a7b8;
+}
+
+.pro-muscle-total {
+  margin-top: 4px;
+  border-color: #3c8bc8;
+  background: rgba(31, 137, 221, 0.12);
+}
+
+.pro-muscle-total strong {
+  color: #55b4ff;
+  font-size: 1.35rem;
+}
+
+.pro-muscle-empty {
+  margin-top: 24px;
+  padding: 28px;
+  border: 1px dashed #34526b;
+  border-radius: 18px;
+  text-align: center;
+  color: #b8c7d2;
+}
+
+.pro-muscle-empty p {
+  margin: 6px 0 0;
+  color: #8fa5b6;
+}
+
+@media (max-width: 900px) {
+  .pro-muscle-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .pro-muscle-distribution {
+    padding: 20px 16px;
+  }
+
+  .pro-muscle-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pro-muscle-header .field {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .pro-radar-label {
+    font-size: 12px;
+  }
+}

@@ -1,6 +1,7 @@
 import { pool } from "../db";
 
 export type ProStatsPeriod = 4 | 12 | 26;
+export type MuscleStatsPeriod = 30 | 90 | 180;
 
 type WeeklyEvolutionRow = {
   week_start: string;
@@ -8,6 +9,12 @@ type WeeklyEvolutionRow = {
   duration_seconds: number;
   volume: number;
   repetitions: number;
+};
+
+type MuscleDistributionRow = {
+  muscle_group: string;
+  current_sets: number;
+  previous_sets: number;
 };
 
 export const getWeeklyEvolution = async (
@@ -95,6 +102,67 @@ export const getWeeklyEvolution = async (
         volume: 0,
         repetitions: 0,
       },
+    ),
+  };
+};
+
+export const getMuscleDistribution = async (
+  userId: number,
+  days: MuscleStatsPeriod,
+) => {
+  const result = await pool.query<MuscleDistributionRow>(
+    `WITH categorized_sets AS (
+       SELECT
+         CASE
+           WHEN LOWER(COALESCE(e.grupo_muscular, '')) ~ 'pecho|pectoral' THEN 'Pecho'
+           WHEN LOWER(COALESCE(e.grupo_muscular, '')) ~ 'espalda|dorsal|trapecio' THEN 'Espalda'
+           WHEN LOWER(COALESCE(e.grupo_muscular, '')) ~ 'hombro|deltoide' THEN 'Hombros'
+           WHEN LOWER(COALESCE(e.grupo_muscular, '')) ~ 'biceps|bíceps|triceps|tríceps|brazo|antebrazo' THEN 'Brazos'
+           WHEN LOWER(COALESCE(e.grupo_muscular, '')) ~ 'pierna|cuadriceps|cuádriceps|femoral|isquio|gemelo|pantorrilla|gluteo|glúteo' THEN 'Piernas'
+           WHEN LOWER(COALESCE(e.grupo_muscular, '')) ~ 'core|abdomen|abdominal|lumbar' THEN 'Core'
+           ELSE INITCAP(NULLIF(TRIM(e.grupo_muscular), ''))
+         END AS muscle_group,
+         COALESCE(se.fecha_fin, se.fecha_inicio, se.fecha)::date AS trained_on
+       FROM serie s
+       JOIN sesionentrenamiento se ON se.id_sesion = s.sesion_id
+       JOIN ejercicio e ON e.id_ejercicio = s.ejercicio_id
+       WHERE se.usuario_id = $1
+         AND se.estado = 'finalizada'
+         AND COALESCE(se.fecha_fin, se.fecha_inicio, se.fecha)
+           >= CURRENT_DATE - (($2::int * 2) * INTERVAL '1 day')
+     )
+     SELECT
+       muscle_group,
+       COUNT(*) FILTER (
+         WHERE trained_on >= CURRENT_DATE - ($2::int * INTERVAL '1 day')
+       )::int AS current_sets,
+       COUNT(*) FILTER (
+         WHERE trained_on < CURRENT_DATE - ($2::int * INTERVAL '1 day')
+           AND trained_on >= CURRENT_DATE - (($2::int * 2) * INTERVAL '1 day')
+       )::int AS previous_sets
+     FROM categorized_sets
+     WHERE muscle_group IS NOT NULL
+     GROUP BY muscle_group
+     HAVING COUNT(*) > 0
+     ORDER BY current_sets DESC, previous_sets DESC, muscle_group ASC`,
+    [userId, days],
+  );
+
+  const groups = result.rows.map((row) => ({
+    muscleGroup: row.muscle_group,
+    currentSets: Number(row.current_sets),
+    previousSets: Number(row.previous_sets),
+  }));
+
+  return {
+    periodDays: days,
+    groups,
+    totals: groups.reduce(
+      (acc, group) => ({
+        currentSets: acc.currentSets + group.currentSets,
+        previousSets: acc.previousSets + group.previousSets,
+      }),
+      { currentSets: 0, previousSets: 0 },
     ),
   };
 };

@@ -6,6 +6,7 @@ import RoutinePostCard from "../components/RoutinePostCard";
 import TrainingCalendar from "../components/TrainingCalendar";
 import UserTrainingFeed from "../components/UserTrainingFeed";
 import ProEvolution from "../components/ProEvolution";
+import ProMuscleDistribution from "../components/ProMuscleDistribution";
 import { COUNTRY_OPTIONS } from "../lib/countries";
 import { isGymUser } from "../lib/roles";
 import { DESCRIPTION_MAX_LENGTH, USERNAME_MAX_LENGTH, limitDescription, limitUsername } from "../lib/textLimits";
@@ -759,11 +760,17 @@ function Perfil({
               </section>
 
               {proStatsOpen && authToken ? (
-                <ProEvolution
-                  authToken={authToken}
-                  onAuthExpired={onAuthExpired}
-                  onClose={() => setProStatsOpen(false)}
-                />
+                <>
+                  <ProEvolution
+                    authToken={authToken}
+                    onAuthExpired={onAuthExpired}
+                    onClose={() => setProStatsOpen(false)}
+                  />
+                  <ProMuscleDistribution
+                    authToken={authToken}
+                    onAuthExpired={onAuthExpired}
+                  />
+                </>
               ) : null}
             </>
           ) : null}
