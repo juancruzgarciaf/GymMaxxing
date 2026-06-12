@@ -276,13 +276,24 @@ function Rutinas({
   } | null>(null);
   const [geminiPanelError, setGeminiPanelError] = useState("");
 
+  const abrirGeminiPanelLimpio = () => {
+    setGeminiLastRoutine(null);
+    setGeminiPanelError("");
+    setGeminiPanelOpen(true);
+  };
+
+  const cerrarGeminiPanel = () => {
+    setGeminiPanelOpen(false);
+    setGeminiPanelError("");
+    setGeminiLastRoutine(null);
+  };
+
   useEffect(() => {
     if (openGeminiPanelRequestKey <= 0) {
       return;
     }
 
-    setGeminiPanelOpen(true);
-    setGeminiPanelError("");
+    abrirGeminiPanelLimpio();
   }, [openGeminiPanelRequestKey]);
 
   const [editorRutinaId, setEditorRutinaId] = useState<number | null>(null);
@@ -670,6 +681,7 @@ function Rutinas({
     setBusquedaEjercicio("");
     setGeminiPanelOpen(false);
     setGeminiPanelError("");
+    setGeminiLastRoutine(null);
     setVista("editor");
   };
 
@@ -2393,7 +2405,7 @@ function Rutinas({
             de guardarlo en tu biblioteca.
           </p>
         </div>
-        <button className="btn" type="button" onClick={() => setGeminiPanelOpen(true)}>
+        <button className="btn" type="button" onClick={abrirGeminiPanelLimpio}>
           Generar con Gemini
         </button>
       </section>
@@ -2544,10 +2556,7 @@ function Rutinas({
       <GeminiRoutinePanel
         open={geminiPanelOpen}
         loading={geminiGenerating}
-        onClose={() => {
-          setGeminiPanelOpen(false);
-          setGeminiPanelError("");
-        }}
+        onClose={cerrarGeminiPanel}
         onGenerate={(payload) => {
           void handleGenerateRoutineWithGemini(payload);
         }}
