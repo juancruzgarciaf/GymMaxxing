@@ -1733,20 +1733,20 @@ h2 {
 }
 
 .gemini-panel-result {
-  border: 1px solid rgba(110, 199, 152, 0.28);
-  background: rgba(14, 46, 34, 0.84);
-  border-radius: 16px;
+  border: 1px solid #355575;
+  background: #14283d;
+  border-radius: 14px;
   padding: 16px;
   display: grid;
   gap: 10px;
 }
 
 .gemini-panel-result strong {
-  color: #e5fff1;
+  color: #d8e2ea;
 }
 
 .gemini-panel-result small {
-  color: #aad8be;
+  color: #9fb3c1;
 }
 
 .gemini-panel-result-list {
@@ -1759,18 +1759,19 @@ h2 {
   justify-content: space-between;
   gap: 12px;
   align-items: center;
-  border-radius: 12px;
+  border: 1px solid rgba(151, 183, 202, 0.14);
+  border-radius: 10px;
   padding: 10px 12px;
-  background: rgba(9, 31, 23, 0.54);
+  background: rgba(9, 24, 38, 0.56);
 }
 
 .gemini-panel-result-item span {
-  color: #effcf4;
+  color: #e5f0f7;
   font-weight: 600;
 }
 
 .gemini-panel-result-item small {
-  color: #94c9ab;
+  color: #9fb3c1;
   text-align: right;
 }
 
@@ -5975,6 +5976,32 @@ button.discover-module-card:hover,
   border-color: #d9e2ea;
   background: #ffffff;
   color: #111827;
+}
+
+:root[data-theme="light"] .gemini-panel-result {
+  border-color: #d9e2ea;
+  background: #ffffff;
+}
+
+:root[data-theme="light"] .gemini-panel-result strong {
+  color: #111827;
+}
+
+:root[data-theme="light"] .gemini-panel-result small {
+  color: #4b5563;
+}
+
+:root[data-theme="light"] .gemini-panel-result-item {
+  border-color: #e5edf3;
+  background: #ffffff;
+}
+
+:root[data-theme="light"] .gemini-panel-result-item span {
+  color: #111827;
+}
+
+:root[data-theme="light"] .gemini-panel-result-item small {
+  color: #4b5563;
 }
 
 :root[data-theme="light"] .profile-social-divider {
