@@ -15,6 +15,7 @@ type UsuarioRow = {
   nivel_entrenamiento: string | null;
   objetivo_entrenamiento: string | null;
   tipo_usuario: string;
+  foto_perfil_url: string | null;
 };
 
 type BasicUserRow = {
@@ -22,6 +23,7 @@ type BasicUserRow = {
   username: string;
   email: string;
   tipo_usuario: string;
+  foto_perfil_url: string | null;
 };
 
 type GymDaySchedule = {
@@ -78,6 +80,7 @@ type TrendRoutineRow = {
   copy_count: number;
   creador_username: string;
   creador_tipo_usuario: string;
+  creador_foto_perfil_url: string | null;
   total_ejercicios: number;
   grupos_musculares: string[];
 };
@@ -106,6 +109,7 @@ type SessionSummaryRow = {
   usuario_id: number;
   username: string;
   tipo_usuario: string;
+  foto_perfil_url: string | null;
   rutina_id: number | null;
   titulo: string;
   descripcion: string | null;
@@ -134,6 +138,7 @@ type RoutinePostSummaryRow = {
   usuario_id: number;
   username: string;
   tipo_usuario: string;
+  foto_perfil_url: string | null;
   titulo: string;
   descripcion: string | null;
   duracion_estimada: number | null;
@@ -168,6 +173,20 @@ const sanitizeUser = (user: UsuarioRow | BasicUserRow) => {
 
 let trophyTablesReady = false;
 let gymProfileTableReady = false;
+let userPhotoColumnReady = false;
+
+const ensureUserPhotoColumn = async () => {
+  if (userPhotoColumnReady) {
+    return;
+  }
+
+  await pool.query(
+    `ALTER TABLE usuario
+     ADD COLUMN IF NOT EXISTS foto_perfil_url TEXT`
+  );
+
+  userPhotoColumnReady = true;
+};
 
 const ensureTrophyTables = async () => {
   if (trophyTablesReady) {
@@ -499,6 +518,7 @@ const getRoutinePostSummaries = async (
   limit: number,
   offset = 0
 ) => {
+  await ensureUserPhotoColumn();
   await ensureRutinaVisibilityColumn();
   const support = await getRutinaMetricsSupport();
   const finalParams = [...params, limit, offset];
@@ -510,6 +530,7 @@ const getRoutinePostSummaries = async (
             r.creador_id AS usuario_id,
             u.username,
             u.tipo_usuario,
+            u.foto_perfil_url,
             r.nombre AS titulo,
             r.descripcion,
             r.duracion_estimada,
@@ -562,6 +583,7 @@ const getSessionSummaries = async (
   orderBySql = "COALESCE(se.fecha_fin, se.fecha_inicio, se.fecha) DESC, se.id_sesion DESC"
 ) => {
   await ensureTrophyTables();
+  await ensureUserPhotoColumn();
   const queryParams = [...params];
   const viewerLikedSql =
     viewerId == null
@@ -584,6 +606,7 @@ const getSessionSummaries = async (
             se.usuario_id,
             u.username,
             u.tipo_usuario,
+            u.foto_perfil_url,
             se.rutina_id,
             COALESCE(se.nombre_rutina_snapshot, r.nombre, se.descripcion, 'Entrenamiento') AS titulo,
             se.descripcion,
@@ -832,6 +855,8 @@ export const getUserRoleById = async (id: number) => {
 };
 
 export const updateUser = async (id: number, data: Partial<UsuarioRow> & { gimnasio_perfil?: Partial<GymProfileData> }) => {
+  await ensureUserPhotoColumn();
+
   const {
     username,
     email,
@@ -843,6 +868,7 @@ export const updateUser = async (id: number, data: Partial<UsuarioRow> & { gimna
     nivel_entrenamiento,
     objetivo_entrenamiento,
     tipo_usuario,
+    foto_perfil_url,
   } = data;
 
   const normalizedRole = isGymRole(tipo_usuario) ? "gimnasio" : tipo_usuario;
@@ -857,8 +883,9 @@ export const updateUser = async (id: number, data: Partial<UsuarioRow> & { gimna
        nacionalidad = $7,
        nivel_entrenamiento = $8,
        objetivo_entrenamiento = $9,
-       tipo_usuario = $10
-     WHERE id = $11
+       tipo_usuario = $10,
+       foto_perfil_url = $11
+     WHERE id = $12
      RETURNING *`,
     [
       username,
@@ -871,6 +898,7 @@ export const updateUser = async (id: number, data: Partial<UsuarioRow> & { gimna
       isGymRole(normalizedRole) ? null : nivel_entrenamiento ?? null,
       isGymRole(normalizedRole) ? null : objetivo_entrenamiento ?? null,
       normalizedRole,
+      foto_perfil_url ?? null,
       id,
     ]
   );
@@ -885,6 +913,8 @@ export const updateUser = async (id: number, data: Partial<UsuarioRow> & { gimna
 };
 
 export const searchUsers = async (query: string, viewerId?: number) => {
+  await ensureUserPhotoColumn();
+
   const params: Array<string | number> = [`%${query.trim()}%`];
   let viewerClause = "";
 
@@ -909,6 +939,7 @@ export const searchUsers = async (query: string, viewerId?: number) => {
             u.username,
             u.email,
             u.tipo_usuario,
+            u.foto_perfil_url,
             (
               SELECT COUNT(*)::int
               FROM seguimientousuario su
@@ -1011,6 +1042,8 @@ const getSocialList = async (
   userId: number,
   viewerId?: number
 ) => {
+  await ensureUserPhotoColumn();
+
   const params: number[] = [userId];
   const viewerFollowsSql =
     viewerId == null
@@ -1055,6 +1088,8 @@ export const getFollowing = async (userId: number, viewerId?: number) =>
   getSocialList("id_seguidor", "id_seguido", userId, viewerId);
 
 export const getUserProfile = async (profileId: number, viewerId?: number) => {
+  await ensureUserPhotoColumn();
+
   const userResult = await pool.query<
     UsuarioRow & {
       followers_count: number;
@@ -1247,6 +1282,8 @@ export const getFeed = async (userId: number, page = 1, pageSize = 10) => {
 };
 
 export const getSuggestedUsers = async (userId: number, limit = 5) => {
+  await ensureUserPhotoColumn();
+
   const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 10);
 
   const secondDegreeResult = await pool.query<SuggestedUserRow>(
@@ -1268,6 +1305,7 @@ export const getSuggestedUsers = async (userId: number, limit = 5) => {
             u.username,
             u.email,
             u.tipo_usuario,
+            u.foto_perfil_url,
             (
               SELECT COUNT(*)::int
               FROM seguimientousuario su
@@ -1312,6 +1350,7 @@ export const getSuggestedUsers = async (userId: number, limit = 5) => {
             u.username,
             u.email,
             u.tipo_usuario,
+            u.foto_perfil_url,
             (
               SELECT COUNT(*)::int
               FROM seguimientousuario su
@@ -1360,6 +1399,7 @@ const getTrendRoutines = async (
   orderByMetric: "copy_count" | "save_count",
   support: RutinaMetricSupport
 ) => {
+  await ensureUserPhotoColumn();
   await ensureRutinaVisibilityColumn();
   const copyCountSql = support.has_copy
     ? `(SELECT COUNT(*)::int FROM rutina_copia rc WHERE rc.rutina_id = r.id_rutina)`
@@ -1381,6 +1421,7 @@ const getTrendRoutines = async (
             ${copyCountSql} AS copy_count,
             u.username AS creador_username,
             u.tipo_usuario AS creador_tipo_usuario,
+            u.foto_perfil_url AS creador_foto_perfil_url,
             (
               SELECT COUNT(*)::int
               FROM rutinaejercicio re
@@ -1403,6 +1444,8 @@ const getTrendRoutines = async (
 };
 
 const getTrendUsers = async (viewerId?: number) => {
+  await ensureUserPhotoColumn();
+
   const params: number[] = [];
   const whereClauses = ["TRUE"];
 
@@ -1429,6 +1472,7 @@ const getTrendUsers = async (viewerId?: number) => {
             u.username,
             u.email,
             u.tipo_usuario,
+            u.foto_perfil_url,
             (
               SELECT COUNT(*)::int
               FROM seguimientousuario su

@@ -51,11 +51,16 @@ export const updateUser = async (req: Request, res: Response) => {
       nivel_entrenamiento,
       objetivo_entrenamiento,
       tipo_usuario,
+      foto_perfil_url,
       gimnasio_perfil,
     } = req.body;
 
     const cleanUsername = typeof username === "string" ? username.trim() : "";
     const cleanEmail = typeof email === "string" ? email.trim() : "";
+    const cleanProfilePhotoUrl =
+      typeof foto_perfil_url === "string" && foto_perfil_url.trim()
+        ? foto_perfil_url.trim()
+        : null;
 
     if (!cleanUsername || !cleanEmail) {
       return res.status(400).json({
@@ -103,6 +108,7 @@ export const updateUser = async (req: Request, res: Response) => {
       nivel_entrenamiento,
       objetivo_entrenamiento,
       tipo_usuario,
+      foto_perfil_url: cleanProfilePhotoUrl,
       gimnasio_perfil,
     });
 

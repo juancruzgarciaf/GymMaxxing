@@ -11,6 +11,7 @@ export type Usuario = {
   nacionalidad?: string | null;
   nivel_entrenamiento?: string | null;
   objetivo_entrenamiento?: string | null;
+  foto_perfil_url?: string | null;
 };
 
 export type GymDaySchedule = {
@@ -54,6 +55,7 @@ export type EntrenamientoResumen = {
   usuario_id: number;
   username: string;
   tipo_usuario?: string;
+  foto_perfil_url?: string | null;
   rutina_id: number | null;
   titulo: string;
   descripcion: string | null;
@@ -83,6 +85,7 @@ export type RoutinePostSummary = {
   usuario_id: number;
   username: string;
   tipo_usuario: string;
+  foto_perfil_url?: string | null;
   titulo: string;
   descripcion: string | null;
   duracion_estimada: number | null;
@@ -144,6 +147,7 @@ export type RoutineSummary = {
 export type DiscoverRoutineSummary = RoutineSummary & {
   creador_username: string;
   creador_tipo_usuario?: string;
+  creador_foto_perfil_url?: string | null;
   total_ejercicios: number;
   grupos_musculares: string[];
   creador_seguido: boolean;

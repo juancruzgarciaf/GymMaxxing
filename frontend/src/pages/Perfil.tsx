@@ -187,6 +187,7 @@ function Perfil({
     nacionalidad: "",
     nivel_entrenamiento: "",
     objetivo_entrenamiento: "",
+    foto_perfil_url: "",
   });
   const [gymForm, setGymForm] = useState<GimnasioPerfil>(() => emptyGymForm());
   const currentNationalityIsKnown =
@@ -362,6 +363,7 @@ function Perfil({
       nacionalidad: perfil.usuario.nacionalidad || "",
       nivel_entrenamiento: perfil.usuario.nivel_entrenamiento || "",
       objetivo_entrenamiento: perfil.usuario.objetivo_entrenamiento || "",
+      foto_perfil_url: perfil.usuario.foto_perfil_url || "",
     });
     setGymForm(normalizeGymForm(perfil));
   }, [perfil]);
@@ -397,6 +399,7 @@ function Perfil({
           nacionalidad: editingGym ? null : form.nacionalidad.trim() || null,
           nivel_entrenamiento: editingGym ? null : form.nivel_entrenamiento.trim() || null,
           objetivo_entrenamiento: editingGym ? null : form.objetivo_entrenamiento.trim() || null,
+          foto_perfil_url: form.foto_perfil_url.trim() || null,
           tipo_usuario: perfil.usuario.tipo_usuario,
           gimnasio_perfil: editingGym ? gymForm : undefined,
         }),
@@ -785,6 +788,12 @@ function Perfil({
                   value={form.objetivo_entrenamiento}
                   onChange={(event) => setForm((prev) => ({ ...prev, objetivo_entrenamiento: event.target.value }))}
                 />
+                <input
+                  className="field"
+                  placeholder="URL de foto de perfil"
+                  value={form.foto_perfil_url}
+                  onChange={(event) => setForm((prev) => ({ ...prev, foto_perfil_url: event.target.value }))}
+                />
               </div>
               <div className="actions-row">
                 <button type="button" className="btn" disabled={saving} onClick={() => void handleGuardarPerfil()}>
@@ -814,6 +823,12 @@ function Perfil({
                     placeholder="Email"
                     value={form.email}
                     onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+                  />
+                  <input
+                    className="field"
+                    placeholder="URL de foto de perfil"
+                    value={form.foto_perfil_url}
+                    onChange={(event) => setForm((prev) => ({ ...prev, foto_perfil_url: event.target.value }))}
                   />
                   <input
                     className="field"
