@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth.middleware";
+import { optionalAuth, requireAuth } from "../middleware/auth.middleware";
 import {
   searchUsers,
   getTrends,
@@ -21,12 +21,12 @@ const router = Router();
 
 router.get("/search", searchUsers);
 router.get("/trends", getTrends);
-router.get("/profile/:username", getUserProfileByUsername);
-router.get("/:id/profile", getUserProfile);
+router.get("/profile/:username", optionalAuth, getUserProfileByUsername);
+router.get("/:id/profile", optionalAuth, getUserProfile);
 router.get("/:id/followers", getFollowers);
 router.get("/:id/following", getFollowing);
 router.get("/:id/suggestions", getSuggestedUsers);
-router.get("/:id/trainings/search", searchUserTrainings);
+router.get("/:id/trainings/search", optionalAuth, searchUserTrainings);
 router.get("/:id/feed", getFeed);
 router.post("/:id/follow", followUser);
 router.delete("/:id/follow", unfollowUser);

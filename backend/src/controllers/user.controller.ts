@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import * as userService from "../services/user.service";
 import { USERNAME_MAX_LENGTH } from "../utils/textLimits";
+import { isUserPro } from "../services/subscription.service";
 
 /*
   Este controller se encarga del CRUD más básico de usuarios.
@@ -196,10 +197,10 @@ export const searchUsers = async (req: Request, res: Response) => {
     }
 
     const viewerIdRaw = req.query.viewer_id;
-    const viewerId =
-      typeof viewerIdRaw === "string" && viewerIdRaw.trim()
+    const viewerId = req.authUser?.id ??
+      (typeof viewerIdRaw === "string" && viewerIdRaw.trim()
         ? Number(viewerIdRaw)
-        : undefined;
+        : undefined);
 
     if (viewerIdRaw != null && (viewerId == null || Number.isNaN(viewerId))) {
       return res.status(400).json({
@@ -392,7 +393,9 @@ export const getUserProfile = async (req: Request, res: Response) => {
       });
     }
 
-    const profile = await userService.getUserProfile(profileId, viewerId);
+    const fullHistory =
+      viewerId !== profileId || (req.authUser ? await isUserPro(req.authUser.id) : true);
+    const profile = await userService.getUserProfile(profileId, viewerId, fullHistory);
 
     if (!profile) {
       return res.status(404).json({
@@ -421,10 +424,10 @@ export const getUserProfileByUsername = async (req: Request, res: Response) => {
     }
 
     const viewerIdRaw = req.query.viewer_id;
-    const viewerId =
-      typeof viewerIdRaw === "string" && viewerIdRaw.trim()
+    const viewerId = req.authUser?.id ??
+      (typeof viewerIdRaw === "string" && viewerIdRaw.trim()
         ? Number(viewerIdRaw)
-        : undefined;
+        : undefined);
 
     if (viewerIdRaw != null && (viewerId == null || Number.isNaN(viewerId))) {
       return res.status(400).json({
@@ -432,7 +435,13 @@ export const getUserProfileByUsername = async (req: Request, res: Response) => {
       });
     }
 
-    const profile = await userService.getUserProfileByUsername(username, viewerId);
+    const profileUser = await userService.getUserProfileByUsername(username, viewerId, true);
+    const fullHistory =
+      !profileUser?.is_own_profile ||
+      (req.authUser ? await isUserPro(req.authUser.id) : true);
+    const profile = fullHistory
+      ? profileUser
+      : await userService.getUserProfileByUsername(username, viewerId, false);
 
     if (!profile) {
       return res.status(404).json({
@@ -488,10 +497,10 @@ export const searchUserTrainings = async (req: Request, res: Response) => {
     }
 
     const viewerIdRaw = req.query.viewer_id;
-    const viewerId =
-      typeof viewerIdRaw === "string" && viewerIdRaw.trim()
+    const viewerId = req.authUser?.id ??
+      (typeof viewerIdRaw === "string" && viewerIdRaw.trim()
         ? Number(viewerIdRaw)
-        : undefined;
+        : undefined);
 
     if (viewerIdRaw != null && (viewerId == null || Number.isNaN(viewerId))) {
       return res.status(400).json({
@@ -562,6 +571,16 @@ export const searchUserTrainings = async (req: Request, res: Response) => {
 
     if (maxDurationMinutes != null) {
       filters.maxDurationSeconds = Math.max(0, Math.floor(maxDurationMinutes * 60));
+    }
+
+    if (
+      viewerId === userId &&
+      req.authUser &&
+      !(await isUserPro(req.authUser.id))
+    ) {
+      const earliest = new Date();
+      earliest.setDate(earliest.getDate() - 90);
+      filters.earliestDate = earliest.toISOString();
     }
 
     const result = await userService.searchUserTrainings(userId, viewerId, filters);

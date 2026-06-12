@@ -102,6 +102,7 @@ type UserTrainingSearchFilters = {
   tiposDisciplina?: string[];
   minDurationSeconds?: number;
   maxDurationSeconds?: number;
+  earliestDate?: string;
 };
 
 type SessionSummaryRow = {
@@ -759,6 +760,13 @@ export const searchUserTrainings = async (
     whereClauses.push(`${SESSION_DURATION_SQL} <= $${params.length}`);
   }
 
+  if (filters.earliestDate) {
+    params.push(filters.earliestDate);
+    whereClauses.push(
+      `COALESCE(se.fecha_fin, se.fecha_inicio, se.fecha) >= $${params.length}::timestamp`,
+    );
+  }
+
   const [items, catalogFilters] = await Promise.all([
     getSessionSummaries(
       whereClauses.join(" AND "),
@@ -1087,7 +1095,11 @@ export const getFollowers = async (userId: number, viewerId?: number) =>
 export const getFollowing = async (userId: number, viewerId?: number) =>
   getSocialList("id_seguidor", "id_seguido", userId, viewerId);
 
-export const getUserProfile = async (profileId: number, viewerId?: number) => {
+export const getUserProfile = async (
+  profileId: number,
+  viewerId?: number,
+  fullHistory = true,
+) => {
   await ensureUserPhotoColumn();
 
   const userResult = await pool.query<
@@ -1147,7 +1159,8 @@ export const getUserProfile = async (profileId: number, viewerId?: number) => {
     ? []
     : await getSessionSummaries(
         `se.usuario_id = $1
-          AND se.estado = 'finalizada'`,
+          AND se.estado = 'finalizada'
+          ${fullHistory ? "" : "AND COALESCE(se.fecha_fin, se.fecha_inicio, se.fecha) >= NOW() - INTERVAL '90 days'"}`,
         [profileId],
         20,
         viewerId
@@ -1169,13 +1182,19 @@ export const getUserProfile = async (profileId: number, viewerId?: number) => {
     routines_count: gymUser ? user.routines_count : 0,
     viewer_follows: user.viewer_follows ?? false,
     is_own_profile: viewerId != null ? viewerId === profileId : false,
+    history_limited: viewerId === profileId && !fullHistory,
+    history_days: viewerId === profileId && !fullHistory ? 90 : null,
     entrenamientos: trainings,
     rutinas: routines,
     gimnasio_perfil: gimnasioPerfil,
   };
 };
 
-export const getUserProfileByUsername = async (username: string, viewerId?: number) => {
+export const getUserProfileByUsername = async (
+  username: string,
+  viewerId?: number,
+  fullHistory = true,
+) => {
   const userResult = await pool.query<{ id: number }>(
     `SELECT id
      FROM usuario
@@ -1188,7 +1207,7 @@ export const getUserProfileByUsername = async (username: string, viewerId?: numb
     return null;
   }
 
-  return getUserProfile(userId, viewerId);
+  return getUserProfile(userId, viewerId, fullHistory);
 };
 
 export const getFeed = async (userId: number, page = 1, pageSize = 10) => {

@@ -13,6 +13,11 @@ import {
   getMyTrainedExercises,
   getMyWeeklyEvolution,
 } from "../controllers/pro-stats.controller";
+import {
+  getMyBodyMeasurements,
+  removeMyBodyMeasurement,
+  upsertMyBodyMeasurement,
+} from "../controllers/body-measurement.controller";
 
 const router = Router();
 
@@ -32,6 +37,9 @@ router.get(
   requirePro,
   getMyExerciseProgress,
 );
+router.get("/body-measurements", requireAuth, requirePro, getMyBodyMeasurements);
+router.post("/body-measurements", requireAuth, requirePro, upsertMyBodyMeasurement);
+router.delete("/body-measurements/:id", requireAuth, requirePro, removeMyBodyMeasurement);
 router.post("/checkout", requireAuth, startCheckout);
 router.post("/cancel", requireAuth, cancelSubscription);
 

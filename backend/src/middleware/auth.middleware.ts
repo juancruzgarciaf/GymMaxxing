@@ -35,3 +35,12 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
   req.authUser = payload;
   return next();
 };
+
+export const optionalAuth = (req: Request, _res: Response, next: NextFunction) => {
+  const header = req.headers.authorization;
+  if (header?.startsWith("Bearer ")) {
+    const payload = verifyAuthToken(header.replace("Bearer ", "").trim());
+    if (payload) req.authUser = payload;
+  }
+  return next();
+};
