@@ -174,6 +174,32 @@ export const isUserPro = async (userId: number) => {
   return result.rowCount === 1;
 };
 
+const isMockPaymentEnabled = () =>
+  process.env.MP_MOCK_PAYMENTS?.trim().toLowerCase() === "true";
+
+const activateMockSubscription = async (
+  subscriptionId: number,
+  planId: SubscriptionPlanId,
+) => {
+  const endDateSql =
+    planId === "monthly"
+      ? "NOW() + INTERVAL '1 month'"
+      : planId === "yearly"
+        ? "NOW() + INTERVAL '1 year'"
+        : "NULL";
+
+  await pool.query(
+    `UPDATE suscripcion
+     SET estado = 'active',
+         fecha_inicio = NOW(),
+         fecha_fin = ${endDateSql},
+         fecha_cancelacion = NULL,
+         fecha_actualizacion = NOW()
+     WHERE id_suscripcion = $1`,
+    [subscriptionId],
+  );
+};
+
 export const createCheckout = async (
   user: { id: number; email: string },
   planId: SubscriptionPlanId,
@@ -240,9 +266,15 @@ export const createCheckout = async (
         [String(preference.id), subscriptionId],
       );
 
+      const mockActivated = isMockPaymentEnabled();
+      if (mockActivated) {
+        await activateMockSubscription(subscriptionId, plan.id);
+      }
+
       return {
         checkoutUrl: preference.init_point || preference.sandbox_init_point,
         subscriptionId,
+        mockActivated,
       };
     }
 
@@ -271,9 +303,15 @@ export const createCheckout = async (
       [String(preapproval.id), subscriptionId],
     );
 
+    const mockActivated = isMockPaymentEnabled();
+    if (mockActivated) {
+      await activateMockSubscription(subscriptionId, plan.id);
+    }
+
     return {
       checkoutUrl: preapproval.init_point,
       subscriptionId,
+      mockActivated,
     };
   } catch (error) {
     await pool.query(
