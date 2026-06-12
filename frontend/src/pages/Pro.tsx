@@ -123,6 +123,7 @@ function Pro({ onClose, authToken, onAuthExpired }: ProProps) {
   }, [authToken, onAuthExpired]);
 
   const handleGoToPayment = async (plan: Plan) => {
+    const paymentWindow = window.open("about:blank", "_blank");
     setLoading(true);
     setMessage("");
 
@@ -135,9 +136,14 @@ function Pro({ onClose, authToken, onAuthExpired }: ProProps) {
         },
         body: JSON.stringify({ plan: plan.id }),
       });
-      const data = (await response.json()) as { checkoutUrl?: string; error?: string };
+      const data = (await response.json()) as {
+        checkoutUrl?: string;
+        mockActivated?: boolean;
+        error?: string;
+      };
 
       if (response.status === 401) {
+        paymentWindow?.close();
         onAuthExpired();
         return;
       }
@@ -145,8 +151,22 @@ function Pro({ onClose, authToken, onAuthExpired }: ProProps) {
         throw new Error(data.error || "No se pudo iniciar el pago");
       }
 
+      if (data.mockActivated) {
+        setIsPro(true);
+        setMessage("Plan PRO activado en modo demostracion.");
+        if (paymentWindow) {
+          paymentWindow.opener = null;
+          paymentWindow.location.replace(data.checkoutUrl);
+        } else {
+          window.location.assign(data.checkoutUrl);
+        }
+        return;
+      }
+
+      paymentWindow?.close();
       window.location.assign(data.checkoutUrl);
     } catch (error) {
+      paymentWindow?.close();
       setMessage(error instanceof Error ? error.message : "No se pudo iniciar el pago");
     } finally {
       setLoading(false);
@@ -250,11 +270,14 @@ function Pro({ onClose, authToken, onAuthExpired }: ProProps) {
           </div>
 
           {message ? (
-            <p className="status error pro-payment-message" role="alert">
+            <p
+              className={`status ${isPro ? "ok" : "error"} pro-payment-message`}
+              role={isPro ? "status" : "alert"}
+            >
               {message}
             </p>
           ) : null}
-          {isPro ? (
+          {isPro && !message ? (
             <p className="status ok pro-payment-message" role="status">
               Ya tienes GymMaxxing PRO activo.
             </p>
