@@ -6,6 +6,7 @@
   background:
     linear-gradient(110deg, rgba(26, 133, 219, 0.1), transparent 45%),
     #0b1a28;
+  color: #eef7fd;
 }
 
 .pro-exercise-header {
@@ -142,6 +143,54 @@
 .pro-exercise-empty p {
   margin: 6px 0 0;
   color: #8fa5b6;
+}
+
+:root[data-theme="light"] .pro-exercise-progress {
+  border-color: #cbdbe8;
+  background:
+    linear-gradient(110deg, rgba(26, 133, 219, 0.08), transparent 45%),
+    #ffffff;
+  color: #102238;
+}
+
+:root[data-theme="light"] .pro-exercise-header p:last-child,
+:root[data-theme="light"] .pro-exercise-filters label,
+:root[data-theme="light"] .pro-exercise-records span,
+:root[data-theme="light"] .pro-exercise-empty p {
+  color: #52697c;
+}
+
+:root[data-theme="light"] .pro-exercise-tabs button {
+  border-color: #cbd9e5;
+  color: #385168;
+  background: #edf3f8;
+}
+
+:root[data-theme="light"] .pro-exercise-tabs button.active {
+  border-color: #258ff0;
+  color: #ffffff;
+  background: #258ff0;
+}
+
+:root[data-theme="light"] .pro-line-grid {
+  stroke: #d4e0e9;
+}
+
+:root[data-theme="light"] .pro-line-dot {
+  fill: #ffffff;
+}
+
+:root[data-theme="light"] .pro-line-value {
+  fill: #17344c;
+}
+
+:root[data-theme="light"] .pro-line-date {
+  fill: #60788b;
+}
+
+:root[data-theme="light"] .pro-exercise-records article {
+  border-color: #d2e0eb;
+  background: #f5f9fc;
 }
 
 @media (max-width: 900px) {

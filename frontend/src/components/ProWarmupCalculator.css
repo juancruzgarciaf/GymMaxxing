@@ -6,6 +6,7 @@
   background:
     radial-gradient(circle at 88% 8%, rgba(255, 164, 54, 0.13), transparent 30%),
     linear-gradient(145deg, #0d1d2b, #091723);
+  color: #eef7fd;
 }
 
 .pro-warmup-header {
@@ -196,6 +197,47 @@
   place-items: center;
   color: #eeb779;
   text-align: center;
+}
+
+:root[data-theme="light"] .pro-warmup-calculator {
+  border-color: #cbdbe8;
+  background:
+    radial-gradient(circle at 88% 8%, rgba(255, 164, 54, 0.12), transparent 30%),
+    #ffffff;
+  color: #102238;
+}
+
+:root[data-theme="light"] .pro-warmup-header p:last-child,
+:root[data-theme="light"] .pro-warmup-form label,
+:root[data-theme="light"] .pro-warmup-tip p,
+:root[data-theme="light"] .pro-warmup-result-heading span,
+:root[data-theme="light"] .pro-warmup-result-heading small,
+:root[data-theme="light"] .pro-warmup-sets small {
+  color: #536a7d;
+}
+
+:root[data-theme="light"] .pro-number-field,
+:root[data-theme="light"] .pro-warmup-result,
+:root[data-theme="light"] .pro-warmup-sets li {
+  border-color: #d2e0eb;
+  background: #f6f9fc;
+}
+
+:root[data-theme="light"] .pro-number-field input {
+  color: #102238;
+}
+
+:root[data-theme="light"] .pro-warmup-result-heading {
+  border-color: #d6e2ec;
+}
+
+:root[data-theme="light"] .pro-warmup-sets li.effective {
+  border-color: #4da8ee;
+  background: #eaf5ff;
+}
+
+:root[data-theme="light"] .pro-warmup-tip {
+  background: #fff7ec;
 }
 
 @media (max-width: 900px) {

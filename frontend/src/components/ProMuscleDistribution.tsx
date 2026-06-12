@@ -126,6 +126,24 @@ function ProMuscleDistribution({
     };
   }, [data]);
 
+  const summary = useMemo(() => {
+    const groups = chart.groups;
+    const mainGroup = groups.reduce<MuscleGroup | null>(
+      (best, group) =>
+        !best || group.currentSets > best.currentSets ? group : best,
+      null,
+    );
+    const previousTotal = data?.totals.previousSets ?? 0;
+    const currentTotal = data?.totals.currentSets ?? 0;
+    const difference = currentTotal - previousTotal;
+
+    return {
+      mainGroup,
+      activeGroups: groups.filter((group) => group.currentSets > 0).length,
+      difference,
+    };
+  }, [chart.groups, data]);
+
   return (
     <section className="pro-muscle-distribution">
       <header className="pro-muscle-header">
@@ -210,22 +228,30 @@ function ProMuscleDistribution({
               </div>
             </div>
 
-            <div className="pro-muscle-list">
-              {chart.groups.map((group) => (
-                <article key={group.muscleGroup}>
-                  <div>
-                    <strong>{group.muscleGroup}</strong>
-                    <span>{group.currentSets} series</span>
-                  </div>
-                  <small>
-                    Anterior: {group.previousSets}
-                  </small>
-                </article>
-              ))}
-              <div className="pro-muscle-total">
-                <span>Series en el periodo</span>
+            <div className="pro-muscle-summary">
+              <article>
+                <span>Series</span>
                 <strong>{data.totals.currentSets}</strong>
-              </div>
+                <small>
+                  {summary.difference >= 0 ? "+" : ""}
+                  {summary.difference} vs. periodo anterior
+                </small>
+              </article>
+              <article>
+                <span>Grupos trabajados</span>
+                <strong>{summary.activeGroups}</strong>
+                <small>zonas con series registradas</small>
+              </article>
+              <article>
+                <span>Mayor enfoque</span>
+                <strong>{summary.mainGroup?.muscleGroup ?? "-"}</strong>
+                <small>{summary.mainGroup?.currentSets ?? 0} series</small>
+              </article>
+              <article>
+                <span>Periodo anterior</span>
+                <strong>{data.totals.previousSets}</strong>
+                <small>series para comparar</small>
+              </article>
             </div>
           </div>
         ) : (
