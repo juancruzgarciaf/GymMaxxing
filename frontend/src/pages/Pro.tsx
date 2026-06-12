@@ -71,6 +71,7 @@ const planComparison = [
 
 type ProProps = {
   onClose: () => void;
+  onExplorePro: () => void;
   authToken: string;
   onAuthExpired: () => void;
 };
@@ -83,7 +84,7 @@ function CheckIcon() {
   );
 }
 
-function Pro({ onClose, authToken, onAuthExpired }: ProProps) {
+function Pro({ onClose, onExplorePro, authToken, onAuthExpired }: ProProps) {
   const [selectedPlanId, setSelectedPlanId] = useState<PlanId>("yearly");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -233,77 +234,91 @@ function Pro({ onClose, authToken, onAuthExpired }: ProProps) {
         </div>
 
         <aside className="pro-checkout-card">
-          <div className="pro-section-head">
-            <p className="eyebrow">Elige tu plan</p>
-            <h2>Activa tu mejor version</h2>
-          </div>
+          {isPro ? (
+            <div className="pro-success-card" role="status">
+              <span className="pro-success-icon" aria-hidden="true">
+                <CheckIcon />
+              </span>
+              <p className="eyebrow">GymMaxxing PRO activado</p>
+              <h2>Gracias por tu compra</h2>
+              <p>
+                Ya eres parte de PRO. Tu apoyo nos ayuda a seguir mejorando GymMaxxing y
+                creando nuevas herramientas para tus entrenamientos.
+              </p>
+              <div className="pro-success-plan">
+                <span>Tu acceso</span>
+                <strong>Funciones premium habilitadas</strong>
+              </div>
+              <button type="button" className="btn pro-payment-button" onClick={onExplorePro}>
+                Explorar funciones PRO
+              </button>
+              <button type="button" className="btn secondary pro-later-button" onClick={onClose}>
+                Volver al inicio
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="pro-section-head">
+                <p className="eyebrow">Elige tu plan</p>
+                <h2>Activa tu mejor version</h2>
+              </div>
 
-          <div className="pro-plans" role="radiogroup" aria-label="Planes PRO">
-            {plans.map((plan) => {
-              const isSelected = selectedPlanId === plan.id;
+              <div className="pro-plans" role="radiogroup" aria-label="Planes PRO">
+                {plans.map((plan) => {
+                  const isSelected = selectedPlanId === plan.id;
 
-              return (
-                <button
-                  type="button"
-                  className={`pro-plan-card ${isSelected ? "selected" : ""}`}
-                  onClick={() => {
-                    setSelectedPlanId(plan.id);
-                    setMessage("");
-                  }}
-                  disabled={loading}
-                  role="radio"
-                  aria-checked={isSelected}
-                  key={plan.id}
-                >
-                  <span className="pro-plan-radio" aria-hidden="true" />
-                  <span className="pro-plan-copy">
-                    <span className="pro-plan-title-row">
-                      <strong>{plan.name}</strong>
-                      {plan.badge ? <small className="pro-plan-badge">{plan.badge}</small> : null}
-                    </span>
-                    <small>{plan.description}</small>
-                  </span>
-                  <span className="pro-plan-price">{plan.priceText}</span>
-                </button>
-              );
-            })}
-          </div>
+                  return (
+                    <button
+                      type="button"
+                      className={`pro-plan-card ${isSelected ? "selected" : ""}`}
+                      onClick={() => {
+                        setSelectedPlanId(plan.id);
+                        setMessage("");
+                      }}
+                      disabled={loading}
+                      role="radio"
+                      aria-checked={isSelected}
+                      key={plan.id}
+                    >
+                      <span className="pro-plan-radio" aria-hidden="true" />
+                      <span className="pro-plan-copy">
+                        <span className="pro-plan-title-row">
+                          <strong>{plan.name}</strong>
+                          {plan.badge ? <small className="pro-plan-badge">{plan.badge}</small> : null}
+                        </span>
+                        <small>{plan.description}</small>
+                      </span>
+                      <span className="pro-plan-price">{plan.priceText}</span>
+                    </button>
+                  );
+                })}
+              </div>
 
-          {message ? (
-            <p
-              className={`status ${isPro ? "ok" : "error"} pro-payment-message`}
-              role={isPro ? "status" : "alert"}
-            >
-              {message}
-            </p>
-          ) : null}
-          {isPro && !message ? (
-            <p className="status ok pro-payment-message" role="status">
-              Ya tienes GymMaxxing PRO activo.
-            </p>
-          ) : null}
+              {message ? (
+                <p className="status error pro-payment-message" role="alert">
+                  {message}
+                </p>
+              ) : null}
 
-          <button
-            type="button"
-            className="btn pro-payment-button"
-            onClick={() => handleGoToPayment(selectedPlan)}
-            disabled={loading || isPro}
-          >
-            {isPro
-              ? "Plan PRO activo"
-              : loading
-                ? "Preparando pago..."
-                : `Ir a pagar - Plan ${selectedPlan.name}`}
-          </button>
-          <button
-            type="button"
-            className="btn secondary pro-later-button"
-            onClick={onClose}
-            disabled={loading}
-          >
-            Quiza mas tarde
-          </button>
-          <p className="pro-cancel-note">Cancela tu suscripcion en cualquier momento.</p>
+              <button
+                type="button"
+                className="btn pro-payment-button"
+                onClick={() => handleGoToPayment(selectedPlan)}
+                disabled={loading}
+              >
+                {loading ? "Preparando pago..." : `Ir a pagar - Plan ${selectedPlan.name}`}
+              </button>
+              <button
+                type="button"
+                className="btn secondary pro-later-button"
+                onClick={onClose}
+                disabled={loading}
+              >
+                Quiza mas tarde
+              </button>
+              <p className="pro-cancel-note">Cancela tu suscripcion en cualquier momento.</p>
+            </>
+          )}
         </aside>
       </section>
     </main>

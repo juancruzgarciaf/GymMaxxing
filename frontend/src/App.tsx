@@ -872,6 +872,7 @@ function App() {
         {mainScreen === "pro" && authToken ? (
           <Pro
             onClose={() => navigateTo("home")}
+            onExplorePro={() => navigateTo("perfil")}
             authToken={authToken}
             onAuthExpired={handleAuthExpired}
           />
