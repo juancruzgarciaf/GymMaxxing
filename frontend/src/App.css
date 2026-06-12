@@ -5900,6 +5900,13 @@ button.discover-module-card:hover,
   color: #4b5563;
 }
 
+:root[data-theme="light"] .settings-info-item,
+:root[data-theme="light"] .settings-toggle-row {
+  border-color: #d5dde7;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
 :root[data-theme="light"] .settings-toggle-row p,
 :root[data-theme="light"] .settings-info-item small {
   color: #4b5563;
