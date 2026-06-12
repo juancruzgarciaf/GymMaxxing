@@ -232,7 +232,7 @@ export type NotificationItem = {
 };
 
 export type GeminiGeneratedRoutineResponse = {
-  status: "routine_created";
+  status: "routine_draft_ready";
   proveedor: "gemini";
   usuario_id: number;
   gemini_configurado: boolean;
@@ -255,28 +255,21 @@ export type GeminiGeneratedRoutineResponse = {
       id_ejercicio: number;
       nombre: string;
       grupo_muscular: string | null;
+      tipo_disciplina: string | null;
       series: number;
       repeticiones: number;
       descanso: number;
       orden: number;
     }>;
   };
-  rutina_creada: {
-    id_rutina: number;
+  rutina_borrador: {
     nombre: string;
     descripcion: string | null;
-    duracion_estimada: number | null;
-    fecha_creacion: string | null;
-    creador_id: number;
     id_carpeta: number | null;
     visible_en_descubrir: boolean;
-    save_count: number;
-    copy_count: number;
-    likes_count: number;
-    viewer_liked: boolean;
+    duracion_estimada: number | null;
     ejercicios: Array<{
       id_ejercicio: number;
-      id_rutina: number;
       series: number;
       repeticiones: number;
       descanso: number;

@@ -10,7 +10,6 @@ type GeminiRoutinePanelProps = {
     diasPorSemana?: number;
   }) => void;
   lastGeneratedRoutine: {
-    id_rutina: number;
     nombre: string;
     totalEjercicios: number;
     ejerciciosPreview: Array<{
@@ -113,8 +112,8 @@ function GeminiRoutinePanelBody({
           <p className="gemini-panel-eyebrow">Gemini + GymMaxxing</p>
           <h2>Generar rutina</h2>
           <p className="gemini-panel-copy">
-            Escribí una consigna corta y GymMaxxing intentará crear una rutina real en tu
-            biblioteca, sin mostrarte una respuesta tipo chatbot.
+            Escribí una consigna corta y GymMaxxing intentará armar un borrador editable de
+            rutina, sin mostrarte una respuesta tipo chatbot.
           </p>
         </div>
         <button type="button" className="modal-close" onClick={onClose} disabled={loading}>
@@ -163,7 +162,7 @@ function GeminiRoutinePanelBody({
 
         <div className="gemini-panel-note">
           Gemini usa tu perfil y datos internos de GymMaxxing para devolver una estructura de
-          rutina que el backend guarda como una rutina real.
+          rutina que después podrás revisar y guardar solo si la confirmás.
         </div>
 
         {errorMessage ? (

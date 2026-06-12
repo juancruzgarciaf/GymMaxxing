@@ -1,13 +1,6 @@
 import { pool } from "../db";
 import { getTrends, getUsuarioPorId } from "./user.service";
 import { getGeminiClient, getGeminiModel, isGeminiConfigured } from "./gemini.service";
-import {
-  agregarEjercicioARutina,
-  crearRutina,
-  deleteRutina,
-  getEjerciciosDeRutina,
-  getRutinaPorId,
-} from "./rutina.service";
 
 export type GenerateRoutineDraftInput = {
   usuarioId: number;
@@ -17,7 +10,7 @@ export type GenerateRoutineDraftInput = {
 };
 
 export type RoutineGenerationCreateResponse = {
-  status: "routine_created";
+  status: "routine_draft_ready";
   proveedor: "gemini";
   usuario_id: number;
   gemini_configurado: boolean;
@@ -102,30 +95,23 @@ export type RoutineGenerationCreateResponse = {
     advertencias: string[];
     ejercicios: Array<{
       id_ejercicio: number;
-      nombre: string;
-      grupo_muscular: string | null;
-      series: number;
-      repeticiones: number;
-      descanso: number;
-      orden: number;
-    }>;
-  };
-  rutina_creada: {
-    id_rutina: number;
+        nombre: string;
+        grupo_muscular: string | null;
+        tipo_disciplina: string | null;
+        series: number;
+        repeticiones: number;
+        descanso: number;
+        orden: number;
+      }>;
+    };
+  rutina_borrador: {
     nombre: string;
     descripcion: string | null;
-    duracion_estimada: number | null;
-    fecha_creacion: string | null;
-    creador_id: number;
     id_carpeta: number | null;
     visible_en_descubrir: boolean;
-    save_count: number;
-    copy_count: number;
-    likes_count: number;
-    viewer_liked: boolean;
+    duracion_estimada: number | null;
     ejercicios: Array<{
       id_ejercicio: number;
-      id_rutina: number;
       series: number;
       repeticiones: number;
       descanso: number;
@@ -159,6 +145,7 @@ type GeneratedRoutineExercise = {
   id_ejercicio: number;
   nombre: string;
   grupo_muscular: string | null;
+  tipo_disciplina?: string | null;
   series: number;
   repeticiones: number;
   descanso: number;
@@ -934,6 +921,7 @@ const sanitizeExercisesForPersistence = async (
         id_ejercicio: number;
         nombre: string;
         grupo_muscular: string | null;
+        tipo_disciplina: string | null;
         series: number;
         repeticiones: number;
         descanso: number;
@@ -946,6 +934,7 @@ const sanitizeExercisesForPersistence = async (
         id_ejercicio: exercise.id_ejercicio,
         nombre: exercise.nombre,
         grupo_muscular: exercise.grupo_muscular,
+        tipo_disciplina: exercise.tipo_disciplina,
         series: parsePositiveInteger(exercise.series, 3),
         repeticiones: parsePositiveInteger(exercise.repeticiones, 10),
         descanso: Math.max(0, Number(exercise.descanso) || 0),
@@ -1052,7 +1041,7 @@ const getReferenceExerciseCatalog = async () => {
   return result.rows;
 };
 
-const persistGeneratedRoutine = async (params: {
+const buildGeneratedRoutineDraftResponse = async (params: {
   input: GenerateRoutineDraftInput;
   geminiConfigured: boolean;
   model: string;
@@ -1069,44 +1058,8 @@ const persistGeneratedRoutine = async (params: {
     params.rutinaGenerada.ejercicios
   );
 
-  const rutinaCreada = await crearRutina({
-    nombre: params.rutinaGenerada.nombre,
-    descripcion: params.rutinaGenerada.descripcion,
-    duracion_estimada: params.rutinaGenerada.duracion_estimada,
-    creador_id: params.input.usuarioId,
-    id_carpeta: null,
-    visible_en_descubrir: true,
-  });
-
-  if (!rutinaCreada) {
-    throw new Error("No se pudo crear la rutina generada por Gemini");
-  }
-
-  try {
-    for (const exercise of ejerciciosValidados) {
-      await agregarEjercicioARutina({
-        id_rutina: rutinaCreada.id_rutina,
-        id_ejercicio: exercise.id_ejercicio,
-        series: exercise.series,
-        repeticiones: exercise.repeticiones,
-        descanso: exercise.descanso,
-        orden: exercise.orden,
-      });
-    }
-  } catch (error) {
-    await deleteRutina(String(rutinaCreada.id_rutina), params.input.usuarioId);
-    throw error;
-  }
-
-  const rutinaPersistida =
-    (await getRutinaPorId(String(rutinaCreada.id_rutina), params.input.usuarioId)) ??
-    rutinaCreada;
-  const ejerciciosPersistidos = await getEjerciciosDeRutina(
-    String(rutinaCreada.id_rutina)
-  );
-
   return {
-    status: "routine_created" as const,
+    status: "routine_draft_ready" as const,
     proveedor: "gemini" as const,
     usuario_id: params.input.usuarioId,
     gemini_configurado: params.geminiConfigured,
@@ -1129,23 +1082,26 @@ const persistGeneratedRoutine = async (params: {
       ...params.rutinaGenerada,
       ejercicios: ejerciciosValidados,
     },
-    rutina_creada: {
-      id_rutina: rutinaPersistida.id_rutina,
-      nombre: rutinaPersistida.nombre,
-      descripcion: rutinaPersistida.descripcion,
-      duracion_estimada: rutinaPersistida.duracion_estimada,
-      fecha_creacion: rutinaPersistida.fecha_creacion,
-      creador_id: rutinaPersistida.creador_id,
-      id_carpeta: rutinaPersistida.id_carpeta,
-      visible_en_descubrir: rutinaPersistida.visible_en_descubrir,
-      save_count: rutinaPersistida.save_count,
-      copy_count: rutinaPersistida.copy_count,
-      likes_count: rutinaPersistida.likes_count,
-      viewer_liked: rutinaPersistida.viewer_liked ?? false,
-      ejercicios: ejerciciosPersistidos,
+    rutina_borrador: {
+      nombre: params.rutinaGenerada.nombre,
+      descripcion: params.rutinaGenerada.descripcion,
+      id_carpeta: null,
+      visible_en_descubrir: true,
+      duracion_estimada: params.rutinaGenerada.duracion_estimada,
+      ejercicios: ejerciciosValidados.map((exercise) => ({
+        id_ejercicio: exercise.id_ejercicio,
+        series: exercise.series,
+        repeticiones: exercise.repeticiones,
+        descanso: exercise.descanso,
+        orden: exercise.orden,
+        nombre: exercise.nombre,
+        descripcion: null,
+        grupo_muscular: exercise.grupo_muscular,
+        tipo_disciplina: exercise.tipo_disciplina ?? null,
+      })),
     },
     siguiente_paso:
-      "La rutina ya fue creada en GymMaxxing usando Gemini o un fallback seguro.",
+      "La rutina quedo preparada como borrador en GymMaxxing y se guardara solo si el usuario confirma.",
   };
 };
 
@@ -1258,7 +1214,7 @@ export const generateRoutineDraftFromPrompt = async (
   }
 
   try {
-    return await persistGeneratedRoutine({
+    return await buildGeneratedRoutineDraftResponse({
       input,
       geminiConfigured,
       model,
@@ -1284,7 +1240,7 @@ export const generateRoutineDraftFromPrompt = async (
     const fallbackRoutine = buildFallbackRoutineProposal(input, referenceCatalog);
 
     try {
-      return await persistGeneratedRoutine({
+      return await buildGeneratedRoutineDraftResponse({
         input,
         geminiConfigured,
         model,
@@ -1299,7 +1255,7 @@ export const generateRoutineDraftFromPrompt = async (
       });
     } catch {
       throw new Error(
-        "No se pudo crear una rutina valida de GymMaxxing ni con Gemini ni con el fallback."
+        "No se pudo preparar una rutina valida de GymMaxxing ni con Gemini ni con el fallback."
       );
     }
   }

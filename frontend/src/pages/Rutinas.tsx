@@ -259,13 +259,19 @@ function Rutinas({
   const [geminiPanelOpen, setGeminiPanelOpen] = useState(false);
   const [geminiGenerating, setGeminiGenerating] = useState(false);
   const [geminiLastRoutine, setGeminiLastRoutine] = useState<{
-    id_rutina: number;
     nombre: string;
+    descripcion: string | null;
+    duracion_estimada: number | null;
+    visible_en_descubrir: boolean;
     totalEjercicios: number;
     ejerciciosPreview: Array<{
       id_ejercicio: number;
       nombre: string;
       grupo_muscular: string | null;
+      tipo_disciplina: string | null;
+      series: number;
+      repeticiones: number;
+      descanso: number;
     }>;
   } | null>(null);
   const [geminiPanelError, setGeminiPanelError] = useState("");
@@ -621,6 +627,49 @@ function Rutinas({
     setFiltroEquipo("");
     setFiltroMusculo("");
     setBusquedaEjercicio("");
+    setVista("editor");
+  };
+
+  const abrirEditorRutinaGemini = () => {
+    if (!geminiLastRoutine) {
+      return;
+    }
+
+    setError("");
+    setMensaje("");
+    setEditorRutinaId(null);
+    setEditorNombre(limitTitle(geminiLastRoutine.nombre));
+    setEditorDescripcion(limitDescription(geminiLastRoutine.descripcion ?? ""));
+    setEditorDuracion(
+      geminiLastRoutine.duracion_estimada != null
+        ? String(geminiLastRoutine.duracion_estimada)
+        : "",
+    );
+    setEditorCarpetaId("");
+    setEditorVisibleEnDescubrir(geminiLastRoutine.visible_en_descubrir);
+    setEditorEjercicios(
+      geminiLastRoutine.ejerciciosPreview.map((exercise) => {
+        const descanso = descansoToInputs(exercise.descanso ?? 90);
+        return {
+          id_ejercicio: exercise.id_ejercicio,
+          nombre: exercise.nombre,
+          grupo_muscular: exercise.grupo_muscular ?? "",
+          tipo_disciplina: exercise.tipo_disciplina ?? "",
+          nota: "",
+          descansoMin: descanso.min,
+          descansoSeg: descanso.sec,
+          series: Array.from({ length: Math.max(1, exercise.series) }, () =>
+            nuevaSerie(String(Math.max(1, exercise.repeticiones || 10))),
+          ),
+        };
+      }),
+    );
+    setDraggedEditorExerciseId(null);
+    setFiltroEquipo("");
+    setFiltroMusculo("");
+    setBusquedaEjercicio("");
+    setGeminiPanelOpen(false);
+    setGeminiPanelError("");
     setVista("editor");
   };
 
@@ -2304,34 +2353,25 @@ function Rutinas({
       }
 
       const data = (await res.json()) as GeminiGeneratedRoutineResponse;
-      const routine = data.rutina_creada;
+      const routine = data.rutina_borrador;
 
-      savePersistedRutinaEjercicios(
-        routine.id_rutina,
-        routine.ejercicios.map((exercise) => ({
-          id_ejercicio: exercise.id_ejercicio,
-          descansoSegundos: Math.max(0, exercise.descanso ?? 0),
-          series: Array.from({ length: Math.max(1, exercise.series) }, () => ({
-            kg: "",
-            reps: String(Math.max(1, exercise.repeticiones || 10)),
-            tipo: "serie" as const,
-          })),
-        })),
-      );
-
-      await Promise.all([cargarRutinas(), cargarCarpetas()]);
-      setSelectedRutinaId(routine.id_rutina);
       setGeminiLastRoutine({
-        id_rutina: routine.id_rutina,
         nombre: routine.nombre,
+        descripcion: routine.descripcion,
+        duracion_estimada: routine.duracion_estimada,
+        visible_en_descubrir: routine.visible_en_descubrir,
         totalEjercicios: routine.ejercicios.length,
-        ejerciciosPreview: routine.ejercicios.slice(0, 6).map((exercise) => ({
+        ejerciciosPreview: routine.ejercicios.map((exercise) => ({
           id_ejercicio: exercise.id_ejercicio,
           nombre: exercise.nombre,
           grupo_muscular: exercise.grupo_muscular,
+          tipo_disciplina: exercise.tipo_disciplina,
+          series: exercise.series,
+          repeticiones: exercise.repeticiones,
+          descanso: exercise.descanso,
         })),
       });
-      setMensaje("Rutina generada con Gemini");
+      setMensaje("Borrador de rutina generado con Gemini");
       setGeminiPanelError("");
     } catch (err) {
       setGeminiPanelError(
@@ -2349,8 +2389,8 @@ function Rutinas({
         <div className="rutinas-hero-copy">
           <h1>Tus rutinas</h1>
           <p className="helper-text">
-            Crea rutinas manuales o pedile una propuesta a Gemini para que GymMaxxing la guarde
-            directo en tu biblioteca.
+            Crea rutinas manuales o pedile una propuesta a Gemini para revisar un borrador antes
+            de guardarlo en tu biblioteca.
           </p>
         </div>
         <button className="btn" type="button" onClick={() => setGeminiPanelOpen(true)}>
@@ -2514,13 +2554,7 @@ function Rutinas({
         lastGeneratedRoutine={geminiLastRoutine}
         errorMessage={geminiPanelError}
         onViewGeneratedRoutine={
-          geminiLastRoutine
-            ? () => {
-                setSelectedRutinaId(geminiLastRoutine.id_rutina);
-                setGeminiPanelOpen(false);
-                setGeminiPanelError("");
-              }
-            : null
+          geminiLastRoutine ? abrirEditorRutinaGemini : null
         }
       />
 
