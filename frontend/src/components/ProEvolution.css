@@ -123,11 +123,11 @@
 }
 
 .pro-bars-chart {
-  min-width: max(100%, calc(var(--bar-count) * 72px));
+  min-width: 100%;
   height: 320px;
   display: grid;
-  grid-template-columns: repeat(var(--bar-count), minmax(48px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(var(--bar-count), minmax(0, 1fr));
+  gap: clamp(5px, 1vw, 12px);
   align-items: end;
   padding: 20px 4px 0;
   border-bottom: 1px solid #35506b;
@@ -138,6 +138,22 @@
     rgba(117, 148, 174, 0.16) 75px,
     transparent 76px
   );
+}
+
+.pro-bars-chart--compact {
+  gap: 4px;
+}
+
+.pro-bars-chart--compact .pro-bar-value {
+  display: none;
+}
+
+.pro-bars-chart--compact .pro-bar-track span {
+  width: min(22px, 72%);
+}
+
+.pro-bars-chart--compact .pro-bar-column small {
+  font-size: 0.65rem;
 }
 
 .pro-bar-column {
@@ -242,6 +258,16 @@
 }
 
 @media (max-width: 760px) {
+  .pro-bars-chart {
+    min-width: max(100%, calc(var(--bar-count) * 58px));
+    gap: 8px;
+  }
+
+  .pro-bars-chart--compact {
+    min-width: calc(var(--bar-count) * 44px);
+    gap: 5px;
+  }
+
   .profile-pro-entry,
   .pro-evolution-header,
   .pro-evolution-toolbar {

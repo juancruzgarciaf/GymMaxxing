@@ -210,12 +210,16 @@ function ProEvolution({ authToken, onAuthExpired, onClose }: ProEvolutionProps) 
         <>
           <div className="pro-bars-scroll">
             <div
-              className="pro-bars-chart"
+              className={`pro-bars-chart ${period === 26 ? "pro-bars-chart--compact" : ""}`}
               style={{ "--bar-count": data.points.length } as CSSProperties}
             >
               {data.points.map((point, index) => {
                 const value = chart.values[index] ?? 0;
                 const height = value === 0 ? 2 : Math.max((value / chart.max) * 100, 7);
+                const showWeekLabel =
+                  period !== 26 ||
+                  index % 2 === 0 ||
+                  index === data.points.length - 1;
 
                 return (
                   <div className="pro-bar-column" key={point.weekStart}>
@@ -223,7 +227,7 @@ function ProEvolution({ authToken, onAuthExpired, onClose }: ProEvolutionProps) 
                     <div className="pro-bar-track">
                       <span style={{ height: `${height}%` }} />
                     </div>
-                    <small>{formatWeek(point.weekStart)}</small>
+                    <small>{showWeekLabel ? formatWeek(point.weekStart) : ""}</small>
                   </div>
                 );
               })}
