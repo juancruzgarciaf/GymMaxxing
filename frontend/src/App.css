@@ -3688,6 +3688,20 @@ small.verified-name {
   gap: 24px;
 }
 
+.history-limit-notice {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid #e4b65d;
+  border-radius: 14px;
+  background: rgba(228, 182, 93, 0.12);
+}
+
+.history-limit-notice span {
+  color: var(--muted);
+}
+
 .gym-profile-editor,
 .gym-public-profile {
   display: grid;
@@ -5491,10 +5505,17 @@ button.discover-module-card:hover,
   }
 
   .profile-content-layout {
-    grid-template-columns: minmax(0, 760px);
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "calendar"
       "feed";
+  }
+
+  .profile-feed-column,
+  .profile-calendar-column {
+    min-width: 0;
   }
 
   .profile-calendar-column {

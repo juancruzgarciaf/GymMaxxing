@@ -1,0 +1,37 @@
+.pro-body-measurements { margin-top:24px; padding:28px; border:1px solid #294761; border-radius:24px; color:#eef7fd; background:linear-gradient(145deg,#0c1d2c,#091722); }
+.pro-body-measurements > header { display:flex; justify-content:space-between; gap:24px; align-items:center; }
+.pro-body-measurements h2 { margin:4px 0 6px; }
+.pro-body-measurements header p:last-child { margin:0; color:#9eb1c0; }
+.body-measurement-current { display:grid; gap:3px; min-width:190px; padding:15px 18px; border:1px solid #3476a9; border-radius:16px; background:rgba(37,143,240,.1); }
+.body-measurement-current span,.body-measurement-current small { color:#91a7b8; }
+.body-measurement-current strong { font-size:1.45rem; }
+.body-measurement-form { display:grid; grid-template-columns:repeat(4,minmax(130px,1fr)); gap:12px; margin-top:24px; }
+.body-measurement-form label { display:grid; gap:5px; color:#9eb1c0; font-size:.8rem; }
+.body-note { grid-column:span 2; }
+.body-metric-tabs { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin-top:22px; }
+.body-metric-tabs button { padding:11px; border:1px solid #29465e; border-radius:999px; color:#b9c8d3; background:#102334; font-weight:800; cursor:pointer; }
+.body-metric-tabs button.active { color:#071421; border-color:#45aaff; background:#45aaff; }
+.body-chart-scroll { overflow-x:auto; margin-top:16px; }
+.body-chart { display:block; width:100%; min-width:680px; }
+.body-chart line { stroke:#294257; }
+.body-chart polyline { fill:none; stroke:#42aaff; stroke-width:4; }
+.body-chart circle { fill:#091722; stroke:#55b2fa; stroke-width:4; }
+.body-chart text { fill:#d7e7f2; text-anchor:middle; font-size:12px; font-weight:800; }
+.body-chart text.date { fill:#8fa5b6; font-weight:500; }
+.body-measurement-empty { margin-top:18px; padding:28px; border:1px dashed #34536c; border-radius:16px; text-align:center; color:#91a7b8; }
+.body-measurement-history { display:grid; gap:8px; margin-top:16px; }
+.body-measurement-history article { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 14px; border:1px solid #29465e; border-radius:13px; background:rgba(6,17,27,.55); }
+.body-measurement-history article div { display:grid; gap:2px; }
+.body-measurement-history span { color:#8fa5b6; }
+.body-measurement-history button { border:0; color:#ff9b9b; background:transparent; cursor:pointer; }
+:root[data-theme="light"] .pro-body-measurements { color:#102238; border-color:#cbdbe8; background:#fff; }
+:root[data-theme="light"] .pro-body-measurements header p:last-child,:root[data-theme="light"] .body-measurement-current span,:root[data-theme="light"] .body-measurement-current small,:root[data-theme="light"] .body-measurement-form label,:root[data-theme="light"] .body-measurement-history span { color:#52697c; }
+:root[data-theme="light"] .body-measurement-current,:root[data-theme="light"] .body-measurement-history article { border-color:#d2e0eb; background:#f5f9fc; }
+:root[data-theme="light"] .body-metric-tabs button { color:#385168; border-color:#cbd9e5; background:#edf3f8; }
+:root[data-theme="light"] .body-metric-tabs button.active { color:#fff; background:#258ff0; }
+:root[data-theme="light"] .body-chart line { stroke:#d4e0e9; }
+:root[data-theme="light"] .body-chart circle { fill:#fff; }
+:root[data-theme="light"] .body-chart text { fill:#17344c; }
+:root[data-theme="light"] .body-chart text.date { fill:#60788b; }
+@media(max-width:900px){.body-measurement-form{grid-template-columns:repeat(2,1fr)}.body-metric-tabs{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:600px){.pro-body-measurements{padding:20px 16px}.pro-body-measurements>header{align-items:stretch;flex-direction:column}.body-measurement-form{grid-template-columns:1fr}.body-note{grid-column:auto}.body-metric-tabs{grid-template-columns:repeat(2,1fr)}}

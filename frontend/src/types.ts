@@ -321,6 +321,8 @@ export type PerfilUsuario = {
   routines_count?: number;
   viewer_follows: boolean;
   is_own_profile: boolean;
+  history_limited?: boolean;
+  history_days?: number | null;
   entrenamientos: EntrenamientoResumen[];
   rutinas?: RoutinePostSummary[];
 };

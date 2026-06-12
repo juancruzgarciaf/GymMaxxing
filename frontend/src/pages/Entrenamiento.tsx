@@ -96,10 +96,22 @@ type EntrenamientoProps = {
 type VistaEntrenamiento = "inicio" | "ejecucion" | "guardar";
 
 const API = "http://localhost:3000";
+const AUTH_STORAGE_KEY = "gymmaxxing_auth_v1";
 const ACTIVE_TRAINING_STORAGE_PREFIX = "gymmaxxing_active_training_v1";
 const TRAINING_DELETED_EVENT = "gymmaxxing:training-deleted";
 const STALE_ACTIVE_TRAINING_THRESHOLD_MS = 6 * 60 * 60 * 1000;
 const EXERCISE_NOTE_MAX_LENGTH = 120;
+
+const getStoredAuthToken = () => {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { token?: string };
+    return typeof parsed.token === "string" ? parsed.token : null;
+  } catch {
+    return null;
+  }
+};
 
 const SET_TIPO_OPTIONS: Array<{ value: TrainingSetType; label: string }> = [
   { value: "warmup", label: "WarmUp" },
@@ -429,7 +441,10 @@ function Entrenamiento({
       setCatalogoLoading(true);
       setCatalogoError("");
 
-      const res = await fetch(`${API}/ejercicios`);
+      const token = getStoredAuthToken();
+      const res = await fetch(`${API}/ejercicios`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
       if (!res.ok) {
         throw new Error(await parseError(res, "No se pudo obtener el catalogo de ejercicios"));
       }

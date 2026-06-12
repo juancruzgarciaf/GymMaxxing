@@ -9,6 +9,8 @@ import ProEvolution from "../components/ProEvolution";
 import ProMuscleDistribution from "../components/ProMuscleDistribution";
 import ProExerciseProgress from "../components/ProExerciseProgress";
 import ProWarmupCalculator from "../components/ProWarmupCalculator";
+import ProBodyMeasurements from "../components/ProBodyMeasurements";
+import CustomExerciseLibrary from "../components/CustomExerciseLibrary";
 import { COUNTRY_OPTIONS } from "../lib/countries";
 import { isGymUser } from "../lib/roles";
 import { DESCRIPTION_MAX_LENGTH, USERNAME_MAX_LENGTH, limitDescription, limitUsername } from "../lib/textLimits";
@@ -206,7 +208,9 @@ function Perfil({
       setLoading(true);
       setError("");
 
-      const res = await fetch(`${API}/users/profile/${encodeURIComponent(profileUsername)}?viewer_id=${usuario.id}`);
+      const res = await fetch(`${API}/users/profile/${encodeURIComponent(profileUsername)}?viewer_id=${usuario.id}`, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
+      });
       const data = (await res.json()) as PerfilUsuario | { error?: string };
 
       if (!res.ok) {
@@ -347,7 +351,9 @@ function Perfil({
         params.set("duracion_max", nextMaxDuration.trim());
       }
 
-      const res = await fetch(`${API}/users/${perfil.usuario.id}/trainings/search?${params.toString()}`);
+      const res = await fetch(`${API}/users/${perfil.usuario.id}/trainings/search?${params.toString()}`, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
+      });
       const data = (await res.json()) as UserTrainingSearchResponse | { error?: string };
 
       if (!res.ok) {
@@ -777,9 +783,14 @@ function Perfil({
                     onAuthExpired={onAuthExpired}
                   />
                   <ProWarmupCalculator />
+                  <ProBodyMeasurements authToken={authToken} onAuthExpired={onAuthExpired} />
                 </>
               ) : null}
             </>
+          ) : null}
+
+          {perfil.is_own_profile && authToken && !profileIsGym ? (
+            <CustomExerciseLibrary authToken={authToken} onAuthExpired={onAuthExpired} />
           ) : null}
 
           {perfil.is_own_profile && editMode && !profileIsGym ? (
@@ -1192,6 +1203,12 @@ function Perfil({
               <section className="profile-feed-column" aria-label="Entrenamientos del usuario">
                 {perfil.is_own_profile ? (
                   <>
+                    {perfil.history_limited ? (
+                      <div className="history-limit-notice">
+                        <strong>Historial del plan gratuito: ultimos {perfil.history_days ?? 90} dias</strong>
+                        <span>GymMaxxing PRO conserva y muestra todo tu historial.</span>
+                      </div>
+                    ) : null}
                     <ProfileTrainingSearch
                       query={trainingSearchQuery}
                       minDuration={trainingMinDuration}

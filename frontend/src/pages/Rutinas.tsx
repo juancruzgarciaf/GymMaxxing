@@ -412,7 +412,10 @@ function Rutinas({
   };
 
   const cargarCatalogoEjercicios = async () => {
-    const res = await fetch(`${API}/ejercicios`);
+    const token = getStoredAuthToken();
+    const res = await fetch(`${API}/ejercicios`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
     if (!res.ok) {
       throw new Error(await parseError(res, "No se pudo obtener el catalogo de ejercicios"));
     }
