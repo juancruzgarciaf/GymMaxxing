@@ -241,6 +241,7 @@ function App() {
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [userSearchResults, setUserSearchResults] = useState<SearchUser[]>([]);
   const [rutinasOpenGeminiRequestKey, setRutinasOpenGeminiRequestKey] = useState(0);
+  const [notificationSettingsOpen, setNotificationSettingsOpen] = useState(false);
   const authScreen: AuthScreen = location.pathname === "/register" ? "register" : "login";
   const mainScreen = getMainScreenFromPath(location.pathname);
   const routeState = location.state as TrainingRouteState | null;
@@ -908,12 +909,35 @@ function App() {
                 <button type="button" className="settings-action-btn theme-action-btn" onClick={toggleTheme}>
                   {themeMode === "dark" ? "Tema claro" : "Tema oscuro"}
                 </button>
+                <button
+                  type="button"
+                  className={`settings-action-btn notifications-action-btn ${notificationSettingsOpen ? "active" : ""}`}
+                  onClick={() => setNotificationSettingsOpen((prev) => !prev)}
+                  aria-expanded={notificationSettingsOpen}
+                >
+                  <svg
+                    className="settings-action-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+                    <path d="M9 17a3 3 0 0 0 6 0" />
+                  </svg>
+                  Notificaciones
+                </button>
                 <button type="button" className="settings-action-btn logout-action-btn" onClick={handleLogout}>
                   Salir
                 </button>
               </div>
             </section>
-            <NotificationSettingsPanel authToken={authToken} onAuthExpired={handleAuthExpired} />
+            {notificationSettingsOpen ? (
+              <NotificationSettingsPanel authToken={authToken} onAuthExpired={handleAuthExpired} />
+            ) : null}
           </main>
         ) : null}
         {mainScreen === "entrenamiento" && currentTraining ? (

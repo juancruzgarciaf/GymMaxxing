@@ -2642,6 +2642,10 @@ h2 {
   font-size: 0.98rem;
   font-weight: 700;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
 }
 
@@ -2649,6 +2653,18 @@ h2 {
   border-color: #5aa9ff;
   background: #07111f;
   transform: translateY(-1px);
+}
+
+.settings-action-icon {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+}
+
+.notifications-action-btn.active {
+  border-color: #5aa9ff;
+  background: rgba(90, 169, 255, 0.14);
+  color: #e5f8ff;
 }
 
 .logout-action-btn {
@@ -5886,6 +5902,12 @@ button.discover-module-card:hover,
 :root[data-theme="light"] .settings-action-btn:hover {
   border-color: #5aa9ff;
   background: rgba(90, 169, 255, 0.08);
+}
+
+:root[data-theme="light"] .notifications-action-btn.active {
+  border-color: #5aa9ff;
+  background: rgba(90, 169, 255, 0.12);
+  color: #0f2740;
 }
 
 :root[data-theme="light"] .logout-action-btn {
