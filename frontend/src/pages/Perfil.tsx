@@ -755,15 +755,15 @@ function Perfil({
               <section className="profile-pro-entry">
                 <div>
                   <p className="eyebrow">GymMaxxing PRO</p>
-                  <h2>Tu progreso, con mas detalle</h2>
-                  <p>Analiza duracion, volumen y repeticiones semana a semana.</p>
+                  <h2>Tus herramientas PRO</h2>
+                  <p>Analiza tu progreso y crea ejercicios propios para cargarlos en rutinas o entrenamientos.</p>
                 </div>
                 <button
                   type="button"
                   className="btn"
                   onClick={() => setProStatsOpen((prev) => !prev)}
                 >
-                  {proStatsOpen ? "Ocultar estadisticas" : "Ver estadisticas PRO"}
+                  {proStatsOpen ? "Ocultar funciones PRO" : "Ver funciones PRO"}
                 </button>
               </section>
 
@@ -784,13 +784,10 @@ function Perfil({
                   />
                   <ProWarmupCalculator />
                   <ProBodyMeasurements authToken={authToken} onAuthExpired={onAuthExpired} />
+                  <CustomExerciseLibrary authToken={authToken} onAuthExpired={onAuthExpired} />
                 </>
               ) : null}
             </>
-          ) : null}
-
-          {perfil.is_own_profile && authToken && !profileIsGym ? (
-            <CustomExerciseLibrary authToken={authToken} onAuthExpired={onAuthExpired} />
           ) : null}
 
           {perfil.is_own_profile && editMode && !profileIsGym ? (

@@ -6,12 +6,13 @@ import {
   getMisEjerciciosPersonalizados,
 } from "../controllers/ejercicio.controller";
 import { optionalAuth, requireAuth } from "../middleware/auth.middleware";
+import { requirePro } from "../middleware/pro.middleware";
 
 const router = Router();
 
 router.get("/", optionalAuth, getEjercicios);
 router.get("/mios", requireAuth, getMisEjerciciosPersonalizados);
-router.post("/", requireAuth, crearEjercicioPersonalizado);
+router.post("/", requireAuth, requirePro, crearEjercicioPersonalizado);
 router.delete("/:id", requireAuth, borrarEjercicioPersonalizado);
 
 export default router;

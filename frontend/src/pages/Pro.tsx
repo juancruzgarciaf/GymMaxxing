@@ -39,7 +39,7 @@ const plans: Plan[] = [
 const planComparison = [
   {
     feature: "Ejercicios personalizados",
-    common: "Hasta 10 ejercicios",
+    common: "No incluido",
     pro: "Ejercicios ilimitados",
   },
   {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import bodybuilderFlexSample from "../assets/bodybuilder-flex-sample.webp";
 import siluetaStrongman from "../assets/siluetastrongman.png";
 import { canUseTrainingFeatures } from "../lib/roles";
+import { CUSTOM_EXERCISES_UPDATED_EVENT } from "../lib/customExercises";
 import { DESCRIPTION_MAX_LENGTH, TITLE_MAX_LENGTH, limitDescription, limitTitle } from "../lib/textLimits";
 import { saveTrainingSeedAsRoutine } from "../lib/trainingTransfer";
 import type { TrainingSeed, TrainingSetType, Usuario } from "../types";
@@ -14,6 +15,7 @@ type Ejercicio = {
   descripcion: string;
   grupo_muscular: string;
   tipo_disciplina: string;
+  es_personalizado?: boolean;
 };
 
 type CarpetaRutina = {
@@ -515,6 +517,14 @@ function Entrenamiento({
     void init();
   }, [usuario.id]);
 
+  useEffect(() => {
+    const handleCustomExercisesUpdated = () => {
+      void cargarCatalogoEjercicios({ silent: true });
+    };
+
+    window.addEventListener(CUSTOM_EXERCISES_UPDATED_EVENT, handleCustomExercisesUpdated);
+    return () => window.removeEventListener(CUSTOM_EXERCISES_UPDATED_EVENT, handleCustomExercisesUpdated);
+  }, [usuario.id]);
   useEffect(() => {
     setActiveTrainingHydrated(false);
     setStaleTrainingRestore(null);
@@ -2363,7 +2373,10 @@ function Entrenamiento({
                   <div key={ejercicio.id_ejercicio} className="library-item">
                     <div>
                       <strong>{ejercicio.nombre}</strong>
-                      <small>{ejercicio.grupo_muscular}</small>
+                      <small>
+                        {ejercicio.grupo_muscular}
+                        {ejercicio.es_personalizado ? <span className="custom-exercise-badge">Personalizado</span> : null}
+                      </small>
                     </div>
                     <div className="library-actions">
                       {yaAgregado ? (

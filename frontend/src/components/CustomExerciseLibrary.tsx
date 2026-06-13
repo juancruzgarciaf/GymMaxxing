@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { notifyCustomExercisesUpdated } from "../lib/customExercises";
 import "./CustomExerciseLibrary.css";
 
 type Exercise = {
@@ -46,6 +47,7 @@ function CustomExerciseLibrary({ authToken, onAuthExpired }: { authToken: string
       if (!response.ok) throw new Error(payload.error || "No se pudo crear el ejercicio");
       setForm({ nombre: "", grupo_muscular: "", tipo_disciplina: "Musculacion", descripcion: "" });
       await load();
+      notifyCustomExercisesUpdated();
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "No se pudo crear el ejercicio");
     } finally { setSaving(false); }
@@ -56,6 +58,7 @@ function CustomExerciseLibrary({ authToken, onAuthExpired }: { authToken: string
     const payload = await response.json();
     if (!response.ok) return setError(payload.error || "No se pudo eliminar");
     await load();
+    notifyCustomExercisesUpdated();
   };
 
   const reachedLimit = data.limit != null && data.count >= data.limit;
@@ -65,7 +68,7 @@ function CustomExerciseLibrary({ authToken, onAuthExpired }: { authToken: string
         <div><p className="eyebrow">Biblioteca personal</p><h2>Mis ejercicios personalizados</h2><p>Crea movimientos propios para usarlos en rutinas y entrenamientos.</p></div>
         <div className={reachedLimit ? "custom-exercise-usage limit" : "custom-exercise-usage"}>
           <strong>{data.count}{data.limit == null ? "" : ` / ${data.limit}`}</strong>
-          <span>{data.isPro ? "Sin limite con PRO" : "Plan gratuito"}</span>
+          <span>Disponible con GymMaxxing PRO</span>
         </div>
       </header>
       <div className="custom-exercise-form">

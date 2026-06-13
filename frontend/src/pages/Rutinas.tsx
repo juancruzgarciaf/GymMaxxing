@@ -6,6 +6,7 @@ import {
   type RoutineLibraryUpdatedDetail,
 } from "../lib/trainingTransfer";
 import { canUseTrainingFeatures } from "../lib/roles";
+import { CUSTOM_EXERCISES_UPDATED_EVENT } from "../lib/customExercises";
 import { DESCRIPTION_MAX_LENGTH, TITLE_MAX_LENGTH, limitDescription, limitTitle } from "../lib/textLimits";
 import type { GeminiGeneratedRoutineResponse, TrainingSeed, Usuario } from "../types";
 import TrashIcon from "../components/TrashIcon";
@@ -36,6 +37,7 @@ type Ejercicio = {
   descripcion: string;
   grupo_muscular: string;
   tipo_disciplina: string;
+  es_personalizado?: boolean;
 };
 
 type RutinaEjercicio = {
@@ -530,6 +532,14 @@ function Rutinas({
     void init();
   }, [cargarRutinas, usuario.id]);
 
+  useEffect(() => {
+    const handleCustomExercisesUpdated = () => {
+      void cargarCatalogoEjercicios();
+    };
+
+    window.addEventListener(CUSTOM_EXERCISES_UPDATED_EVENT, handleCustomExercisesUpdated);
+    return () => window.removeEventListener(CUSTOM_EXERCISES_UPDATED_EVENT, handleCustomExercisesUpdated);
+  }, [usuario.id]);
   useEffect(() => {
     const handleRoutineLibraryUpdated = (event: Event) => {
       const detail = (event as CustomEvent<RoutineLibraryUpdatedDetail>).detail;
@@ -2023,7 +2033,10 @@ function Rutinas({
                   <div key={ejercicio.id_ejercicio} className="library-item">
                     <div>
                       <strong>{ejercicio.nombre}</strong>
-                      <small>{ejercicio.grupo_muscular}</small>
+                      <small>
+                        {ejercicio.grupo_muscular}
+                        {ejercicio.es_personalizado ? <span className="custom-exercise-badge">Personalizado</span> : null}
+                      </small>
                     </div>
                     <button
                       type="button"

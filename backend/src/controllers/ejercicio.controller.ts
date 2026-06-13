@@ -71,21 +71,6 @@ export const crearEjercicioPersonalizado = async (
       });
     }
 
-    if (!(await isUserPro(req.authUser!.id))) {
-      const countResult = await pool.query<{ total: number }>(
-        `SELECT COUNT(*)::int AS total
-         FROM ejercicio
-         WHERE creador_id = $1 AND es_personalizado = TRUE`,
-        [req.authUser!.id],
-      );
-      if (Number(countResult.rows[0]?.total ?? 0) >= 10) {
-        return res.status(403).json({
-          error: "El plan gratuito permite hasta 10 ejercicios personalizados",
-          code: "FREE_CUSTOM_EXERCISE_LIMIT",
-        });
-      }
-    }
-
     const result = await pool.query(
       `INSERT INTO ejercicio
          (nombre, descripcion, grupo_muscular, tipo_disciplina, creador_id, es_personalizado)
