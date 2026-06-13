@@ -4035,6 +4035,7 @@ small.verified-name {
   grid-area: calendar;
   position: sticky;
   top: 88px;
+  z-index: 4;
 }
 
 .training-calendar-card {
