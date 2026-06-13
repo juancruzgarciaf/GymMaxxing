@@ -1,4 +1,5 @@
 import type { RoutinePostSummary } from "../types";
+import ProPlanBadge from "./ProPlanBadge";
 import VerifiedBadge from "./VerifiedBadge";
 
 type RoutinePostCardProps = {
@@ -44,6 +45,7 @@ function RoutinePostCard({ item, onOpenProfile, onOpenRoutine }: RoutinePostCard
           <strong className="verified-name">
             {item.username}
             <VerifiedBadge tipoUsuario={item.tipo_usuario} />
+            <ProPlanBadge plan={item.pro_plan} />
           </strong>
           <small>{formatDate(item.fecha_actividad)}</small>
         </span>

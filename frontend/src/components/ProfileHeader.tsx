@@ -1,4 +1,5 @@
 import type { PerfilUsuario } from "../types";
+import ProPlanBadge from "./ProPlanBadge";
 import VerifiedBadge from "./VerifiedBadge";
 
 type ProfileHeaderProps = {
@@ -49,6 +50,7 @@ function ProfileHeader({
             <h1 className="verified-name">
               {displayName}
               <VerifiedBadge tipoUsuario={perfil.usuario.tipo_usuario} className="large" />
+              <ProPlanBadge plan={perfil.usuario.pro_plan} className="large" />
             </h1>
             {isGym ? (
               <p className="profile-real-name verified-name">

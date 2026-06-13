@@ -16,6 +16,7 @@ type UsuarioRow = {
   objetivo_entrenamiento: string | null;
   tipo_usuario: string;
   foto_perfil_url: string | null;
+  pro_plan?: "monthly" | "yearly" | "lifetime" | null;
 };
 
 type BasicUserRow = {
@@ -24,6 +25,7 @@ type BasicUserRow = {
   email: string;
   tipo_usuario: string;
   foto_perfil_url: string | null;
+  pro_plan?: "monthly" | "yearly" | "lifetime" | null;
 };
 
 type GymDaySchedule = {
@@ -111,6 +113,7 @@ type SessionSummaryRow = {
   username: string;
   tipo_usuario: string;
   foto_perfil_url: string | null;
+  pro_plan: "monthly" | "yearly" | "lifetime" | null;
   rutina_id: number | null;
   titulo: string;
   descripcion: string | null;
@@ -140,6 +143,7 @@ type RoutinePostSummaryRow = {
   username: string;
   tipo_usuario: string;
   foto_perfil_url: string | null;
+  pro_plan: "monthly" | "yearly" | "lifetime" | null;
   titulo: string;
   descripcion: string | null;
   duracion_estimada: number | null;
@@ -171,6 +175,14 @@ const sanitizeUser = (user: UsuarioRow | BasicUserRow) => {
   const { password: _password, ...safeUser } = user as UsuarioRow;
   return safeUser;
 };
+
+const ACTIVE_PRO_PLAN_SQL = `(SELECT s.plan
+  FROM suscripcion s
+  WHERE s.usuario_id = u.id
+    AND s.estado = 'active'
+    AND (s.plan = 'lifetime' OR s.fecha_fin IS NULL OR s.fecha_fin > NOW())
+  ORDER BY s.fecha_creacion DESC
+  LIMIT 1)`;
 
 let trophyTablesReady = false;
 let gymProfileTableReady = false;
@@ -532,6 +544,7 @@ const getRoutinePostSummaries = async (
             u.username,
             u.tipo_usuario,
             u.foto_perfil_url,
+            ${ACTIVE_PRO_PLAN_SQL} AS pro_plan,
             r.nombre AS titulo,
             r.descripcion,
             r.duracion_estimada,
@@ -608,6 +621,7 @@ const getSessionSummaries = async (
             u.username,
             u.tipo_usuario,
             u.foto_perfil_url,
+            ${ACTIVE_PRO_PLAN_SQL} AS pro_plan,
             se.rutina_id,
             COALESCE(se.nombre_rutina_snapshot, r.nombre, se.descripcion, 'Entrenamiento') AS titulo,
             se.descripcion,
@@ -1112,6 +1126,7 @@ export const getUserProfile = async (
     }
   >(
     `SELECT u.*,
+            ${ACTIVE_PRO_PLAN_SQL} AS pro_plan,
             (
               SELECT COUNT(*)::int
               FROM seguimientousuario su

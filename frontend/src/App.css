@@ -3364,6 +3364,47 @@ small.verified-name {
   height: 15px;
 }
 
+.pro-plan-badge-title {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 9px;
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 12px rgba(5, 12, 22, 0.18);
+}
+
+.pro-plan-badge-title.monthly {
+  border-color: #e6cc55;
+  background: #594c10;
+  color: #ffe568 !important;
+}
+
+.pro-plan-badge-title.yearly {
+  border-color: #38a8ef;
+  background: #153f60;
+  color: #55bdff !important;
+}
+
+.pro-plan-badge-title.lifetime {
+  border-color: #e052d1;
+  background: #63175f;
+  color: #ff78ed !important;
+}
+
+.pro-plan-badge-title.large {
+  min-height: 30px;
+  padding: 5px 12px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
 .profile-banner {
   display: grid;
   grid-template-columns: auto 1fr auto;

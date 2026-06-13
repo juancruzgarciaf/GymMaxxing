@@ -1,3 +1,5 @@
+export type ProPlanId = "monthly" | "yearly" | "lifetime";
+
 export type Usuario = {
   id: number;
   username: string;
@@ -12,6 +14,7 @@ export type Usuario = {
   nivel_entrenamiento?: string | null;
   objetivo_entrenamiento?: string | null;
   foto_perfil_url?: string | null;
+  pro_plan?: ProPlanId | null;
 };
 
 export type GymDaySchedule = {
@@ -56,6 +59,7 @@ export type EntrenamientoResumen = {
   username: string;
   tipo_usuario?: string;
   foto_perfil_url?: string | null;
+  pro_plan?: ProPlanId | null;
   rutina_id: number | null;
   titulo: string;
   descripcion: string | null;
@@ -86,6 +90,7 @@ export type RoutinePostSummary = {
   username: string;
   tipo_usuario: string;
   foto_perfil_url?: string | null;
+  pro_plan?: ProPlanId | null;
   titulo: string;
   descripcion: string | null;
   duracion_estimada: number | null;

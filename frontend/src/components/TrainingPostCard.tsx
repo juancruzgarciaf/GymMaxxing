@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DESCRIPTION_MAX_LENGTH, TITLE_MAX_LENGTH, limitDescription, limitTitle } from "../lib/textLimits";
 import type { EntrenamientoResumen, SessionComment } from "../types";
+import ProPlanBadge from "./ProPlanBadge";
 import VerifiedBadge from "./VerifiedBadge";
 
 type TrainingPostCardProps = {
@@ -517,6 +518,7 @@ function TrainingPostCard({
           <strong className="verified-name">
             {displayItem.username}
             <VerifiedBadge tipoUsuario={displayItem.tipo_usuario} />
+            <ProPlanBadge plan={displayItem.pro_plan} />
           </strong>
           <small>{formatDate(displayItem.fecha_actividad)}</small>
         </span>
