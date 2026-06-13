@@ -453,14 +453,21 @@ export const cancelUserSubscription = async (userId: number) => {
   if (subscription.plan === "lifetime") {
     throw new Error("El plan Para Siempre no es una suscripcion recurrente");
   }
-  if (!subscription.mp_preapproval_id) {
+  const mockPayment = isMockPaymentEnabled();
+
+  if (!mockPayment && !subscription.mp_preapproval_id) {
     throw new Error("La suscripcion no tiene un identificador de Mercado Pago");
   }
 
-  await mercadoPagoRequest(`/preapproval/${encodeURIComponent(subscription.mp_preapproval_id)}`, {
-    method: "PUT",
-    body: { status: "canceled" },
-  });
+  if (!mockPayment) {
+    await mercadoPagoRequest(
+      `/preapproval/${encodeURIComponent(subscription.mp_preapproval_id!)}`,
+      {
+        method: "PUT",
+        body: { status: "cancelled" },
+      },
+    );
+  }
 
   await pool.query(
     `UPDATE suscripcion
