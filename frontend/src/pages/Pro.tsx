@@ -87,8 +87,12 @@ function CheckIcon() {
 function Pro({ onClose, onExplorePro, authToken, onAuthExpired }: ProProps) {
   const [selectedPlanId, setSelectedPlanId] = useState<PlanId>("yearly");
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"error" | "success">("error");
   const [loading, setLoading] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [isPro, setIsPro] = useState(false);
+  const [activePlan, setActivePlan] = useState<PlanId | null>(null);
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? plans[1];
 
@@ -108,9 +112,13 @@ function Pro({ onClose, onExplorePro, authToken, onAuthExpired }: ProProps) {
           return;
         }
 
-        const data = (await response.json()) as { isPro?: boolean };
+const data = (await response.json()) as {
+          isPro?: boolean;
+          subscription?: { plan?: PlanId } | null;
+        };
         if (!cancelled) {
           setIsPro(Boolean(data.isPro));
+          setActivePlan(data.subscription?.plan ?? null);
         }
       } catch {
         // El checkout sigue disponible aunque falle esta consulta informativa.
@@ -127,6 +135,7 @@ function Pro({ onClose, onExplorePro, authToken, onAuthExpired }: ProProps) {
     const paymentWindow = window.open("about:blank", "_blank");
     setLoading(true);
     setMessage("");
+    setMessageTone("error");
 
     try {
       const response = await fetch("http://localhost:3000/suscripciones/checkout", {
@@ -154,6 +163,8 @@ function Pro({ onClose, onExplorePro, authToken, onAuthExpired }: ProProps) {
 
       if (data.mockActivated) {
         setIsPro(true);
+        setActivePlan(plan.id);
+        setMessageTone("success");
         setMessage("Plan PRO activado en modo demostracion.");
         if (paymentWindow) {
           paymentWindow.opener = null;
@@ -168,12 +179,43 @@ function Pro({ onClose, onExplorePro, authToken, onAuthExpired }: ProProps) {
       window.location.assign(data.checkoutUrl);
     } catch (error) {
       paymentWindow?.close();
+      setMessageTone("error");
       setMessage(error instanceof Error ? error.message : "No se pudo iniciar el pago");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleCancelSubscription = async () => {
+    try {
+      setCancelLoading(true);
+      setMessage("");
+      const response = await fetch("http://localhost:3000/suscripciones/cancel", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const data = (await response.json()) as { error?: string };
+
+      if (response.status === 401) {
+        onAuthExpired();
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(data.error || "No se pudo dar de baja el plan");
+      }
+
+      setIsPro(false);
+      setActivePlan(null);
+      setCancelConfirmOpen(false);
+      setMessageTone("success");
+      setMessage("Tu suscripcion PRO fue dada de baja correctamente.");
+    } catch (error) {
+      setMessageTone("error");
+      setMessage(error instanceof Error ? error.message : "No se pudo dar de baja el plan");
+    } finally {
+      setCancelLoading(false);
+    }
+  };
   return (
     <main className="page-shell pro-page-shell">
       <section className="pro-hero">
@@ -255,6 +297,38 @@ function Pro({ onClose, onExplorePro, authToken, onAuthExpired }: ProProps) {
               <button type="button" className="btn secondary pro-later-button" onClick={onClose}>
                 Volver al inicio
               </button>
+              {activePlan !== "lifetime" ? (
+                <div className="pro-cancel-subscription">
+                  {!cancelConfirmOpen ? (
+                    <button
+                      type="button"
+                      className="pro-cancel-link"
+                      onClick={() => {
+                        setCancelConfirmOpen(true);
+                        setMessage("");
+                      }}
+                    >
+                      Dar de baja el plan PRO
+                    </button>
+                  ) : (
+                    <div className="pro-cancel-confirm" role="alert">
+                      <strong>¿Dar de baja tu suscripcion?</strong>
+                      <p>Perderás el acceso a las funciones PRO y volverás al plan gratuito.</p>
+                      {message ? <p className="status error">{message}</p> : null}
+                      <div>
+                        <button type="button" className="btn secondary" onClick={() => setCancelConfirmOpen(false)} disabled={cancelLoading}>
+                          Mantener PRO
+                        </button>
+                        <button type="button" className="btn danger" onClick={() => void handleCancelSubscription()} disabled={cancelLoading}>
+                          {cancelLoading ? "Procesando..." : "Confirmar baja"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="pro-cancel-note">El plan Para Siempre es una compra unica y no requiere cancelacion.</p>
+              )}
             </div>
           ) : (
             <>
@@ -274,6 +348,7 @@ function Pro({ onClose, onExplorePro, authToken, onAuthExpired }: ProProps) {
                       onClick={() => {
                         setSelectedPlanId(plan.id);
                         setMessage("");
+                        setMessageTone("error");
                       }}
                       disabled={loading}
                       role="radio"
@@ -295,7 +370,7 @@ function Pro({ onClose, onExplorePro, authToken, onAuthExpired }: ProProps) {
               </div>
 
               {message ? (
-                <p className="status error pro-payment-message" role="alert">
+                <p className={`status ${messageTone} pro-payment-message`} role="alert">
                   {message}
                 </p>
               ) : null}

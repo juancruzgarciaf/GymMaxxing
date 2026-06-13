@@ -6753,3 +6753,73 @@ button.discover-module-card:hover,
   font-weight: 800;
   letter-spacing: 0.02em;
 }
+
+.pro-cancel-subscription {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.pro-cancel-link {
+  border: 0;
+  color: #9bb0c0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.pro-cancel-link:hover {
+  color: #ff9b9b;
+}
+
+.pro-cancel-confirm {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(220, 98, 98, 0.42);
+  border-radius: 14px;
+  background: rgba(220, 98, 98, 0.08);
+  text-align: left;
+}
+
+.pro-cancel-confirm p {
+  margin: 0;
+  color: #a9bdcc;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.pro-cancel-confirm > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pro-cancel-confirm .btn {
+  min-height: 40px;
+}
+
+.pro-cancel-confirm .btn.danger {
+  border-color: #dc6262;
+  background: #dc6262;
+  color: #fff;
+}
+
+:root[data-theme="light"] .pro-cancel-confirm {
+  border-color: #f0aaaa;
+  background: #fff4f4;
+}
+
+:root[data-theme="light"] .pro-cancel-confirm p,
+:root[data-theme="light"] .pro-cancel-link {
+  color: #6b7280;
+}
+
+@media (max-width: 420px) {
+  .pro-cancel-confirm > div {
+    grid-template-columns: 1fr;
+  }
+}

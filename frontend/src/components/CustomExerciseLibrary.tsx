@@ -17,11 +17,35 @@ type ResponseData = {
   isPro: boolean;
 };
 
+const DISCIPLINE_OPTIONS = ["Musculacion", "Calistenia", "Cardio", "Movilidad", "Funcional", "Otro"];
+const MUSCLE_GROUP_OPTIONS = [
+  "Pecho",
+  "Espalda",
+  "Piernas",
+  "Hombros",
+  "Biceps",
+  "Triceps",
+  "Brazos",
+  "Core",
+  "Gluteos",
+  "Full body",
+  "Cardio",
+  "Otro",
+];
+
 const API = "http://localhost:3000";
+const EMPTY_FORM = {
+  nombre: "",
+  grupo_muscular: "",
+  tipo_disciplina: "Musculacion",
+  descripcion: "",
+};
 
 function CustomExerciseLibrary({ authToken, onAuthExpired }: { authToken: string; onAuthExpired: () => void }) {
   const [data, setData] = useState<ResponseData>({ items: [], count: 0, limit: 10, isPro: false });
-  const [form, setForm] = useState({ nombre: "", grupo_muscular: "", tipo_disciplina: "Musculacion", descripcion: "" });
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [customDiscipline, setCustomDiscipline] = useState("");
+  const [customMuscleGroup, setCustomMuscleGroup] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -35,22 +59,32 @@ function CustomExerciseLibrary({ authToken, onAuthExpired }: { authToken: string
   useEffect(() => { void load(); }, [authToken]);
 
   const create = async () => {
+    const payloadForm = {
+      ...form,
+      grupo_muscular: form.grupo_muscular === "Otro" ? customMuscleGroup.trim() : form.grupo_muscular,
+      tipo_disciplina: form.tipo_disciplina === "Otro" ? customDiscipline.trim() : form.tipo_disciplina,
+    };
+
     try {
       setSaving(true);
       setError("");
       const response = await fetch(`${API}/ejercicios`, {
         method: "POST",
         headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payloadForm),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "No se pudo crear el ejercicio");
-      setForm({ nombre: "", grupo_muscular: "", tipo_disciplina: "Musculacion", descripcion: "" });
+      setForm(EMPTY_FORM);
+      setCustomDiscipline("");
+      setCustomMuscleGroup("");
       await load();
       notifyCustomExercisesUpdated();
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "No se pudo crear el ejercicio");
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remove = async (id: number) => {
@@ -62,6 +96,9 @@ function CustomExerciseLibrary({ authToken, onAuthExpired }: { authToken: string
   };
 
   const reachedLimit = data.limit != null && data.count >= data.limit;
+  const validMuscleGroup = form.grupo_muscular && (form.grupo_muscular !== "Otro" || customMuscleGroup.trim());
+  const validDiscipline = form.tipo_disciplina !== "Otro" || customDiscipline.trim();
+
   return (
     <section className="custom-exercise-library">
       <header>
@@ -72,11 +109,40 @@ function CustomExerciseLibrary({ authToken, onAuthExpired }: { authToken: string
         </div>
       </header>
       <div className="custom-exercise-form">
-        <input className="field" placeholder="Nombre del ejercicio" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
-        <input className="field" placeholder="Grupo muscular" value={form.grupo_muscular} onChange={(e) => setForm({ ...form, grupo_muscular: e.target.value })} />
-        <input className="field" placeholder="Disciplina" value={form.tipo_disciplina} onChange={(e) => setForm({ ...form, tipo_disciplina: e.target.value })} />
-        <input className="field" placeholder="Descripcion opcional" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
-        <button type="button" className="btn" disabled={saving || reachedLimit || !form.nombre.trim() || !form.grupo_muscular.trim()} onClick={() => void create()}>
+        <label>
+          <span>Nombre</span>
+          <input className="field" placeholder="Ej: Press unilateral" value={form.nombre} onChange={(event) => setForm({ ...form, nombre: event.target.value })} />
+        </label>
+        <label>
+          <span>Disciplina</span>
+          <select className="field" value={form.tipo_disciplina} onChange={(event) => setForm({ ...form, tipo_disciplina: event.target.value })}>
+            {DISCIPLINE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
+        </label>
+        {form.tipo_disciplina === "Otro" ? (
+          <label>
+            <span>Nueva disciplina</span>
+            <input className="field" placeholder="Escribe la disciplina" value={customDiscipline} onChange={(event) => setCustomDiscipline(event.target.value)} />
+          </label>
+        ) : null}
+        <label>
+          <span>Grupo muscular</span>
+          <select className="field" value={form.grupo_muscular} onChange={(event) => setForm({ ...form, grupo_muscular: event.target.value })}>
+            <option value="">Selecciona una opcion</option>
+            {MUSCLE_GROUP_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
+        </label>
+        {form.grupo_muscular === "Otro" ? (
+          <label>
+            <span>Nuevo grupo muscular</span>
+            <input className="field" placeholder="Escribe el grupo muscular" value={customMuscleGroup} onChange={(event) => setCustomMuscleGroup(event.target.value)} />
+          </label>
+        ) : null}
+        <label className="custom-exercise-description">
+          <span>Descripcion</span>
+          <input className="field" placeholder="Descripcion opcional" value={form.descripcion} onChange={(event) => setForm({ ...form, descripcion: event.target.value })} />
+        </label>
+        <button type="button" className="btn" disabled={saving || reachedLimit || !form.nombre.trim() || !validMuscleGroup || !validDiscipline} onClick={() => void create()}>
           {saving ? "Creando..." : "Crear ejercicio"}
         </button>
       </div>
