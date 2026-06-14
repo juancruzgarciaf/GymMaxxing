@@ -3148,6 +3148,20 @@ h2 {
   gap: 12px;
 }
 
+.search-empty-illustration {
+  width: min(720px, 100%);
+  justify-self: center;
+  overflow: hidden;
+  border-radius: 0;
+  background: transparent;
+}
+
+.search-empty-illustration img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .feed-list,
 .user-list {
   display: grid;

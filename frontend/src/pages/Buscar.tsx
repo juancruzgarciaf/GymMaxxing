@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { SearchUser, Usuario } from "../types";
 import VerifiedBadge from "../components/VerifiedBadge";
+import searchEmptyBodybuilders from "../assets/search-empty-bodybuilders.png";
 
 type BuscarProps = {
   usuario: Usuario;
@@ -23,6 +24,7 @@ function Buscar({
 }: BuscarProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const isSearchEmpty = query.trim().length === 0;
 
   const buscarUsuarios = async () => {
     const cleanQuery = query.trim();
@@ -107,6 +109,12 @@ function Buscar({
           {loading ? "Buscando..." : "Buscar"}
         </button>
       </section>
+
+      {isSearchEmpty ? (
+        <section className="search-empty-illustration" aria-hidden="true">
+          <img src={searchEmptyBodybuilders} alt="" />
+        </section>
+      ) : null}
 
       {error ? <div className="status error">{error}</div> : null}
 
