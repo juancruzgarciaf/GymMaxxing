@@ -63,6 +63,7 @@ export type EntrenamientoResumen = {
   rutina_id: number | null;
   titulo: string;
   descripcion: string | null;
+  imagen_url?: string | null;
   fecha_inicio: string | null;
   fecha_fin: string | null;
   fecha_actividad: string | null;
@@ -133,6 +134,7 @@ export type SerieSesionDetalle = {
   descripcion: string | null;
   grupo_muscular: string | null;
   tipo_disciplina: string | null;
+  imagen_url?: string | null;
 };
 
 export type RoutineSummary = {

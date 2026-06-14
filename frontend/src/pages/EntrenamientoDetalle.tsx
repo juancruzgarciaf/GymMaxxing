@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { EntrenamientoResumen, SerieSesionDetalle } from "../types";
 import VerifiedBadge from "../components/VerifiedBadge";
+import { resolveMediaUrl } from "../lib/media";
 
 type EntrenamientoDetalleProps = {
   entrenamiento: EntrenamientoResumen;
@@ -226,6 +227,7 @@ function EntrenamientoDetalle({
         descripcion: string | null;
         grupo_muscular: string | null;
         tipo_disciplina: string | null;
+        imagen_url: string | null;
         nota: string | null;
         orden_ejercicio: number;
         series: SerieSesionDetalle[];
@@ -248,6 +250,7 @@ function EntrenamientoDetalle({
         descripcion: serie.descripcion,
         grupo_muscular: serie.grupo_muscular,
         tipo_disciplina: serie.tipo_disciplina,
+        imagen_url: serie.imagen_url ?? null,
         nota: serie.nota_ejercicio ?? null,
         orden_ejercicio: serie.orden_ejercicio ?? 9999,
         series: [serie],
@@ -286,7 +289,11 @@ function EntrenamientoDetalle({
           className="profile-chip detail-author"
           onClick={() => onOpenProfile(entrenamiento.username)}
         >
-          <span className="avatar-circle">{entrenamiento.username.slice(0, 1).toUpperCase()}</span>
+          <span className="avatar-circle">
+            {resolveMediaUrl(entrenamiento.foto_perfil_url) ? (
+              <img src={resolveMediaUrl(entrenamiento.foto_perfil_url) ?? ""} alt="" />
+            ) : entrenamiento.username.slice(0, 1).toUpperCase()}
+          </span>
           <span>
             <strong className="verified-name">
               {entrenamiento.username}
@@ -333,6 +340,14 @@ function EntrenamientoDetalle({
         </div>
       </section>
 
+      {resolveMediaUrl(entrenamiento.imagen_url) ? (
+        <img
+          className="training-detail-cover"
+          src={resolveMediaUrl(entrenamiento.imagen_url) ?? ""}
+          alt={`Imagen de ${entrenamiento.titulo}`}
+        />
+      ) : null}
+
       {loading ? <div className="status">Cargando detalle del entrenamiento...</div> : null}
       {error ? <div className="status error">{error}</div> : null}
 
@@ -351,6 +366,13 @@ function EntrenamientoDetalle({
               return (
               <article key={`${entrenamiento.id_sesion}-${ejercicio.id_ejercicio}`} className="exercise-card readonly detail-exercise-card">
                 <div className="exercise-card-head">
+                  {resolveMediaUrl(ejercicio.imagen_url) ? (
+                    <img
+                      className="detail-exercise-image"
+                      src={resolveMediaUrl(ejercicio.imagen_url) ?? ""}
+                      alt={ejercicio.nombre}
+                    />
+                  ) : null}
                   <div>
                     <h3>{ejercicio.nombre}</h3>
                     <small>

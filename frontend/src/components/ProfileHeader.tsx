@@ -1,4 +1,6 @@
+import { useRef } from "react";
 import type { PerfilUsuario } from "../types";
+import { resolveMediaUrl } from "../lib/media";
 import ProPlanBadge from "./ProPlanBadge";
 import VerifiedBadge from "./VerifiedBadge";
 
@@ -9,6 +11,8 @@ type ProfileHeaderProps = {
   onToggleFollow: () => void | Promise<void>;
   onOpenFollowers: () => void;
   onOpenFollowing: () => void;
+  onSelectPhoto?: (file: File) => void;
+  photoUploading?: boolean;
 };
 
 const formatNumber = (value: number) =>
@@ -26,7 +30,10 @@ function ProfileHeader({
   onToggleFollow,
   onOpenFollowers,
   onOpenFollowing,
+  onSelectPhoto,
+  photoUploading = false,
 }: ProfileHeaderProps) {
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const isGym = perfil.usuario.tipo_usuario.trim().toLowerCase() === "gimnasio";
   const gymProfile = perfil.gimnasio_perfil;
   const realName = perfil.usuario.nombre?.trim();
@@ -39,10 +46,35 @@ function ProfileHeader({
     : perfil.usuario.username;
   const location = [gymProfile?.ciudad, gymProfile?.provincia].filter(Boolean).join(", ");
   const gymInstagram = gymProfile?.instagram?.trim().replace(/^@/, "");
+  const profilePhoto = resolveMediaUrl(perfil.usuario.foto_perfil_url);
 
   return (
     <section className="profile-modern-header">
-      <div className="profile-modern-avatar">{displayName.slice(0, 1).toUpperCase()}</div>
+      <div className="profile-photo-shell">
+        <button
+          type="button"
+          className={`profile-modern-avatar profile-photo-button ${perfil.is_own_profile ? "editable" : ""}`}
+          onClick={() => perfil.is_own_profile && photoInputRef.current?.click()}
+          disabled={!perfil.is_own_profile || photoUploading}
+          aria-label={perfil.is_own_profile ? "Cambiar foto de perfil" : undefined}
+        >
+          {profilePhoto ? <img src={profilePhoto} alt={`Foto de ${displayName}`} /> : displayName.slice(0, 1).toUpperCase()}
+        </button>
+        {perfil.is_own_profile ? (
+          <span className="profile-photo-hint">{photoUploading ? "Subiendo..." : "Cambiar foto"}</span>
+        ) : null}
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) onSelectPhoto?.(file);
+            event.currentTarget.value = "";
+          }}
+        />
+      </div>
 
       <div className="profile-modern-main">
         <div className="profile-modern-topline">

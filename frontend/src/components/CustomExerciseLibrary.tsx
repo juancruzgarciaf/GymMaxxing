@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { notifyCustomExercisesUpdated } from "../lib/customExercises";
+import ExerciseMedia from "./ExerciseMedia";
 import "./CustomExerciseLibrary.css";
 
 type Exercise = {
@@ -8,6 +9,7 @@ type Exercise = {
   descripcion: string | null;
   grupo_muscular: string;
   tipo_disciplina: string;
+  imagen_url?: string | null;
 };
 
 type ResponseData = {
@@ -149,7 +151,21 @@ function CustomExerciseLibrary({ authToken, onAuthExpired }: { authToken: string
       {reachedLimit ? <div className="custom-exercise-limit">Llegaste al limite gratuito de 10 ejercicios. PRO permite crear ejercicios ilimitados.</div> : null}
       {error ? <div className="status error">{error}</div> : null}
       <div className="custom-exercise-list">
-        {data.items.map((item) => <article key={item.id_ejercicio}><div><strong>{item.nombre}</strong><span>{item.grupo_muscular} · {item.tipo_disciplina}</span></div><button type="button" onClick={() => void remove(item.id_ejercicio)}>Eliminar</button></article>)}
+        {data.items.map((item) => (
+          <article key={item.id_ejercicio}>
+            <ExerciseMedia
+              exerciseId={item.id_ejercicio}
+              name={item.nombre}
+              imageUrl={item.imagen_url}
+              canUpload
+            />
+            <div>
+              <strong>{item.nombre}</strong>
+              <span>{item.grupo_muscular} · {item.tipo_disciplina}</span>
+            </div>
+            <button type="button" onClick={() => void remove(item.id_ejercicio)}>Eliminar</button>
+          </article>
+        ))}
         {!data.items.length ? <p>Todavia no creaste ejercicios personalizados.</p> : null}
       </div>
     </section>

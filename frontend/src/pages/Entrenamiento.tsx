@@ -8,6 +8,7 @@ import { saveTrainingSeedAsRoutine } from "../lib/trainingTransfer";
 import type { TrainingSeed, TrainingSetType, Usuario } from "../types";
 import TrashIcon from "../components/TrashIcon";
 import DurationInput from "../components/DurationInput";
+import ExerciseMedia from "../components/ExerciseMedia";
 
 type Ejercicio = {
   id_ejercicio: number;
@@ -16,6 +17,8 @@ type Ejercicio = {
   grupo_muscular: string;
   tipo_disciplina: string;
   es_personalizado?: boolean;
+  creador_id?: number | null;
+  imagen_url?: string | null;
 };
 
 type CarpetaRutina = {
@@ -364,6 +367,7 @@ function Entrenamiento({
   const [guardarDescripcion, setGuardarDescripcion] = useState("");
   const [guardarCarpetaId, setGuardarCarpetaId] = useState("");
   const [guardarComoRutina, setGuardarComoRutina] = useState(false);
+  const [guardarImagen, setGuardarImagen] = useState<File | null>(null);
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
   const [activeTrainingHydrated, setActiveTrainingHydrated] = useState(false);
   const [staleTrainingRestore, setStaleTrainingRestore] = useState<RestoredActiveTraining | null>(null);
@@ -803,6 +807,7 @@ function Entrenamiento({
     setGuardarDescripcion("");
     setGuardarCarpetaId("");
     setGuardarComoRutina(false);
+    setGuardarImagen(null);
     setFiltroEquipo("");
     setFiltroMusculo("");
     setBusquedaEjercicio("");
@@ -1620,6 +1625,21 @@ function Entrenamiento({
         throw new Error(await parseError(updateRes, "No se pudo guardar el entrenamiento"));
       }
 
+      if (guardarImagen) {
+        const token = getStoredAuthToken();
+        if (!token) throw new Error("Volvé a iniciar sesión para subir la imagen");
+        const formData = new FormData();
+        formData.append("image", guardarImagen);
+        const imageResponse = await fetch(`${API}/entrenamientos/${sesionActiva.id_sesion}/image`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+        if (!imageResponse.ok) {
+          throw new Error(await parseError(imageResponse, "No se pudo guardar la imagen"));
+        }
+      }
+
       if (guardarComoRutina) {
         const currentSeed = buildCurrentTrainingSeed();
         await saveTrainingSeedAsRoutine(currentSeed, usuario.id, {
@@ -1873,6 +1893,15 @@ function Entrenamiento({
               <small className="field-counter">
                 {guardarDescripcion.length}/{DESCRIPTION_MAX_LENGTH}
               </small>
+              <label className="image-upload-field">
+                <span>Foto del entrenamiento (opcional)</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => setGuardarImagen(event.target.files?.[0] ?? null)}
+                />
+                {guardarImagen ? <small>{guardarImagen.name}</small> : null}
+              </label>
               <select
                 className="field"
                 value={guardarCarpetaId}
@@ -2371,6 +2400,15 @@ function Entrenamiento({
 
                 return (
                   <div key={ejercicio.id_ejercicio} className="library-item">
+                    <ExerciseMedia
+                      exerciseId={ejercicio.id_ejercicio}
+                      name={ejercicio.nombre}
+                      imageUrl={ejercicio.imagen_url}
+                      canUpload={
+                        usuario.email.trim().toLowerCase() === "admin@gmail.com" ||
+                        ejercicio.creador_id === usuario.id
+                      }
+                    />
                     <div>
                       <strong>{ejercicio.nombre}</strong>
                       <small>

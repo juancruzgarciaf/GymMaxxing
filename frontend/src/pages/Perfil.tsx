@@ -167,6 +167,7 @@ function Perfil({
   const [error, setError] = useState("");
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const [trainingSearchQuery, setTrainingSearchQuery] = useState("");
   const [trainingMinDuration, setTrainingMinDuration] = useState("");
   const [trainingMaxDuration, setTrainingMaxDuration] = useState("");
@@ -202,6 +203,41 @@ function Perfil({
     !form.nacionalidad || COUNTRY_OPTIONS.includes(form.nacionalidad);
   const currentTrainingLevelIsKnown =
     !form.nivel_entrenamiento || TRAINING_LEVEL_OPTIONS.includes(form.nivel_entrenamiento);
+
+  const handleProfilePhoto = async (file: File) => {
+    if (!perfil?.is_own_profile || !authToken) return;
+
+    try {
+      setPhotoUploading(true);
+      setError("");
+      const formData = new FormData();
+      formData.append("image", file);
+      const response = await fetch(`${API}/users/${perfil.usuario.id}/photo`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}` },
+        body: formData,
+      });
+      const data = (await response.json()) as { foto_perfil_url?: string; error?: string };
+      if (response.status === 401) {
+        onAuthExpired();
+        return;
+      }
+      if (!response.ok) throw new Error(data.error || "No se pudo subir la foto");
+
+      const fotoPerfilUrl = data.foto_perfil_url ?? null;
+      setPerfil((current) =>
+        current
+          ? { ...current, usuario: { ...current.usuario, foto_perfil_url: fotoPerfilUrl } }
+          : current,
+      );
+      setForm((current) => ({ ...current, foto_perfil_url: fotoPerfilUrl ?? "" }));
+      onUserUpdated({ ...usuario, foto_perfil_url: fotoPerfilUrl });
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "No se pudo subir la foto");
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
 
   const cargarPerfil = async () => {
     try {
@@ -748,6 +784,8 @@ function Perfil({
             onToggleFollow={toggleFollow}
             onOpenFollowers={() => abrirModalSocial("followers")}
             onOpenFollowing={() => abrirModalSocial("following")}
+            onSelectPhoto={(file) => void handleProfilePhoto(file)}
+            photoUploading={photoUploading}
           />
 
           {perfil.is_own_profile && isPro && !profileIsGym ? (
@@ -879,12 +917,6 @@ function Perfil({
                   value={form.objetivo_entrenamiento}
                   onChange={(event) => setForm((prev) => ({ ...prev, objetivo_entrenamiento: event.target.value }))}
                 />
-                <input
-                  className="field"
-                  placeholder="URL de foto de perfil"
-                  value={form.foto_perfil_url}
-                  onChange={(event) => setForm((prev) => ({ ...prev, foto_perfil_url: event.target.value }))}
-                />
               </div>
               <div className="actions-row">
                 <button type="button" className="btn" disabled={saving} onClick={() => void handleGuardarPerfil()}>
@@ -914,12 +946,6 @@ function Perfil({
                     placeholder="Email"
                     value={form.email}
                     onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-                  />
-                  <input
-                    className="field"
-                    placeholder="URL de foto de perfil"
-                    value={form.foto_perfil_url}
-                    onChange={(event) => setForm((prev) => ({ ...prev, foto_perfil_url: event.target.value }))}
                   />
                   <input
                     className="field"

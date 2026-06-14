@@ -1,6 +1,7 @@
 import type { RoutinePostSummary } from "../types";
 import ProPlanBadge from "./ProPlanBadge";
 import VerifiedBadge from "./VerifiedBadge";
+import { resolveMediaUrl } from "../lib/media";
 
 type RoutinePostCardProps = {
   item: RoutinePostSummary;
@@ -40,7 +41,11 @@ function RoutinePostCard({ item, onOpenProfile, onOpenRoutine }: RoutinePostCard
         onClick={() => onOpenProfile?.(item.username)}
         disabled={!onOpenProfile}
       >
-        <span className="avatar-circle">{item.username.slice(0, 1).toUpperCase()}</span>
+        <span className="avatar-circle">
+          {resolveMediaUrl(item.foto_perfil_url) ? (
+            <img src={resolveMediaUrl(item.foto_perfil_url) ?? ""} alt="" />
+          ) : item.username.slice(0, 1).toUpperCase()}
+        </span>
         <span>
           <strong className="verified-name">
             {item.username}

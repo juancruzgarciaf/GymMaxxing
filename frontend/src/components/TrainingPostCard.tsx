@@ -3,6 +3,7 @@ import { DESCRIPTION_MAX_LENGTH, TITLE_MAX_LENGTH, limitDescription, limitTitle 
 import type { EntrenamientoResumen, SessionComment } from "../types";
 import ProPlanBadge from "./ProPlanBadge";
 import VerifiedBadge from "./VerifiedBadge";
+import { resolveMediaUrl } from "../lib/media";
 
 type TrainingPostCardProps = {
   item: EntrenamientoResumen;
@@ -16,6 +17,17 @@ type TrainingPostCardProps = {
 
 const API = "http://localhost:3000";
 const TRAINING_DELETED_EVENT = "gymmaxxing:training-deleted";
+const AUTH_STORAGE_KEY = "gymmaxxing_auth_v1";
+
+const getStoredAuthToken = () => {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    return (JSON.parse(raw) as { token?: string }).token ?? null;
+  } catch {
+    return null;
+  }
+};
 
 const formatDate = (value: string | null) => {
   if (!value) {
@@ -174,6 +186,7 @@ function TrainingPostCard({
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editTitle, setEditTitle] = useState(limitTitle(item.titulo));
   const [editDescription, setEditDescription] = useState(item.descripcion ?? "");
+  const [editImage, setEditImage] = useState<File | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletingTraining, setDeletingTraining] = useState(false);
@@ -201,6 +214,7 @@ function TrainingPostCard({
     setEditModalOpen(false);
     setEditTitle(limitTitle(item.titulo));
     setEditDescription(item.descripcion ?? "");
+    setEditImage(null);
     setSavingEdit(false);
     setDeleteModalOpen(false);
     setDeletingTraining(false);
@@ -238,6 +252,7 @@ function TrainingPostCard({
   const openEditModal = () => {
     setEditTitle(limitTitle(displayItem.titulo));
     setEditDescription(limitDescription(displayItem.descripcion ?? ""));
+    setEditImage(null);
     setActionsOpen(false);
     setEditModalOpen(true);
   };
@@ -270,10 +285,27 @@ function TrainingPostCard({
         throw new Error(data.error || "No se pudo modificar el entrenamiento");
       }
 
+      let nextImageUrl = displayItem.imagen_url ?? null;
+      if (editImage) {
+        const token = getStoredAuthToken();
+        if (!token) throw new Error("Volvé a iniciar sesión para subir la imagen");
+        const formData = new FormData();
+        formData.append("image", editImage);
+        const imageResponse = await fetch(`${API}/entrenamientos/${displayItem.id_sesion}/image`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+        const imageData = (await imageResponse.json()) as { imagen_url?: string; error?: string };
+        if (!imageResponse.ok) throw new Error(imageData.error || "No se pudo guardar la imagen");
+        nextImageUrl = imageData.imagen_url ?? null;
+      }
+
       const updated = {
         ...displayItem,
         titulo: data.nombre_rutina_snapshot ?? nextTitle,
         descripcion: data.descripcion ?? null,
+        imagen_url: nextImageUrl,
       };
       setDisplayItem(updated);
       onTrainingUpdated?.(updated);
@@ -513,7 +545,11 @@ function TrainingPostCard({
         onClick={() => onOpenProfile?.(displayItem.username)}
         disabled={!onOpenProfile}
       >
-        <span className="avatar-circle">{displayItem.username.slice(0, 1).toUpperCase()}</span>
+        <span className="avatar-circle">
+          {resolveMediaUrl(displayItem.foto_perfil_url) ? (
+            <img src={resolveMediaUrl(displayItem.foto_perfil_url) ?? ""} alt="" />
+          ) : displayItem.username.slice(0, 1).toUpperCase()}
+        </span>
         <span>
           <strong className="verified-name">
             {displayItem.username}
@@ -530,6 +566,14 @@ function TrainingPostCard({
           <p className="feed-description">{displayItem.descripcion || "Entrenamiento finalizado"}</p>
         </div>
       </div>
+
+      {resolveMediaUrl(displayItem.imagen_url) ? (
+        <img
+          className="training-cover-image"
+          src={resolveMediaUrl(displayItem.imagen_url) ?? ""}
+          alt={`Imagen de ${displayItem.titulo}`}
+        />
+      ) : null}
 
       <div className="metrics-row">
         <div className="metric-box">
@@ -805,6 +849,15 @@ function TrainingPostCard({
               <small className="field-counter">
                 {editDescription.length}/{DESCRIPTION_MAX_LENGTH}
               </small>
+              <label className="image-upload-field">
+                <span>Foto del entrenamiento (opcional)</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => setEditImage(event.target.files?.[0] ?? null)}
+                />
+                {editImage ? <small>{editImage.name}</small> : null}
+              </label>
             </div>
             <div className="modal-actions">
               <button

@@ -12,6 +12,7 @@ import type { GeminiGeneratedRoutineResponse, TrainingSeed, Usuario } from "../t
 import TrashIcon from "../components/TrashIcon";
 import DurationInput from "../components/DurationInput";
 import GeminiRoutinePanel from "../components/GeminiRoutinePanel";
+import ExerciseMedia from "../components/ExerciseMedia";
 
 type Rutina = {
   id_rutina: number;
@@ -38,6 +39,8 @@ type Ejercicio = {
   grupo_muscular: string;
   tipo_disciplina: string;
   es_personalizado?: boolean;
+  creador_id?: number | null;
+  imagen_url?: string | null;
 };
 
 type RutinaEjercicio = {
@@ -2031,6 +2034,15 @@ function Rutinas({
 
                 return (
                   <div key={ejercicio.id_ejercicio} className="library-item">
+                    <ExerciseMedia
+                      exerciseId={ejercicio.id_ejercicio}
+                      name={ejercicio.nombre}
+                      imageUrl={ejercicio.imagen_url}
+                      canUpload={
+                        usuario.email.trim().toLowerCase() === "admin@gmail.com" ||
+                        ejercicio.creador_id === usuario.id
+                      }
+                    />
                     <div>
                       <strong>{ejercicio.nombre}</strong>
                       <small>
