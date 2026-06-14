@@ -15,6 +15,7 @@ type SesionEntrenamientoRow = {
   duracion_segundos: number | null;
   volumen_total: number | null;
   nombre_rutina_snapshot: string | null;
+  imagen_url: string | null;
 };
 
 type SessionInteractionSummaryRow = {
@@ -531,6 +532,7 @@ export const getSeriesDeSesion = async (sesion_id: string) => {
             e.descripcion,
             e.grupo_muscular,
             e.tipo_disciplina,
+            e.imagen_url,
             s.nota_ejercicio,
             COALESCE(
               ARRAY(

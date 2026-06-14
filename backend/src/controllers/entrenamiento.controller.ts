@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import * as entrenamientoService from "../services/entrenamiento.service";
 import { getUserRoleById } from "../services/user.service";
+import { pool } from "../db";
+import { uploadedFileUrl } from "../middleware/upload.middleware";
 
 /*
   Este controller maneja lo que pasa mientras una persona entrena:
@@ -116,6 +118,37 @@ export const updateSesionEntrenamiento = async (req: Request, res: Response) => 
     return res.status(500).json({
       error: "Error actualizando sesión",
     });
+  }
+};
+
+export const uploadTrainingImage = async (req: Request, res: Response) => {
+  try {
+    const sessionId = Number(req.params.id);
+    if (!Number.isInteger(sessionId) || !req.authUser) {
+      return res.status(400).json({ error: "Sesion invalida" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "Selecciona una imagen" });
+    }
+
+    const imageUrl = uploadedFileUrl("trainings", req.file.filename);
+    const result = await pool.query(
+      `UPDATE sesionentrenamiento
+       SET imagen_url = $3
+       WHERE id_sesion = $1 AND usuario_id = $2
+       RETURNING *`,
+      [sessionId, req.authUser.id, imageUrl],
+    );
+
+    if (result.rowCount !== 1) {
+      return res.status(404).json({ error: "Entrenamiento no encontrado" });
+    }
+
+    return res.json(result.rows[0]);
+  } catch (error) {
+    console.error("ERROR UPLOAD TRAINING IMAGE:", error);
+    return res.status(500).json({ error: "No se pudo guardar la imagen" });
   }
 };
 

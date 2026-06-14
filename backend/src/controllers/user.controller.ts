@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import * as userService from "../services/user.service";
 import { USERNAME_MAX_LENGTH } from "../utils/textLimits";
 import { isUserPro } from "../services/subscription.service";
+import { pool } from "../db";
+import { uploadedFileUrl } from "../middleware/upload.middleware";
 
 /*
   Este controller se encarga del CRUD más básico de usuarios.
@@ -125,6 +127,34 @@ export const updateUser = async (req: Request, res: Response) => {
     res.status(500).json({
       error: "Error actualizando usuario",
     });
+  }
+};
+
+export const uploadProfilePhoto = async (req: Request, res: Response) => {
+  try {
+    const userId = Number(req.params.id);
+
+    if (!Number.isInteger(userId) || !req.authUser || req.authUser.id !== userId) {
+      return res.status(403).json({ error: "Solo podes cambiar tu propia foto" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "Selecciona una imagen" });
+    }
+
+    const photoUrl = uploadedFileUrl("profiles", req.file.filename);
+    const result = await pool.query(
+      `UPDATE usuario
+       SET foto_perfil_url = $2
+       WHERE id = $1
+       RETURNING id, username, foto_perfil_url`,
+      [userId, photoUrl],
+    );
+
+    return res.json(result.rows[0]);
+  } catch (error) {
+    console.error("ERROR UPLOAD PROFILE PHOTO:", error);
+    return res.status(500).json({ error: "No se pudo guardar la foto de perfil" });
   }
 };
 

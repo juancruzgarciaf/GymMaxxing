@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { pool } from "../db";
 import { isUserPro } from "../services/subscription.service";
+import { uploadedFileUrl } from "../middleware/upload.middleware";
 
 export const getEjercicios = async (req: Request, res: Response) => {
   try {
@@ -117,5 +118,52 @@ export const borrarEjercicioPersonalizado = async (
     return res.status(409).json({
       error: "No se puede borrar un ejercicio que ya esta siendo utilizado",
     });
+  }
+};
+
+export const uploadExerciseImage = async (req: Request, res: Response) => {
+  try {
+    const exerciseId = Number(req.params.id);
+    if (!Number.isInteger(exerciseId) || !req.authUser) {
+      return res.status(400).json({ error: "Ejercicio invalido" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "Selecciona una imagen" });
+    }
+
+    const exerciseResult = await pool.query(
+      `SELECT id_ejercicio, creador_id
+       FROM ejercicio
+       WHERE id_ejercicio = $1`,
+      [exerciseId],
+    );
+    const exercise = exerciseResult.rows[0];
+
+    if (!exercise) {
+      return res.status(404).json({ error: "Ejercicio no encontrado" });
+    }
+
+    const isOfficialAdmin = req.authUser.email.trim().toLowerCase() === "admin@gmail.com";
+    const isCreator = Number(exercise.creador_id) === req.authUser.id;
+    if (!isOfficialAdmin && !isCreator) {
+      return res.status(403).json({
+        error: "Solo el creador o el administrador puede cambiar esta imagen",
+      });
+    }
+
+    const imageUrl = uploadedFileUrl("exercises", req.file.filename);
+    const result = await pool.query(
+      `UPDATE ejercicio
+       SET imagen_url = $2
+       WHERE id_ejercicio = $1
+       RETURNING *`,
+      [exerciseId, imageUrl],
+    );
+
+    return res.json(result.rows[0]);
+  } catch (error) {
+    console.error("ERROR UPLOAD EXERCISE IMAGE:", error);
+    return res.status(500).json({ error: "No se pudo guardar la imagen" });
   }
 };

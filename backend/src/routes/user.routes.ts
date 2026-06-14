@@ -13,11 +13,14 @@ import {
   getFeed,
   searchUserTrainings,
   updateUser,
+  uploadProfilePhoto,
   getUsuarios,
   getUsuarioPorId
 } from "../controllers/user.controller";
+import { createImageUpload } from "../middleware/upload.middleware";
 
 const router = Router();
+const profilePhotoUpload = createImageUpload("profiles");
 
 router.get("/search", searchUsers);
 router.get("/trends", getTrends);
@@ -33,5 +36,6 @@ router.delete("/:id/follow", unfollowUser);
 router.get("/", getUsuarios);
 router.get("/:id", getUsuarioPorId);
 router.put("/:id", requireAuth, updateUser);
+router.post("/:id/photo", requireAuth, profilePhotoUpload.single("image"), uploadProfilePhoto);
 
 export default router;

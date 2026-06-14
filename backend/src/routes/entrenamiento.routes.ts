@@ -16,9 +16,13 @@ import {
   finalizarSesion,
   abandonarSesion,
   deleteSesionEntrenamiento,
+  uploadTrainingImage,
 } from "../controllers/entrenamiento.controller";
+import { requireAuth } from "../middleware/auth.middleware";
+import { createImageUpload } from "../middleware/upload.middleware";
 
 const router = Router();
+const trainingImageUpload = createImageUpload("trainings");
 
 // sesión
 router.post("/start", iniciarSesionEntrenamiento);
@@ -26,6 +30,7 @@ router.get("/sesion/:id", getSesionPorId);
 router.get("/sesion/:id/interacciones", getSessionInteractionSummary);
 router.get("/sesion/:id/comentarios", getComentariosDeSesion);
 router.put("/:id", updateSesionEntrenamiento);
+router.post("/:id/image", requireAuth, trainingImageUpload.single("image"), uploadTrainingImage);
 router.put("/:id/series", replaceSeriesDeSesion);
 router.post("/end", finalizarSesion);
 router.post("/:id/finalizar", finalizarSesion);

@@ -117,6 +117,7 @@ type SessionSummaryRow = {
   rutina_id: number | null;
   titulo: string;
   descripcion: string | null;
+  imagen_url: string | null;
   fecha_inicio: string | null;
   fecha_fin: string | null;
   fecha_actividad: string | null;
@@ -625,6 +626,7 @@ const getSessionSummaries = async (
             se.rutina_id,
             COALESCE(se.nombre_rutina_snapshot, r.nombre, se.descripcion, 'Entrenamiento') AS titulo,
             se.descripcion,
+            se.imagen_url,
             se.fecha_inicio::text,
             se.fecha_fin::text,
             COALESCE(se.fecha_fin, se.fecha_inicio, se.fecha)::text AS fecha_actividad,
