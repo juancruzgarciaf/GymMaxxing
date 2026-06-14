@@ -111,6 +111,9 @@ const mercadoPagoRequest = async (
   };
 
   if (!response.ok) {
+    console.log("MP ERROR STATUS:", response.status);
+    console.log("MP ERROR DATA:", JSON.stringify(data, null, 2));
+  
     throw new Error(data.message || data.error || "Mercado Pago rechazo la solicitud");
   }
 
