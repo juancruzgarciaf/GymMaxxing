@@ -1,5 +1,6 @@
 import type { PerfilUsuario, SuggestedAthlete, Usuario } from "../types";
 import VerifiedBadge from "./VerifiedBadge";
+import UserAvatar from "./UserAvatar";
 
 type ProfileSummaryCardProps = {
   usuario: Usuario;
@@ -30,8 +31,6 @@ type FeedSidebarProps = {
 const formatNumber = (value: number | null | undefined) =>
   new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(value ?? 0);
 
-const getInitial = (username: string) => username.slice(0, 1).toUpperCase();
-
 function ProfileSummaryCard({ usuario, profile, onOpenProfile }: ProfileSummaryCardProps) {
   const profileUser = profile?.usuario ?? usuario;
   const realName = profileUser.nombre?.trim();
@@ -39,7 +38,11 @@ function ProfileSummaryCard({ usuario, profile, onOpenProfile }: ProfileSummaryC
   return (
     <article className="feed-sidebar-card profile-summary-card">
       <div className="profile-summary-head">
-        <div className="profile-summary-avatar">{getInitial(profileUser.username)}</div>
+        <UserAvatar
+          username={profileUser.username}
+          photoUrl={profileUser.foto_perfil_url}
+          className="profile-summary-avatar"
+        />
         <div>
           <h2 className="verified-name">
             {profileUser.username}
@@ -99,7 +102,11 @@ function SuggestedAthletesCard({
               className="suggested-athlete-profile"
               onClick={() => onOpenProfile(athlete.username)}
             >
-              <span className="suggested-athlete-avatar">{getInitial(athlete.username)}</span>
+              <UserAvatar
+                username={athlete.username}
+                photoUrl={athlete.foto_perfil_url}
+                className="suggested-athlete-avatar"
+              />
               <span>
                 <strong className="verified-name">
                   {athlete.username}

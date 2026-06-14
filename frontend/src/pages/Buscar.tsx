@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { SearchUser, Usuario } from "../types";
 import VerifiedBadge from "../components/VerifiedBadge";
+import UserAvatar from "../components/UserAvatar";
 import searchEmptyBodybuilders from "../assets/search-empty-bodybuilders.png";
 
 type BuscarProps = {
@@ -121,15 +122,22 @@ function Buscar({
       <section className="user-list">
         {resultados.map((item) => (
           <article key={item.id} className="user-card">
-            <div>
-              <strong className="verified-name">
-                {item.username}
-                <VerifiedBadge tipoUsuario={item.tipo_usuario} />
-              </strong>
-              <p>{item.email}</p>
-              <small>
-                {item.followers_count} seguidores · {item.following_count} seguidos
-              </small>
+            <div className="user-card-profile">
+              <UserAvatar
+                username={item.username}
+                photoUrl={item.foto_perfil_url}
+                className="search-user-avatar"
+              />
+              <div>
+                <strong className="verified-name">
+                  {item.username}
+                  <VerifiedBadge tipoUsuario={item.tipo_usuario} />
+                </strong>
+                <p>{item.email}</p>
+                <small>
+                  {item.followers_count} seguidores · {item.following_count} seguidos
+                </small>
+              </div>
             </div>
 
             <div className="user-card-actions">

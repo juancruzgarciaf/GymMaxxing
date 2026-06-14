@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { SocialUser } from "../types";
 import VerifiedBadge from "./VerifiedBadge";
+import UserAvatar from "./UserAvatar";
 
 type SocialModalMode = "followers" | "following";
 
@@ -17,8 +18,6 @@ type ProfileSocialModalProps = {
   onFollow: (user: SocialUser) => void | Promise<void>;
   onUnfollow: (user: SocialUser) => void | Promise<void>;
 };
-
-const getInitial = (username: string) => username.slice(0, 1).toUpperCase();
 
 function ProfileSocialModal({
   mode,
@@ -158,7 +157,11 @@ function ProfileSocialModal({
                   }}
                 >
                   <div className="profile-social-user-main">
-                    <span className="profile-social-avatar">{getInitial(user.username)}</span>
+                    <UserAvatar
+                      username={user.username}
+                      photoUrl={user.foto_perfil_url}
+                      className="profile-social-avatar"
+                    />
                     <span>
                       <strong className="verified-name">
                         {user.username}

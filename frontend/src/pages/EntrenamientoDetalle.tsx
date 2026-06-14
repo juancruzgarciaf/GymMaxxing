@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { EntrenamientoResumen, SerieSesionDetalle } from "../types";
 import VerifiedBadge from "../components/VerifiedBadge";
 import { resolveMediaUrl } from "../lib/media";
+import UserAvatar from "../components/UserAvatar";
 
 type EntrenamientoDetalleProps = {
   entrenamiento: EntrenamientoResumen;
@@ -289,11 +290,7 @@ function EntrenamientoDetalle({
           className="profile-chip detail-author"
           onClick={() => onOpenProfile(entrenamiento.username)}
         >
-          <span className="avatar-circle">
-            {resolveMediaUrl(entrenamiento.foto_perfil_url) ? (
-              <img src={resolveMediaUrl(entrenamiento.foto_perfil_url) ?? ""} alt="" />
-            ) : entrenamiento.username.slice(0, 1).toUpperCase()}
-          </span>
+          <UserAvatar username={entrenamiento.username} photoUrl={entrenamiento.foto_perfil_url} />
           <span>
             <strong className="verified-name">
               {entrenamiento.username}

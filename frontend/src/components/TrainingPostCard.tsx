@@ -4,6 +4,7 @@ import type { EntrenamientoResumen, SessionComment } from "../types";
 import ProPlanBadge from "./ProPlanBadge";
 import VerifiedBadge from "./VerifiedBadge";
 import { resolveMediaUrl } from "../lib/media";
+import UserAvatar from "./UserAvatar";
 
 type TrainingPostCardProps = {
   item: EntrenamientoResumen;
@@ -545,11 +546,7 @@ function TrainingPostCard({
         onClick={() => onOpenProfile?.(displayItem.username)}
         disabled={!onOpenProfile}
       >
-        <span className="avatar-circle">
-          {resolveMediaUrl(displayItem.foto_perfil_url) ? (
-            <img src={resolveMediaUrl(displayItem.foto_perfil_url) ?? ""} alt="" />
-          ) : displayItem.username.slice(0, 1).toUpperCase()}
-        </span>
+        <UserAvatar username={displayItem.username} photoUrl={displayItem.foto_perfil_url} />
         <span>
           <strong className="verified-name">
             {displayItem.username}
