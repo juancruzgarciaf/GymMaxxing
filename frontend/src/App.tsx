@@ -242,6 +242,8 @@ function App() {
   const [userSearchResults, setUserSearchResults] = useState<SearchUser[]>([]);
   const [rutinasOpenGeminiRequestKey, setRutinasOpenGeminiRequestKey] = useState(0);
   const [homeRefreshKey, setHomeRefreshKey] = useState(0);
+  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
+  const [activeProfileUsername, setActiveProfileUsername] = useState("");
   const [notificationSettingsOpen, setNotificationSettingsOpen] = useState(false);
   const authScreen: AuthScreen = location.pathname === "/register" ? "register" : "login";
   const mainScreen = getMainScreenFromPath(location.pathname);
@@ -253,6 +255,9 @@ function App() {
   const currentTraining =
     mainScreen === "entrenamiento" && availableTraining?.id_sesion === routeTrainingId ? availableTraining : null;
   const routeProfileUsername = getProfileUsernameFromPath(location.pathname);
+  const requestedProfileUsername =
+    usuario && mainScreen === "perfil" ? routeProfileUsername ?? usuario.username : null;
+  const profileUsernameForRender = requestedProfileUsername ?? activeProfileUsername;
 
   useEffect(() => {
     document.documentElement.dataset.theme = themeMode;
@@ -291,6 +296,12 @@ function App() {
       navigate("/", { replace: true });
     }
   }, [currentTraining, mainScreen, navigate, usuario]);
+
+  useEffect(() => {
+    if (requestedProfileUsername) {
+      setActiveProfileUsername(requestedProfileUsername);
+    }
+  }, [requestedProfileUsername]);
 
   useEffect(() => {
     if (!usuario || canUseTrainingFeatures(usuario)) {
@@ -558,6 +569,14 @@ function App() {
   const isOwnProfileScreen =
     mainScreen === "perfil" &&
     (routeProfileUsername == null || routeProfileUsername.toLowerCase() === usuario.username.toLowerCase());
+  const openOwnProfileFromTopbar = () => {
+    if (isOwnProfileScreen) {
+      setProfileRefreshKey((prev) => prev + 1);
+      return;
+    }
+
+    openProfile(usuario.username);
+  };
   const showActiveTrainingBar = Boolean(activeTraining && mainScreen !== "entrenamientoLibre");
   const activeRestFinished = Boolean(
     activeTraining?.rest &&
@@ -698,7 +717,7 @@ function App() {
           <button
             type="button"
             className={`nav-btn ${isOwnProfileScreen ? "active" : ""}`}
-            onClick={() => openProfile(usuario.username)}
+            onClick={openOwnProfileFromTopbar}
           >
             <svg
               className="nav-icon"
@@ -885,28 +904,33 @@ function App() {
             onAuthExpired={handleAuthExpired}
           />
         ) : null}
-        {mainScreen === "perfil" ? (
-          <Perfil
-            usuario={usuario}
-            profileUsername={routeProfileUsername ?? usuario.username}
-            onOpenProfile={openProfile}
-            onBack={goBackFromProfile}
-            onOpenTraining={(training) => openTraining(training, "perfil")}
-            onOpenRoutine={openRoutine}
-            onSaveAsRoutine={handleSaveTrainingAsRoutine}
-            authToken={authToken}
-            onAuthExpired={handleAuthExpired}
-            onUserUpdated={(nextUser) => {
-              setUsuario(nextUser);
-              if (authToken) {
-                persistAuth({ usuario: nextUser, token: authToken });
-              }
-              if (mainScreen === "perfil") {
-                navigate(`/perfil/${encodeURIComponent(nextUser.username)}`, { replace: true });
-              }
-            }}
-          />
-        ) : null}
+        <div className={mainScreen === "perfil" ? "" : "screen-hidden"}>
+          {profileUsernameForRender ? (
+            <Perfil
+              usuario={usuario}
+              profileUsername={profileUsernameForRender}
+              isActive={mainScreen === "perfil"}
+              refreshKey={profileRefreshKey}
+              onOpenProfile={openProfile}
+              onBack={goBackFromProfile}
+              onOpenTraining={(training) => openTraining(training, "perfil")}
+              onOpenRoutine={openRoutine}
+              onSaveAsRoutine={handleSaveTrainingAsRoutine}
+              authToken={authToken}
+              onAuthExpired={handleAuthExpired}
+              onUserUpdated={(nextUser) => {
+                setUsuario(nextUser);
+                setActiveProfileUsername(nextUser.username);
+                if (authToken) {
+                  persistAuth({ usuario: nextUser, token: authToken });
+                }
+                if (mainScreen === "perfil") {
+                  navigate(`/perfil/${encodeURIComponent(nextUser.username)}`, { replace: true });
+                }
+              }}
+            />
+          ) : null}
+        </div>
         {mainScreen === "ajustes" ? (
           <main className="page-shell settings-page-shell">
             <section className="settings-card">

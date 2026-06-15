@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ProfileHeader from "../components/ProfileHeader";
 import ProfileSocialModal from "../components/ProfileSocialModal";
 import ProfileTrainingSearch from "../components/ProfileTrainingSearch";
@@ -28,6 +28,8 @@ import type {
 type PerfilProps = {
   usuario: Usuario;
   profileUsername: string;
+  isActive: boolean;
+  refreshKey: number;
   onOpenProfile: (username: string) => void;
   onBack: () => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
@@ -153,6 +155,8 @@ type GymPublicSection = "servicios" | "horarios";
 function Perfil({
   usuario,
   profileUsername,
+  isActive,
+  refreshKey,
   onOpenProfile,
   onBack,
   onOpenTraining,
@@ -162,6 +166,7 @@ function Perfil({
   onAuthExpired,
   onUserUpdated,
 }: PerfilProps) {
+  const savedScrollYRef = useRef(0);
   const [perfil, setPerfil] = useState<PerfilUsuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -262,8 +267,21 @@ function Perfil({
   };
 
   useEffect(() => {
+    savedScrollYRef.current = 0;
+    window.scrollTo({ top: 0 });
     void cargarPerfil();
-  }, [profileUsername]);
+  }, [profileUsername, refreshKey]);
+
+  useEffect(() => {
+    if (isActive) {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: savedScrollYRef.current });
+      });
+      return;
+    }
+
+    savedScrollYRef.current = window.scrollY;
+  }, [isActive]);
 
   useEffect(() => {
     if (!perfil?.is_own_profile || !authToken || isGymUser(perfil.usuario)) {
