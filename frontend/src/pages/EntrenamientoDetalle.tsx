@@ -3,6 +3,7 @@ import type { EntrenamientoResumen, SerieSesionDetalle } from "../types";
 import VerifiedBadge from "../components/VerifiedBadge";
 import { resolveMediaUrl } from "../lib/media";
 import UserAvatar from "../components/UserAvatar";
+import ExerciseMedia from "../components/ExerciseMedia";
 
 type EntrenamientoDetalleProps = {
   entrenamiento: EntrenamientoResumen;
@@ -363,13 +364,11 @@ function EntrenamientoDetalle({
               return (
               <article key={`${entrenamiento.id_sesion}-${ejercicio.id_ejercicio}`} className="exercise-card readonly detail-exercise-card">
                 <div className="exercise-card-head">
-                  {resolveMediaUrl(ejercicio.imagen_url) ? (
-                    <img
-                      className="detail-exercise-image"
-                      src={resolveMediaUrl(ejercicio.imagen_url) ?? ""}
-                      alt={ejercicio.nombre}
-                    />
-                  ) : null}
+                  <ExerciseMedia
+                    exerciseId={ejercicio.id_ejercicio}
+                    name={ejercicio.nombre}
+                    imageUrl={ejercicio.imagen_url}
+                  />
                   <div>
                     <h3>{ejercicio.nombre}</h3>
                     <small>

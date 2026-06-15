@@ -54,6 +54,7 @@ type RutinaEjercicio = {
   descripcion: string;
   grupo_muscular: string;
   tipo_disciplina: string;
+  imagen_url?: string | null;
 };
 
 type SerieDraft = {
@@ -70,6 +71,7 @@ type EjercicioDraft = {
   nombre: string;
   grupo_muscular: string;
   tipo_disciplina: string;
+  imagen_url?: string | null;
   nota: string;
   descansoMin: string;
   descansoSeg: string;
@@ -682,6 +684,7 @@ function Rutinas({
           nombre: exercise.nombre,
           grupo_muscular: exercise.grupo_muscular ?? "",
           tipo_disciplina: exercise.tipo_disciplina ?? "",
+          imagen_url: null,
           nota: "",
           descansoMin: descanso.min,
           descansoSeg: descanso.sec,
@@ -720,6 +723,7 @@ function Rutinas({
           nombre: item.nombre,
           grupo_muscular: item.grupo_muscular,
           tipo_disciplina: item.tipo_disciplina,
+          imagen_url: item.imagen_url ?? null,
           nota: limitExerciseNote(persisted?.nota ?? ""),
           descansoMin: descanso.min,
           descansoSeg: descanso.sec,
@@ -1029,6 +1033,7 @@ function Rutinas({
           nombre: ejercicio.nombre,
           grupo_muscular: ejercicio.grupo_muscular,
           tipo_disciplina: ejercicio.tipo_disciplina,
+          imagen_url: ejercicio.imagen_url ?? null,
           nota: "",
           descansoMin: "1",
           descansoSeg: "30",
@@ -1332,6 +1337,7 @@ function Rutinas({
             nombre: item.nombre,
             grupo_muscular: item.grupo_muscular,
             tipo_disciplina: item.tipo_disciplina,
+            imagen_url: item.imagen_url ?? null,
             nota: limitExerciseNote(persisted?.nota ?? ""),
             descansoSegundos: Math.max(0, persisted?.descansoSegundos ?? item.descanso ?? 0),
             series: Array.from({ length: Math.max(1, item.series) }, (_, index) => ({
@@ -1853,6 +1859,11 @@ function Rutinas({
                         <span />
                         <span />
                       </button>
+                      <ExerciseMedia
+                        exerciseId={ejercicio.id_ejercicio}
+                        name={ejercicio.nombre}
+                        imageUrl={ejercicio.imagen_url}
+                      />
                       <div className="exercise-title-block">
                         <h3>{ejercicio.nombre}</h3>
                         <small>
