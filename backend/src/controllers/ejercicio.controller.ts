@@ -1,4 +1,6 @@
 import { Request, Response } from "express";
+import fs from "fs/promises";
+import path from "path";
 import { pool } from "../db";
 import { isUserPro } from "../services/subscription.service";
 import { uploadedFileUrl } from "../middleware/upload.middleware";
@@ -165,5 +167,59 @@ export const uploadExerciseImage = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("ERROR UPLOAD EXERCISE IMAGE:", error);
     return res.status(500).json({ error: "No se pudo guardar la imagen" });
+  }
+};
+
+export const deleteExerciseImage = async (req: Request, res: Response) => {
+  try {
+    const exerciseId = Number(req.params.id);
+    if (!Number.isInteger(exerciseId) || !req.authUser) {
+      return res.status(400).json({ error: "Ejercicio invalido" });
+    }
+
+    const exerciseResult = await pool.query(
+      `SELECT id_ejercicio, creador_id, imagen_url
+       FROM ejercicio
+       WHERE id_ejercicio = $1`,
+      [exerciseId],
+    );
+    const exercise = exerciseResult.rows[0];
+
+    if (!exercise) {
+      return res.status(404).json({ error: "Ejercicio no encontrado" });
+    }
+
+    const isOfficialAdmin = req.authUser.email.trim().toLowerCase() === "admin@gmail.com";
+    const isCreator = Number(exercise.creador_id) === req.authUser.id;
+    if (!isOfficialAdmin && !isCreator) {
+      return res.status(403).json({
+        error: "Solo el creador o el administrador puede eliminar esta imagen",
+      });
+    }
+
+    await pool.query(
+      `UPDATE ejercicio
+       SET imagen_url = NULL
+       WHERE id_ejercicio = $1`,
+      [exerciseId],
+    );
+
+    const imageUrl = typeof exercise.imagen_url === "string" ? exercise.imagen_url : "";
+    if (imageUrl.startsWith("/uploads/exercises/")) {
+      const uploadsDirectory = path.resolve(__dirname, "../../uploads/exercises");
+      const filename = path.basename(imageUrl);
+      const filePath = path.resolve(uploadsDirectory, filename);
+
+      if (path.dirname(filePath) === uploadsDirectory) {
+        await fs.unlink(filePath).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== "ENOENT") throw error;
+        });
+      }
+    }
+
+    return res.json({ deleted: true, imagen_url: null });
+  } catch (error) {
+    console.error("ERROR DELETE EXERCISE IMAGE:", error);
+    return res.status(500).json({ error: "No se pudo eliminar la imagen" });
   }
 };

@@ -25,6 +25,7 @@ function ExerciseMedia({ exerciseId, name, imageUrl, canUpload = false }: Exerci
   const inputRef = useRef<HTMLInputElement>(null);
   const [currentImage, setCurrentImage] = useState(imageUrl ?? null);
   const [uploading, setUploading] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
   const resolvedImage = resolveMediaUrl(currentImage);
   const isVideo = isVideoMediaUrl(resolvedImage);
@@ -51,6 +52,31 @@ function ExerciseMedia({ exerciseId, name, imageUrl, canUpload = false }: Exerci
       setCurrentImage(data.imagen_url ?? null);
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "No se pudo subir la imagen");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const deleteImage = async () => {
+    const token = getStoredToken();
+    if (!token) {
+      setError("Volvé a iniciar sesión");
+      return;
+    }
+
+    try {
+      setUploading(true);
+      setError("");
+      const response = await fetch(`${API}/ejercicios/${exerciseId}/image`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(data.error || "No se pudo eliminar la imagen");
+      setCurrentImage(null);
+      setConfirmDelete(false);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "No se pudo eliminar la imagen");
     } finally {
       setUploading(false);
     }
@@ -87,6 +113,26 @@ function ExerciseMedia({ exerciseId, name, imageUrl, canUpload = false }: Exerci
           >
             {uploading ? "Subiendo..." : resolvedImage ? "Cambiar foto" : "Agregar foto"}
           </button>
+          {resolvedImage && !confirmDelete ? (
+            <button
+              type="button"
+              className="exercise-media-delete"
+              onClick={() => setConfirmDelete(true)}
+              disabled={uploading}
+            >
+              Eliminar foto
+            </button>
+          ) : null}
+          {resolvedImage && confirmDelete ? (
+            <div className="exercise-media-confirm">
+              <button type="button" onClick={() => void deleteImage()} disabled={uploading}>
+                Confirmar
+              </button>
+              <button type="button" onClick={() => setConfirmDelete(false)} disabled={uploading}>
+                Cancelar
+              </button>
+            </div>
+          ) : null}
           <input
             ref={inputRef}
             type="file"

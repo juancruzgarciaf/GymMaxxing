@@ -7027,6 +7027,37 @@ button.discover-module-card:hover,
   cursor: pointer;
 }
 
+.exercise-media-delete {
+  border: 0;
+  padding: 0;
+  color: #dc6262;
+  background: transparent;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.exercise-media-confirm {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.exercise-media-confirm button {
+  border: 0;
+  padding: 0;
+  color: #dc6262;
+  background: transparent;
+  font: inherit;
+  font-size: 0.65rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.exercise-media-confirm button:last-child {
+  color: #7f91a3;
+}
+
 .exercise-media-error {
   color: #dc6262;
   font-size: 0.65rem;

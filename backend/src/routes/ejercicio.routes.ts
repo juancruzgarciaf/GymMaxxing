@@ -5,6 +5,7 @@ import {
   getEjercicios,
   getMisEjerciciosPersonalizados,
   uploadExerciseImage,
+  deleteExerciseImage,
 } from "../controllers/ejercicio.controller";
 import { optionalAuth, requireAuth } from "../middleware/auth.middleware";
 import { requirePro } from "../middleware/pro.middleware";
@@ -17,6 +18,7 @@ router.get("/", optionalAuth, getEjercicios);
 router.get("/mios", requireAuth, getMisEjerciciosPersonalizados);
 router.post("/", requireAuth, requirePro, crearEjercicioPersonalizado);
 router.post("/:id/image", requireAuth, exerciseImageUpload.single("image"), uploadExerciseImage);
+router.delete("/:id/image", requireAuth, deleteExerciseImage);
 router.delete("/:id", requireAuth, borrarEjercicioPersonalizado);
 
 export default router;
