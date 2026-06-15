@@ -164,6 +164,38 @@ type GeneratedRoutineProposal = {
 
 type CatalogExercise = RoutineGenerationCreateResponse["contexto"]["catalogo_referencia"][number];
 
+const GEMINI_ROUTINE_DEBUG_PREFIX = "[GeminiRoutineDebug]";
+const DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 4096;
+const GEMINI_REFERENCE_CATALOG_LIMIT = 24;
+const GEMINI_TREND_ROUTINES_LIMIT = 3;
+const GEMINI_TREND_USERS_LIMIT = 3;
+const GEMINI_POPULAR_EXERCISES_PER_GROUP_LIMIT = 2;
+const GEMINI_TRAINER_EXERCISES_LIMIT = 6;
+
+const readPositiveIntEnv = (key: string, fallback: number) => {
+  const raw = process.env[key];
+  if (!raw) {
+    return fallback;
+  }
+
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const isGeminiRoutineDebugEnabled = () => {
+  const value = process.env.GEMINI_ROUTINE_DEBUG;
+  return value === "1" || value?.toLowerCase() === "true";
+};
+
+const debugGeminiRoutine = (...args: Parameters<typeof console.warn>) => {
+  if (isGeminiRoutineDebugEnabled()) {
+    console.warn(...args);
+  }
+};
+
+const getGeminiMaxOutputTokens = () =>
+  readPositiveIntEnv("GEMINI_MAX_OUTPUT_TOKENS", DEFAULT_GEMINI_MAX_OUTPUT_TOKENS);
+
 const ROUTINE_INTENT_KEYWORDS = [
   "rutina",
   "entrenamiento",
@@ -407,6 +439,8 @@ const buildSystemPrompt = () =>
     "Debes responder unicamente JSON valido siguiendo exactamente el schema solicitado.",
     "No agregues markdown, comentarios ni texto fuera del JSON.",
     "No inventes ejercicios fuera del catalogo de referencia si hay equivalentes disponibles.",
+    "Genera entre 4 y 8 ejercicios como maximo, salvo que el pedido exija algo mas corto.",
+    "Manten nombres, descripciones y advertencias breves para evitar respuestas innecesariamente largas.",
   ].join(" ");
 
 const buildUserPrompt = (payload: {
@@ -485,6 +519,8 @@ const buildUserPrompt = (payload: {
     ),
     "",
     "Genera una propuesta de rutina alineada con GymMaxxing.",
+    "Usa entre 4 y 8 ejercicios en total y elegi solo IDs del catalogo de referencia.",
+    "Manten la descripcion y las advertencias cortas.",
     "Responde solo con JSON estructurado.",
   ];
 
@@ -500,6 +536,7 @@ const routineProposalJsonSchema = {
     },
     descripcion: {
       type: "string",
+      maxLength: 180,
       description: "Descripcion breve y concreta de la rutina.",
     },
     objetivo: {
@@ -517,10 +554,13 @@ const routineProposalJsonSchema = {
     advertencias: {
       type: "array",
       items: { type: "string" },
+      maxItems: 3,
       description: "Advertencias o aclaraciones breves.",
     },
     ejercicios: {
       type: "array",
+      minItems: 4,
+      maxItems: 8,
       items: {
         type: "object",
         properties: {
@@ -643,7 +683,7 @@ const generateGeminiContentWithRetry = async (params: {
           responseMimeType: "application/json",
           responseJsonSchema: routineProposalJsonSchema,
           temperature: 0.4,
-          maxOutputTokens: 1600,
+          maxOutputTokens: getGeminiMaxOutputTokens(),
         },
       });
     } catch (error) {
@@ -724,9 +764,18 @@ const getExerciseNameSimilarityScore = (
 const parseGeminiJsonResponse = (rawText: string) => {
   const trimmed = rawText.trim();
 
+  debugGeminiRoutine(`${GEMINI_ROUTINE_DEBUG_PREFIX} parseGeminiJsonResponse input`, {
+    rawLength: rawText.length,
+    trimmedLength: trimmed.length,
+    startsWith: trimmed.slice(0, 80),
+    endsWith: trimmed.slice(-80),
+  });
+  debugGeminiRoutine(`${GEMINI_ROUTINE_DEBUG_PREFIX} parseGeminiJsonResponse raw input START\n${rawText}\n${GEMINI_ROUTINE_DEBUG_PREFIX} parseGeminiJsonResponse raw input END`);
+
   try {
     return JSON.parse(trimmed);
-  } catch {
+  } catch (directParseError) {
+    debugGeminiRoutine(`${GEMINI_ROUTINE_DEBUG_PREFIX} direct JSON.parse failed`, directParseError);
     try {
       const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
       if (fencedMatch?.[1]) {
@@ -738,7 +787,8 @@ const parseGeminiJsonResponse = (rawText: string) => {
       if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
         return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
       }
-    } catch {
+    } catch (recoveryParseError) {
+      debugGeminiRoutine(`${GEMINI_ROUTINE_DEBUG_PREFIX} recovery JSON.parse failed`, recoveryParseError);
       throw new Error("Gemini devolvio un JSON invalido para la rutina");
     }
 
@@ -978,8 +1028,9 @@ const getPopularExercisesByMuscleGroup = async () => {
             veces_usado_en_rutinas,
             ranking
      FROM ranked
-     WHERE ranking <= 3
-     ORDER BY grupo_muscular ASC, ranking ASC`
+     WHERE ranking <= $1
+     ORDER BY grupo_muscular ASC, ranking ASC`,
+    [GEMINI_POPULAR_EXERCISES_PER_GROUP_LIMIT]
   );
 
   const grouped = new Map<
@@ -1018,7 +1069,8 @@ const getPopularExercisesByTrainers = async () => {
      WHERE LOWER(u.tipo_usuario) = 'entrenador'
      GROUP BY e.id_ejercicio, e.nombre, e.grupo_muscular, e.tipo_disciplina
      ORDER BY veces_usado_por_entrenadores DESC, e.nombre ASC
-     LIMIT 10`
+     LIMIT $1`,
+    [GEMINI_TRAINER_EXERCISES_LIMIT]
   );
 
   return result.rows;
@@ -1035,7 +1087,8 @@ const getReferenceExerciseCatalog = async () => {
      LEFT JOIN rutinaejercicio re ON re.id_ejercicio = e.id_ejercicio
      GROUP BY e.id_ejercicio, e.nombre, e.grupo_muscular, e.tipo_disciplina
      ORDER BY veces_usado_en_rutinas DESC, e.nombre ASC
-     LIMIT 30`
+     LIMIT $1`,
+    [GEMINI_REFERENCE_CATALOG_LIMIT]
   );
 
   return result.rows;
@@ -1143,7 +1196,7 @@ export const generateRoutineDraftFromPrompt = async (
   };
 
   const tendencias = {
-    rutinas_mas_copiadas: trends.rutinas_mas_copiadas.slice(0, 5).map((routine) => ({
+    rutinas_mas_copiadas: trends.rutinas_mas_copiadas.slice(0, GEMINI_TREND_ROUTINES_LIMIT).map((routine) => ({
       id_rutina: routine.id_rutina,
       nombre: routine.nombre,
       duracion_estimada: routine.duracion_estimada,
@@ -1153,7 +1206,7 @@ export const generateRoutineDraftFromPrompt = async (
       creador_tipo_usuario: routine.creador_tipo_usuario,
       copy_count: routine.copy_count,
     })),
-    rutinas_mas_guardadas: trends.rutinas_mas_guardadas.slice(0, 5).map((routine) => ({
+    rutinas_mas_guardadas: trends.rutinas_mas_guardadas.slice(0, GEMINI_TREND_ROUTINES_LIMIT).map((routine) => ({
       id_rutina: routine.id_rutina,
       nombre: routine.nombre,
       duracion_estimada: routine.duracion_estimada,
@@ -1163,7 +1216,7 @@ export const generateRoutineDraftFromPrompt = async (
       creador_tipo_usuario: routine.creador_tipo_usuario,
       save_count: routine.save_count,
     })),
-    usuarios_mas_seguidos: trends.usuarios_mas_seguidos.slice(0, 5).map((user) => ({
+    usuarios_mas_seguidos: trends.usuarios_mas_seguidos.slice(0, GEMINI_TREND_USERS_LIMIT).map((user) => ({
       id: user.id,
       username: user.username,
       tipo_usuario: user.tipo_usuario,
@@ -1184,6 +1237,27 @@ export const generateRoutineDraftFromPrompt = async (
     catalogoReferencia: referenceCatalog,
   });
 
+  debugGeminiRoutine(`${GEMINI_ROUTINE_DEBUG_PREFIX} context summary`, {
+    usuarioId: input.usuarioId,
+    geminiConfigured,
+    maxOutputTokens: getGeminiMaxOutputTokens(),
+    catalogoReferenciaCount: referenceCatalog.length,
+    catalogoReferenciaKeys: Object.keys(referenceCatalog[0] ?? {}),
+    popularExercisesByGroupCount: popularExercisesByGroup.length,
+    popularExercisesByTrainersCount: popularExercisesByTrainers.length,
+    rutinasMasCopiadasCount: tendencias.rutinas_mas_copiadas.length,
+    rutinasMasGuardadasCount: tendencias.rutinas_mas_guardadas.length,
+    promptSistemaLength: promptSistema.length,
+    promptUsuarioLength: promptUsuario.length,
+    promptTotalLength: promptSistema.length + promptUsuario.length,
+    includesImagenUrl: promptUsuario.includes("imagen_url"),
+    includesUploadsPath: promptUsuario.includes("/uploads/"),
+    includesMp4: promptUsuario.toLowerCase().includes(".mp4"),
+    includesGif: promptUsuario.toLowerCase().includes(".gif"),
+  });
+  debugGeminiRoutine(`${GEMINI_ROUTINE_DEBUG_PREFIX} final system prompt START\n${promptSistema}\n${GEMINI_ROUTINE_DEBUG_PREFIX} final system prompt END`);
+  debugGeminiRoutine(`${GEMINI_ROUTINE_DEBUG_PREFIX} final user prompt START\n${promptUsuario}\n${GEMINI_ROUTINE_DEBUG_PREFIX} final user prompt END`);
+
   const model = getGeminiModel();
   let rutinaGenerada: GeneratedRoutineProposal | null = null;
   let routineFromGemini = false;
@@ -1197,6 +1271,25 @@ export const generateRoutineDraftFromPrompt = async (
       });
 
       const rawText = response.text;
+      const responseDebug = response as unknown as {
+        candidates?: Array<{
+          finishReason?: string;
+          finishMessage?: string;
+          content?: unknown;
+        }>;
+        usageMetadata?: unknown;
+        promptFeedback?: unknown;
+      };
+      debugGeminiRoutine(`${GEMINI_ROUTINE_DEBUG_PREFIX} raw Gemini response metadata`, {
+        rawTextLength: rawText?.length ?? 0,
+        candidates: responseDebug.candidates?.map((candidate) => ({
+          finishReason: candidate.finishReason,
+          finishMessage: candidate.finishMessage,
+        })),
+        usageMetadata: responseDebug.usageMetadata,
+        promptFeedback: responseDebug.promptFeedback,
+      });
+      debugGeminiRoutine(`${GEMINI_ROUTINE_DEBUG_PREFIX} raw Gemini text START\n${rawText ?? ""}\n${GEMINI_ROUTINE_DEBUG_PREFIX} raw Gemini text END`);
       if (!rawText || !rawText.trim()) {
         throw new Error("Gemini no devolvio contenido para la rutina");
       }

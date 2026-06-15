@@ -113,12 +113,16 @@ Para dejar lista la integración con generación inteligente de rutinas, sumá e
 ```env
 GEMINI_API_KEY=tu_api_key_de_google_ai_studio
 GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MAX_OUTPUT_TOKENS=4096
+GEMINI_ROUTINE_DEBUG=false
 ```
 
 Notas:
 
 * `GEMINI_API_KEY` se obtiene desde Google AI Studio y es la credencial que usa el backend para llamar a Gemini.
 * `GEMINI_MODEL` es opcional en la práctica: si no lo definís, el backend usa `gemini-2.5-flash` por defecto.
+* `GEMINI_MAX_OUTPUT_TOKENS` es opcional; si no lo definís, el backend usa `4096` para evitar respuestas JSON truncadas.
+* `GEMINI_ROUTINE_DEBUG=true` activa logs detallados del prompt y la respuesta cruda de Gemini para diagnosticar problemas.
 * `GOOGLE_CLIENT_ID` y `GEMINI_API_KEY` no son lo mismo.
   `GOOGLE_CLIENT_ID` se usa para login con Google y `GEMINI_API_KEY` para la API de Gemini.
 
