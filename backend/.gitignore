@@ -3,6 +3,11 @@ node_modules
 .env
 
 /src/generated/prisma
+# Uploaded profile and training media stays local.
 uploads/profiles
 uploads/trainings
+
+# Exercise media uploaded by the admin is shared with the team.
+!uploads/exercises/
+!uploads/exercises/**
 !uploads/.gitkeep
