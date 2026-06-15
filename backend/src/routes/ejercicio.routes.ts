@@ -11,7 +11,7 @@ import { requirePro } from "../middleware/pro.middleware";
 import { createImageUpload } from "../middleware/upload.middleware";
 
 const router = Router();
-const exerciseImageUpload = createImageUpload("exercises");
+const exerciseImageUpload = createImageUpload("exercises", { allowMp4: true });
 
 router.get("/", optionalAuth, getEjercicios);
 router.get("/mios", requireAuth, getMisEjerciciosPersonalizados);

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { resolveMediaUrl } from "../lib/media";
+import { isVideoMediaUrl, resolveMediaUrl } from "../lib/media";
 
 type ExerciseMediaProps = {
   exerciseId: number;
@@ -27,6 +27,7 @@ function ExerciseMedia({ exerciseId, name, imageUrl, canUpload = false }: Exerci
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const resolvedImage = resolveMediaUrl(currentImage);
+  const isVideo = isVideoMediaUrl(resolvedImage);
 
   const uploadImage = async (file: File) => {
     const token = getStoredToken();
@@ -58,7 +59,19 @@ function ExerciseMedia({ exerciseId, name, imageUrl, canUpload = false }: Exerci
   return (
     <div className="exercise-media">
       {resolvedImage ? (
-        <img src={resolvedImage} alt={name} className="exercise-media-image" />
+        isVideo ? (
+          <video
+            src={resolvedImage}
+            className="exercise-media-image"
+            aria-label={name}
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        ) : (
+          <img src={resolvedImage} alt={name} className="exercise-media-image" />
+        )
       ) : (
         <div className="exercise-media-placeholder" aria-hidden="true">
           {name.slice(0, 1).toUpperCase()}
@@ -77,7 +90,7 @@ function ExerciseMedia({ exerciseId, name, imageUrl, canUpload = false }: Exerci
           <input
             ref={inputRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4"
             hidden
             onChange={(event) => {
               const file = event.target.files?.[0];

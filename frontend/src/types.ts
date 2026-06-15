@@ -171,6 +171,7 @@ export type RoutineExerciseDetailed = {
   descripcion: string;
   grupo_muscular: string;
   tipo_disciplina: string;
+  imagen_url?: string | null;
 };
 
 export type TrainingSetType = "warmup" | "serie" | "dropset" | "failure";
@@ -188,6 +189,7 @@ export type TrainingSeedExercise = {
   nombre: string;
   grupo_muscular: string;
   tipo_disciplina: string;
+  imagen_url?: string | null;
   nota?: string;
   descansoSegundos: number;
   series: TrainingSeedSerie[];

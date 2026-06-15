@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import FeedSidebar from "../components/FeedSidebar";
 import RoutinePostCard from "../components/RoutinePostCard";
 import TrainingPostCard from "../components/TrainingPostCard";
@@ -6,6 +6,8 @@ import type { EntrenamientoResumen, FeedItem, PerfilUsuario, RoutinePostSummary,
 
 type HomeProps = {
   usuario: Usuario;
+  isActive: boolean;
+  refreshKey: number;
   onOpenProfile: (username: string) => void;
   onOpenTraining: (training: EntrenamientoResumen) => void;
   onOpenRoutine: (routine: RoutinePostSummary) => void;
@@ -25,13 +27,18 @@ type FeedResponse = {
 
 function Home({
   usuario,
+  isActive,
+  refreshKey,
   onOpenProfile,
   onOpenTraining,
   onOpenRoutine,
   onSaveAsRoutine,
 }: HomeProps) {
+  const savedScrollYRef = useRef(0);
+  const latestRefreshKeyRef = useRef(refreshKey);
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [page, setPage] = useState(1);
+  const [feedReloadKey, setFeedReloadKey] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -45,6 +52,34 @@ function Home({
   useEffect(() => {
     setPage(1);
   }, [usuario.id]);
+
+  useEffect(() => {
+    if (latestRefreshKeyRef.current === refreshKey) {
+      return;
+    }
+
+    latestRefreshKeyRef.current = refreshKey;
+    savedScrollYRef.current = 0;
+    window.scrollTo({ top: 0 });
+
+    if (page === 1) {
+      setFeedReloadKey((prev) => prev + 1);
+      return;
+    }
+
+    setPage(1);
+  }, [page, refreshKey]);
+
+  useEffect(() => {
+    if (isActive) {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: savedScrollYRef.current });
+      });
+      return;
+    }
+
+    savedScrollYRef.current = window.scrollY;
+  }, [isActive]);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,7 +130,7 @@ function Home({
     return () => {
       cancelled = true;
     };
-  }, [page, usuario.id]);
+  }, [feedReloadKey, page, usuario.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -149,7 +184,7 @@ function Home({
     return () => {
       cancelled = true;
     };
-  }, [usuario.id]);
+  }, [refreshKey, usuario.id]);
 
   const goToPage = (nextPage: number) => {
     setPage(Math.min(Math.max(nextPage, 1), totalPages));

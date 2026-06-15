@@ -174,6 +174,7 @@ export const buildTrainingSeedFromRoutine = (
       nombre: exercise.nombre,
       grupo_muscular: exercise.grupo_muscular,
       tipo_disciplina: exercise.tipo_disciplina,
+      imagen_url: exercise.imagen_url ?? null,
       descansoSegundos: Math.max(0, exercise.descanso ?? 0),
       series: Array.from({ length: Math.max(1, exercise.series) }, () => ({
         kg: "",
@@ -210,6 +211,7 @@ export const fetchSessionSeed = async (training: EntrenamientoResumen): Promise<
       nombre: string;
       grupo_muscular: string;
       tipo_disciplina: string;
+      imagen_url: string | null;
       nota: string | null;
       orden_ejercicio: number;
       descansoSegundos: number;
@@ -232,6 +234,7 @@ export const fetchSessionSeed = async (training: EntrenamientoResumen): Promise<
       nombre: serie.nombre,
       grupo_muscular: serie.grupo_muscular || "Sin grupo",
       tipo_disciplina: serie.tipo_disciplina || "Sin disciplina",
+      imagen_url: serie.imagen_url ?? null,
       nota: serie.nota_ejercicio ?? null,
       orden_ejercicio: serie.orden_ejercicio ?? 9999,
       descansoSegundos: Math.max(0, serie.descanso ?? 0),
@@ -263,6 +266,7 @@ export const fetchSessionSeed = async (training: EntrenamientoResumen): Promise<
         nombre: exercise.nombre,
         grupo_muscular: exercise.grupo_muscular,
         tipo_disciplina: exercise.tipo_disciplina,
+        imagen_url: exercise.imagen_url,
         nota: exercise.nota ?? undefined,
         descansoSegundos: exercise.descansoSegundos,
         series: exercise.series

@@ -241,6 +241,7 @@ function App() {
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [userSearchResults, setUserSearchResults] = useState<SearchUser[]>([]);
   const [rutinasOpenGeminiRequestKey, setRutinasOpenGeminiRequestKey] = useState(0);
+  const [homeRefreshKey, setHomeRefreshKey] = useState(0);
   const [notificationSettingsOpen, setNotificationSettingsOpen] = useState(false);
   const authScreen: AuthScreen = location.pathname === "/register" ? "register" : "login";
   const mainScreen = getMainScreenFromPath(location.pathname);
@@ -320,6 +321,11 @@ function App() {
   const navigateTo = (screen: Exclude<MainScreen, "entrenamiento">) => {
     if (screen !== "rutinaCompartida") {
       dismissSharedRoutine();
+    }
+
+    if (screen === "home" && mainScreen === "home") {
+      setHomeRefreshKey((prev) => prev + 1);
+      return;
     }
 
     if (screen === "rutinaCompartida") {
@@ -795,15 +801,17 @@ function App() {
       </header>
 
       <div className="content">
-        {mainScreen === "home" ? (
+        <div className={mainScreen === "home" ? "" : "screen-hidden"}>
           <Home
             usuario={usuario}
+            isActive={mainScreen === "home"}
+            refreshKey={homeRefreshKey}
             onOpenProfile={openProfile}
             onOpenTraining={(training) => openTraining(training, "home")}
             onOpenRoutine={openRoutine}
             onSaveAsRoutine={handleSaveTrainingAsRoutine}
           />
-        ) : null}
+        </div>
         {canTrain ? (
           <div className={mainScreen === "entrenamientoLibre" ? "" : "screen-hidden"}>
             <Entrenamiento

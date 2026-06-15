@@ -908,7 +908,7 @@ export const agregarEjercicioARutina = async (data: any) => {
 
 export const getEjerciciosDeRutina = async (id_rutina: string) => {
   const result = await pool.query(
-    `SELECT re.*, e.nombre, e.descripcion, e.grupo_muscular, e.tipo_disciplina
+    `SELECT re.*, e.nombre, e.descripcion, e.grupo_muscular, e.tipo_disciplina, e.imagen_url
      FROM rutinaejercicio re
      JOIN ejercicio e ON e.id_ejercicio = re.id_ejercicio
      WHERE re.id_rutina = $1
