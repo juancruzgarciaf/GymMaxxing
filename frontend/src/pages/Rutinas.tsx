@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import routineDetailEmptyBodybuilder from "../assets/routine-detail-empty-bodybuilder.png";
 import {
   createRoutineShareUrl,
+  matchPersistedByOrder as emparejarPersistidos,
   ROUTINE_LIBRARY_UPDATED_EVENT,
   type RoutineLibraryUpdatedDetail,
 } from "../lib/trainingTransfer";
@@ -67,6 +68,8 @@ type SerieDraft = {
 type SetTipo = "warmup" | "serie" | "dropset" | "failure";
 
 type EjercicioDraft = {
+  // Identificador local de cada aparición: una rutina puede tener el mismo ejercicio más de una vez.
+  uid: string;
   id_ejercicio: number;
   nombre: string;
   grupo_muscular: string;
@@ -78,9 +81,18 @@ type EjercicioDraft = {
   series: SerieDraft[];
 };
 
+type ResumenSerie = {
+  kg: string;
+  reps: string;
+  tipo: SetTipo;
+};
+
 type ResumenEjercicio = {
   nombre: string;
   grupo_muscular: string;
+  tipo_disciplina: string;
+  descansoSegundos: number;
+  series: ResumenSerie[];
 };
 
 type EjecucionSerie = {
@@ -147,6 +159,38 @@ const nuevaSerie = (reps = ""): SerieDraft => ({
   reps,
   tipo: "serie",
 });
+
+const nuevoUidEjercicio = () => crypto.randomUUID();
+
+const getPersistedEjercicios = (idRutina: number): PersistedRutinaEjercicio[] => {
+  const persisted = readRutinaPrefs()[String(idRutina)];
+  return Array.isArray(persisted) ? persisted : [];
+};
+
+const esCardio = (tipoDisciplina?: string | null) =>
+  (tipoDisciplina ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("cardio");
+
+const SET_TIPO_TAG: Record<SetTipo, string> = {
+  warmup: "W",
+  serie: "",
+  dropset: "D",
+  failure: "F",
+};
+
+const formatResumenSerie = (serie: ResumenSerie) => {
+  const kg = serie.kg.trim();
+  const reps = serie.reps.trim();
+  if (kg && reps) {
+    return `${kg} kg × ${reps}`;
+  }
+  if (reps) {
+    return `${reps} reps`;
+  }
+  if (kg) {
+    return `${kg} kg`;
+  }
+  return "-";
+};
 
 const parseError = async (res: Response, fallback: string) => {
   try {
@@ -310,8 +354,9 @@ function Rutinas({
   const [editorCarpetaId, setEditorCarpetaId] = useState<string>("");
   const [editorVisibleEnDescubrir, setEditorVisibleEnDescubrir] = useState(false);
   const [editorEjercicios, setEditorEjercicios] = useState<EjercicioDraft[]>([]);
-  const [pendingEditorScrollId, setPendingEditorScrollId] = useState<number | null>(null);
-  const [draggedEditorExerciseId, setDraggedEditorExerciseId] = useState<number | null>(null);
+  const [pendingEditorScrollId, setPendingEditorScrollId] = useState<string | null>(null);
+  const [draggedEditorExerciseId, setDraggedEditorExerciseId] = useState<string | null>(null);
+  const [resumenVersion, setResumenVersion] = useState(0);
 
   const [filtroEquipo, setFiltroEquipo] = useState("");
   const [filtroMusculo, setFiltroMusculo] = useState("");
@@ -323,7 +368,7 @@ function Rutinas({
   const [pendingExecutionScrollId, setPendingExecutionScrollId] = useState<number | null>(null);
   const [descansoActivo, setDescansoActivo] = useState<DescansoActivo | null>(null);
   const [elapsedSesionSegundos, setElapsedSesionSegundos] = useState(0);
-  const editorExerciseRefs = useRef(new Map<number, HTMLElement>());
+  const editorExerciseRefs = useRef(new Map<string, HTMLElement>());
   const executionExerciseRefs = useRef(new Map<number, HTMLElement>());
 
   const rutinaSeleccionada =
@@ -331,9 +376,9 @@ function Rutinas({
       ? null
       : rutinas.find((rutina) => rutina.id_rutina === selectedRutinaId) ?? null;
 
-  const scrollToExercise = (refs: { current: Map<number, HTMLElement> }, idEjercicio: number) => {
+  const scrollToExercise = <K,>(refs: { current: Map<K, HTMLElement> }, id: K) => {
     window.requestAnimationFrame(() => {
-      refs.current.get(idEjercicio)?.scrollIntoView({
+      refs.current.get(id)?.scrollIntoView({
         behavior: "smooth",
         block: "center",
       });
@@ -440,11 +485,6 @@ function Rutinas({
     return (await res.json()) as RutinaEjercicio[];
   };
 
-  const getPersistedRutinaEjercicios = (idRutina: number) => {
-    const all = readRutinaPrefs();
-    return all[String(idRutina)] ?? [];
-  };
-
   const savePersistedRutinaEjercicios = (
     idRutina: number,
     ejercicios: PersistedRutinaEjercicio[],
@@ -465,6 +505,43 @@ function Rutinas({
     }>,
   ) => {
     const ejerciciosActuales = await cargarEjerciciosDeRutina(rutinaId);
+    const tieneRepetidos = (ids: number[]) => new Set(ids).size !== ids.length;
+
+    // El backend actualiza/borra por (rutina, ejercicio). Si el mismo ejercicio aparece más de una
+    // vez, eso pisaría todas sus apariciones, así que en ese caso reemplazamos la lista completa.
+    if (
+      tieneRepetidos(ejerciciosActuales.map((ejercicio) => ejercicio.id_ejercicio)) ||
+      tieneRepetidos(ejerciciosObjetivo.map((ejercicio) => ejercicio.id_ejercicio))
+    ) {
+      for (const idEjercicio of new Set(ejerciciosActuales.map((ejercicio) => ejercicio.id_ejercicio))) {
+        const deleteRes = await fetch(`${API}/rutinas/${rutinaId}/ejercicios/${idEjercicio}`, {
+          method: "DELETE",
+        });
+        if (!deleteRes.ok) {
+          throw new Error(await parseError(deleteRes, "No se pudo eliminar ejercicio de rutina"));
+        }
+      }
+
+      for (const ejercicio of ejerciciosObjetivo) {
+        const addRes = await fetch(`${API}/rutinas/ejercicios`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id_rutina: rutinaId,
+            id_ejercicio: ejercicio.id_ejercicio,
+            series: ejercicio.series,
+            repeticiones: ejercicio.repeticiones,
+            descanso: ejercicio.descanso,
+            orden: ejercicio.orden,
+          }),
+        });
+        if (!addRes.ok) {
+          throw new Error(await parseError(addRes, "No se pudo agregar ejercicio"));
+        }
+      }
+      return;
+    }
+
     const actualesPorEjercicio = new Map(
       ejerciciosActuales.map((ejercicio) => [ejercicio.id_ejercicio, ejercicio]),
     );
@@ -574,11 +651,26 @@ function Rutinas({
       try {
         setResumenLoading(true);
         const ejercicios = await cargarEjerciciosDeRutina(selectedRutinaId);
+        const persistidos = emparejarPersistidos(ejercicios, getPersistedEjercicios(selectedRutinaId));
         setResumenEjercicios(
-          ejercicios.map((item) => ({
-            nombre: item.nombre,
-            grupo_muscular: item.grupo_muscular,
-          })),
+          ejercicios.map((item, index) => {
+            const persisted = persistidos[index];
+            const persistedSeries = persisted?.series ?? [];
+            const cantidadSeries = Math.max(1, item.series || persistedSeries.length || 1);
+            return {
+              nombre: item.nombre,
+              grupo_muscular: item.grupo_muscular,
+              tipo_disciplina: item.tipo_disciplina ?? "",
+              descansoSegundos: Math.max(0, persisted?.descansoSegundos ?? item.descanso ?? 0),
+              series: Array.from({ length: cantidadSeries }, (_, serieIndex) => ({
+                kg: persistedSeries[serieIndex]?.kg ?? "",
+                reps:
+                  persistedSeries[serieIndex]?.reps ??
+                  (item.repeticiones ? String(item.repeticiones) : ""),
+                tipo: persistedSeries[serieIndex]?.tipo ?? "serie",
+              })),
+            };
+          }),
         );
       } catch {
         setResumenEjercicios([]);
@@ -588,7 +680,7 @@ function Rutinas({
     };
 
     void loadResumen();
-  }, [selectedRutinaId]);
+  }, [selectedRutinaId, resumenVersion]);
 
   useEffect(() => {
     if (!descansoActivo || descansoActivo.finalizado) {
@@ -680,6 +772,7 @@ function Rutinas({
       geminiLastRoutine.ejerciciosPreview.map((exercise) => {
         const descanso = descansoToInputs(exercise.descanso ?? 90);
         return {
+          uid: nuevoUidEjercicio(),
           id_ejercicio: exercise.id_ejercicio,
           nombre: exercise.nombre,
           grupo_muscular: exercise.grupo_muscular ?? "",
@@ -711,14 +804,13 @@ function Rutinas({
       setMensaje("");
 
       const ejercicios = await cargarEjerciciosDeRutina(rutina.id_rutina);
-      const persistedByExercise = new Map(
-        getPersistedRutinaEjercicios(rutina.id_rutina).map((item) => [item.id_ejercicio, item]),
-      );
-      const draft = ejercicios.map((item) => {
-        const persisted = persistedByExercise.get(item.id_ejercicio);
+      const persistidos = emparejarPersistidos(ejercicios, getPersistedEjercicios(rutina.id_rutina));
+      const draft = ejercicios.map((item, ejercicioIndex): EjercicioDraft => {
+        const persisted = persistidos[ejercicioIndex];
         const descanso = descansoToInputs(persisted?.descansoSegundos ?? item.descanso ?? 0);
         const persistedSeries = persisted?.series ?? [];
         return {
+          uid: nuevoUidEjercicio(),
           id_ejercicio: item.id_ejercicio,
           nombre: item.nombre,
           grupo_muscular: item.grupo_muscular,
@@ -1020,15 +1112,19 @@ function Rutinas({
   };
 
   const agregarEjercicioAlEditor = (ejercicio: Ejercicio) => {
-    setPendingEditorScrollId(ejercicio.id_ejercicio);
-    setEditorEjercicios((prev) => {
-      if (prev.some((item) => item.id_ejercicio === ejercicio.id_ejercicio)) {
-        return prev;
-      }
+    const existente = editorEjercicios.find((item) => item.id_ejercicio === ejercicio.id_ejercicio);
+    if (existente) {
+      setPendingEditorScrollId(existente.uid);
+      return;
+    }
 
+    const uid = nuevoUidEjercicio();
+    setPendingEditorScrollId(uid);
+    setEditorEjercicios((prev) => {
       return [
         ...prev,
         {
+          uid,
           id_ejercicio: ejercicio.id_ejercicio,
           nombre: ejercicio.nombre,
           grupo_muscular: ejercicio.grupo_muscular,
@@ -1043,28 +1139,28 @@ function Rutinas({
     });
   };
 
-  const removerEjercicioDelEditor = (idEjercicio: number) => {
-    setEditorEjercicios((prev) => prev.filter((item) => item.id_ejercicio !== idEjercicio));
+  const removerEjercicioDelEditor = (uid: string) => {
+    setEditorEjercicios((prev) => prev.filter((item) => item.uid !== uid));
   };
 
-  const updateNotaEditor = (idEjercicio: number, nota: string) => {
+  const updateNotaEditor = (uid: string, nota: string) => {
     setEditorEjercicios((prev) =>
       prev.map((item) =>
-        item.id_ejercicio === idEjercicio
+        item.uid === uid
           ? { ...item, nota: limitExerciseNote(nota) }
           : item,
       ),
     );
   };
 
-  const moveEditorExercise = (targetId: number) => {
-    if (draggedEditorExerciseId == null || draggedEditorExerciseId === targetId) {
+  const moveEditorExercise = (targetUid: string) => {
+    if (draggedEditorExerciseId == null || draggedEditorExerciseId === targetUid) {
       return;
     }
 
     setEditorEjercicios((prev) => {
-      const fromIndex = prev.findIndex((item) => item.id_ejercicio === draggedEditorExerciseId);
-      const toIndex = prev.findIndex((item) => item.id_ejercicio === targetId);
+      const fromIndex = prev.findIndex((item) => item.uid === draggedEditorExerciseId);
+      const toIndex = prev.findIndex((item) => item.uid === targetUid);
       if (fromIndex < 0 || toIndex < 0) {
         return prev;
       }
@@ -1076,11 +1172,11 @@ function Rutinas({
     });
   };
 
-  const agregarSerieAEjercicio = (idEjercicio: number) => {
-    setPendingEditorScrollId(idEjercicio);
+  const agregarSerieAEjercicio = (uid: string) => {
+    setPendingEditorScrollId(uid);
     setEditorEjercicios((prev) =>
       prev.map((item) => {
-        if (item.id_ejercicio !== idEjercicio) {
+        if (item.uid !== uid) {
           return item;
         }
 
@@ -1100,10 +1196,10 @@ function Rutinas({
     );
   };
 
-  const borrarSerieDeEjercicio = (idEjercicio: number, serieId: string) => {
+  const borrarSerieDeEjercicio = (uid: string, serieId: string) => {
     setEditorEjercicios((prev) =>
       prev.map((item) => {
-        if (item.id_ejercicio !== idEjercicio) {
+        if (item.uid !== uid) {
           return item;
         }
 
@@ -1120,14 +1216,14 @@ function Rutinas({
   };
 
   const updateSerieEditor = (
-    idEjercicio: number,
+    uid: string,
     serieId: string,
     field: "kg" | "reps" | "tipo",
     value: string,
   ) => {
     setEditorEjercicios((prev) =>
       prev.map((item) => {
-        if (item.id_ejercicio !== idEjercicio) {
+        if (item.uid !== uid) {
           return item;
         }
 
@@ -1151,11 +1247,11 @@ function Rutinas({
     );
   };
 
-  const updateDescansoEditor = (idEjercicio: number, seconds: number) => {
+  const updateDescansoEditor = (uid: string, seconds: number) => {
     const next = descansoToInputs(seconds);
     setEditorEjercicios((prev) =>
       prev.map((item) =>
-        item.id_ejercicio === idEjercicio
+        item.uid === uid
           ? { ...item, descansoMin: next.min, descansoSeg: next.sec }
           : item,
       ),
@@ -1236,6 +1332,7 @@ function Rutinas({
 
       await Promise.all([cargarRutinas(), cargarCarpetas()]);
       setSelectedRutinaId(rutinaId);
+      setResumenVersion((prev) => prev + 1);
       setVista("lista");
       setMensaje("Rutina guardada");
     } catch (err) {
@@ -1319,8 +1416,9 @@ function Rutinas({
       setMensaje("");
 
       const ejercicios = await cargarEjerciciosDeRutina(rutinaSeleccionada.id_rutina);
-      const persistedByExercise = new Map(
-        getPersistedRutinaEjercicios(rutinaSeleccionada.id_rutina).map((item) => [item.id_ejercicio, item]),
+      const persistidos = emparejarPersistidos(
+        ejercicios,
+        getPersistedEjercicios(rutinaSeleccionada.id_rutina),
       );
       const seed: TrainingSeed = {
         origin: "rutina",
@@ -1329,8 +1427,8 @@ function Rutinas({
         title: rutinaSeleccionada.nombre,
         description: rutinaSeleccionada.descripcion,
         durationMinutes: rutinaSeleccionada.duracion_estimada,
-        exercises: ejercicios.map((item) => {
-          const persisted = persistedByExercise.get(item.id_ejercicio);
+        exercises: ejercicios.map((item, ejercicioIndex) => {
+          const persisted = persistidos[ejercicioIndex];
           const persistedSeries = persisted?.series ?? [];
           return {
             id_ejercicio: item.id_ejercicio,
@@ -1822,19 +1920,19 @@ function Rutinas({
               ) : (
                 editorEjercicios.map((ejercicio) => (
                   <article
-                    key={ejercicio.id_ejercicio}
-                    className={`exercise-card ${draggedEditorExerciseId === ejercicio.id_ejercicio ? "dragging" : ""}`}
+                    key={ejercicio.uid}
+                    className={`exercise-card ${draggedEditorExerciseId === ejercicio.uid ? "dragging" : ""}`}
                     onDragOver={(event) => event.preventDefault()}
                     onDrop={(event) => {
                       event.preventDefault();
-                      moveEditorExercise(ejercicio.id_ejercicio);
+                      moveEditorExercise(ejercicio.uid);
                       setDraggedEditorExerciseId(null);
                     }}
                     ref={(node) => {
                       if (node) {
-                        editorExerciseRefs.current.set(ejercicio.id_ejercicio, node);
+                        editorExerciseRefs.current.set(ejercicio.uid, node);
                       } else {
-                        editorExerciseRefs.current.delete(ejercicio.id_ejercicio);
+                        editorExerciseRefs.current.delete(ejercicio.uid);
                       }
                     }}
                   >
@@ -1844,9 +1942,9 @@ function Rutinas({
                         className="drag-handle"
                         draggable
                         onDragStart={(event) => {
-                          setDraggedEditorExerciseId(ejercicio.id_ejercicio);
+                          setDraggedEditorExerciseId(ejercicio.uid);
                           event.dataTransfer.effectAllowed = "move";
-                          event.dataTransfer.setData("text/plain", String(ejercicio.id_ejercicio));
+                          event.dataTransfer.setData("text/plain", ejercicio.uid);
                         }}
                         onDragEnd={() => setDraggedEditorExerciseId(null)}
                         aria-label={`Reordenar ${ejercicio.nombre}`}
@@ -1876,14 +1974,14 @@ function Rutinas({
                           <DurationInput
                             className="rest-time-input"
                             seconds={descansoDesdeInputs(ejercicio.descansoMin, ejercicio.descansoSeg)}
-                            onChangeSeconds={(seconds) => updateDescansoEditor(ejercicio.id_ejercicio, seconds)}
+                            onChangeSeconds={(seconds) => updateDescansoEditor(ejercicio.uid, seconds)}
                             ariaLabel={`Descanso de ${ejercicio.nombre}`}
                           />
                         </div>
                         <button
                           type="button"
                           className="exercise-remove-btn"
-                          onClick={() => removerEjercicioDelEditor(ejercicio.id_ejercicio)}
+                          onClick={() => removerEjercicioDelEditor(ejercicio.uid)}
                           aria-label={`Quitar ${ejercicio.nombre}`}
                           title="Quitar ejercicio"
                         >
@@ -1893,15 +1991,15 @@ function Rutinas({
                     </div>
 
                     <div className="exercise-note-panel">
-                      <label htmlFor={`routine-note-${ejercicio.id_ejercicio}`}>Nota</label>
+                      <label htmlFor={`routine-note-${ejercicio.uid}`}>Nota</label>
                       <textarea
-                        id={`routine-note-${ejercicio.id_ejercicio}`}
+                        id={`routine-note-${ejercicio.uid}`}
                         className="field exercise-note-textarea"
                         placeholder="Escribir nota"
                         maxLength={EXERCISE_NOTE_MAX_LENGTH}
                         value={ejercicio.nota}
                         onChange={(event) =>
-                          updateNotaEditor(ejercicio.id_ejercicio, event.target.value)
+                          updateNotaEditor(ejercicio.uid, event.target.value)
                         }
                       />
                     </div>
@@ -1927,7 +2025,7 @@ function Rutinas({
                               value={serie.tipo}
                               onChange={(event) =>
                                 updateSerieEditor(
-                                  ejercicio.id_ejercicio,
+                                  ejercicio.uid,
                                   serie.id,
                                   "tipo",
                                   event.target.value,
@@ -1952,7 +2050,7 @@ function Rutinas({
                             value={serie.kg}
                             onChange={(event) =>
                               updateSerieEditor(
-                                ejercicio.id_ejercicio,
+                                ejercicio.uid,
                                 serie.id,
                                 "kg",
                                 event.target.value,
@@ -1967,7 +2065,7 @@ function Rutinas({
                             value={serie.reps}
                             onChange={(event) =>
                               updateSerieEditor(
-                                ejercicio.id_ejercicio,
+                                ejercicio.uid,
                                 serie.id,
                                 "reps",
                                 event.target.value,
@@ -1978,7 +2076,7 @@ function Rutinas({
                             type="button"
                             className="btn tiny secondary"
                             disabled={ejercicio.series.length <= 1}
-                            onClick={() => borrarSerieDeEjercicio(ejercicio.id_ejercicio, serie.id)}
+                            onClick={() => borrarSerieDeEjercicio(ejercicio.uid, serie.id)}
                           >
                             x
                           </button>
@@ -1990,7 +2088,7 @@ function Rutinas({
                     <button
                       type="button"
                       className="btn secondary"
-                      onClick={() => agregarSerieAEjercicio(ejercicio.id_ejercicio)}
+                      onClick={() => agregarSerieAEjercicio(ejercicio.uid)}
                     >
                       + Add serie
                     </button>
@@ -2541,12 +2639,45 @@ function Rutinas({
                 <p className="helper-text">Esta rutina no tiene ejercicios.</p>
               ) : (
                 <div className="exercise-summary-grid">
-                  {resumenEjercicios.map((ejercicio, index) => (
-                    <div key={`${ejercicio.nombre}-${index}`} className="exercise-summary-item">
-                      <strong>{ejercicio.nombre}</strong>
-                      <small>{ejercicio.grupo_muscular}</small>
-                    </div>
-                  ))}
+                  {resumenEjercicios.map((ejercicio, index) => {
+                    const cardio = esCardio(ejercicio.tipo_disciplina);
+                    const cantidadSeries = ejercicio.series.length;
+                    let numeroSerie = 0;
+
+                    return (
+                      <div key={`${ejercicio.nombre}-${index}`} className="exercise-summary-item">
+                        <strong>{ejercicio.nombre}</strong>
+                        <small>
+                          {[
+                            ejercicio.grupo_muscular,
+                            `${cantidadSeries} ${cantidadSeries === 1 ? "serie" : "series"}`,
+                            ejercicio.descansoSegundos > 0
+                              ? `Descanso ${formatDuration(ejercicio.descansoSegundos)}`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </small>
+                        {!cardio ? (
+                          <ul className="exercise-summary-sets" aria-label={`Series de ${ejercicio.nombre}`}>
+                            {ejercicio.series.map((serie, serieIndex) => {
+                              if (serie.tipo === "serie") {
+                                numeroSerie += 1;
+                              }
+                              const tag = serie.tipo === "serie" ? String(numeroSerie) : SET_TIPO_TAG[serie.tipo];
+
+                              return (
+                                <li key={serieIndex} className={`exercise-summary-set ${serie.tipo}`}>
+                                  <span className="exercise-summary-set-tag">{tag}</span>
+                                  {formatResumenSerie(serie)}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 

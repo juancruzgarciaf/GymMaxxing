@@ -364,13 +364,21 @@ function App() {
     navigate(`/perfil/${encodeURIComponent(username)}`);
   };
 
-  const goBackFromProfile = () => {
-    if (window.history.length > 1) {
+  // "Volver" de las pantallas de detalle: si se llegó navegando dentro de la app, volvemos a la
+  // entrada anterior del historial (misma URL exacta, por ejemplo /descubrir/tendencias/mayor-volumen),
+  // igual que el botón atrás del navegador. Si se entró directo por URL, vamos a la pantalla de respaldo.
+  const goBackOr = (fallbackPath: string) => {
+    const historyIndex = (window.history.state as { idx?: unknown } | null)?.idx;
+    if (typeof historyIndex === "number" && historyIndex > 0) {
       navigate(-1);
       return;
     }
 
-    navigate(pathForScreen("home"));
+    navigate(fallbackPath, { replace: true });
+  };
+
+  const goBackFromProfile = () => {
+    goBackOr(pathForScreen("home"));
   };
 
   const openTraining = (
@@ -385,9 +393,13 @@ function App() {
     });
   };
 
-  const openRoutine = (routine: RoutinePostSummary) => {
+  const openRoutineById = (routineId: number) => {
     dismissSharedRoutine();
-    navigate(sharedRoutinePath(routine.id_rutina));
+    navigate(sharedRoutinePath(routineId));
+  };
+
+  const openRoutine = (routine: RoutinePostSummary) => {
+    openRoutineById(routine.id_rutina);
   };
 
   const openTrainingFromSeed = (seed: TrainingSeed, options: { recordCopy?: boolean } = {}) => {
@@ -476,7 +488,7 @@ function App() {
   };
 
   const goBackFromTraining = () => {
-    navigate(pathForScreen(routeState?.returnScreen ?? trainingReturnScreen), { replace: true });
+    goBackOr(pathForScreen(routeState?.returnScreen ?? trainingReturnScreen));
   };
 
   const handleLogout = useCallback(() => {
@@ -856,6 +868,7 @@ function App() {
             usuario={usuario}
             onOpenProfile={openProfile}
             onOpenTraining={(training) => openTraining(training, "descubrir")}
+            onOpenRoutine={openRoutineById}
           />
         ) : null}
         {mainScreen === "rutinaCompartida" && sharedRoutineId != null ? (
@@ -865,9 +878,10 @@ function App() {
             routineId={sharedRoutineId}
             onClose={() => {
               dismissSharedRoutine();
-              navigate(pathForScreen("rutinas"), { replace: true });
+              goBackOr(pathForScreen("rutinas"));
             }}
-            onCopyToTraining={(seed) => {
+            onOpenProfile={openProfile}
+            onCopyToTraining={(seed, options) => {
               if (!canTrain) {
                 setAppToast({
                   type: "error",
@@ -875,7 +889,8 @@ function App() {
                 });
                 return;
               }
-              openTrainingFromSeed(seed);
+              // Empezar una rutina propia no cuenta como "copia" para los rankings.
+              openTrainingFromSeed(seed, { recordCopy: !options?.isOwnRoutine });
             }}
           />
         ) : null}

@@ -580,8 +580,8 @@ function DescubrirRutinas({ usuario, onBack, onOpenProfile }: DescubrirRutinasPr
                       </tr>
                     </thead>
                     <tbody>
-                      {detalleEjercicios.map((ejercicio) => (
-                        <tr key={`${ejercicio.id_rutina}-${ejercicio.id_ejercicio}`}>
+                      {detalleEjercicios.map((ejercicio, index) => (
+                        <tr key={`${ejercicio.id_rutina}-${ejercicio.id_ejercicio}-${index}`}>
                           <td>{ejercicio.orden}</td>
                           <td>{ejercicio.nombre}</td>
                           <td>{ejercicio.grupo_muscular}</td>

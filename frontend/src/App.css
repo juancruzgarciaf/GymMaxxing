@@ -2075,6 +2075,57 @@ h2 {
   color: #97afbf;
 }
 
+.exercise-summary-sets {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.exercise-summary-set {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px 3px 3px;
+  border-radius: 999px;
+  border: 1px solid #29445f;
+  background: #0b1a2b;
+  color: #dce8f1;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.exercise-summary-set-tag {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(220, 232, 241, 0.12);
+  color: #dce8f1;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.exercise-summary-set.warmup .exercise-summary-set-tag {
+  background: rgba(245, 190, 62, 0.18);
+  color: #f5be3e;
+}
+
+.exercise-summary-set.dropset .exercise-summary-set-tag {
+  background: rgba(99, 179, 255, 0.18);
+  color: #63b3ff;
+}
+
+.exercise-summary-set.failure .exercise-summary-set-tag {
+  background: rgba(255, 104, 117, 0.18);
+  color: #ff6875;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -3144,8 +3195,107 @@ h2 {
 
 .search-panel {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
   gap: 12px;
+}
+
+.search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input-icon {
+  position: absolute;
+  left: 14px;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: #6f8aa0;
+  stroke-width: 2;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.field.search-input {
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 12px 46px 12px 42px;
+  border-radius: 12px;
+  font-size: 15px;
+}
+
+.search-input::-webkit-search-cancel-button,
+.search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search-input-clear {
+  position: absolute;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(159, 179, 193, 0.14);
+  color: #9fb3c1;
+  cursor: pointer;
+}
+
+.search-input-clear:hover {
+  background: rgba(159, 179, 193, 0.26);
+  color: #d8e2ea;
+}
+
+.search-input-clear svg,
+.search-recent-remove svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.search-recents {
+  display: grid;
+  gap: 12px;
+}
+
+.search-recents-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.search-recents-head h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.search-recents-clear {
+  border: 0;
+  background: transparent;
+  color: #5aa9ff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+
+.search-recents-clear:hover {
+  text-decoration: underline;
+}
+
+.search-no-results {
+  margin: 4px 0 0;
+  text-align: center;
+  color: #9fb3c1;
 }
 
 .search-empty-illustration {
@@ -3362,15 +3512,72 @@ h2 {
   font-weight: 800;
 }
 
-.user-card-profile {
+.user-card.search-user-card {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.user-card.search-user-card:hover {
+  border-color: #5aa9ff;
+  background: #07111f;
+}
+
+.search-user-open {
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 14px;
+  padding: 14px 20px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.user-card-profile > div {
+.search-user-open:focus-visible {
+  outline: 2px solid #5aa9ff;
+  outline-offset: -2px;
+}
+
+.search-user-name {
   min-width: 0;
+  font-size: 1.15rem;
+}
+
+.search-user-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-user-name .verified-badge {
+  flex: 0 0 auto;
+}
+
+.search-recent-remove {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  margin-right: 14px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #9fb3c1;
+  cursor: pointer;
+}
+
+.search-recent-remove:hover {
+  background: rgba(159, 179, 193, 0.16);
+  color: #d8e2ea;
 }
 
 .verified-name {
@@ -4898,12 +5105,6 @@ small.verified-name {
 .user-card p,
 .user-card small {
   margin: 4px 0 0;
-}
-
-.user-card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
 }
 
 .discover-home-shell {
@@ -7078,4 +7279,118 @@ button.discover-module-card:hover,
     width: 62px;
     height: 56px;
   }
+}
+
+:root[data-theme="light"] .search-input-icon {
+  stroke: #6b7280;
+}
+
+:root[data-theme="light"] .search-input-clear {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+:root[data-theme="light"] .search-input-clear:hover {
+  background: #d1d5db;
+  color: #111827;
+}
+
+:root[data-theme="light"] .content .user-card.search-user-card:hover {
+  border-color: #5aa9ff;
+  background: #f5f9ff;
+}
+
+:root[data-theme="light"] .search-recents-clear {
+  color: #1d6fd1;
+}
+
+:root[data-theme="light"] .search-recent-remove {
+  color: #6b7280;
+}
+
+:root[data-theme="light"] .search-recent-remove:hover {
+  background: #eef2f6;
+  color: #111827;
+}
+
+:root[data-theme="light"] .content p.search-no-results {
+  color: #6b7280;
+}
+
+:root[data-theme="light"] .content .exercise-summary-set {
+  border-color: #d9e2ea;
+  background: #f5f8fb;
+  color: #111827;
+}
+
+:root[data-theme="light"] .content .exercise-summary-set-tag {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+:root[data-theme="light"] .content .exercise-summary-set.warmup .exercise-summary-set-tag {
+  background: #fef3c7;
+  color: #c88f00;
+}
+
+:root[data-theme="light"] .content .exercise-summary-set.dropset .exercise-summary-set-tag {
+  background: #dbeafe;
+  color: #2f8ed9;
+}
+
+:root[data-theme="light"] .content .exercise-summary-set.failure .exercise-summary-set-tag {
+  background: #fee2e2;
+  color: #d43d4a;
+}
+
+/* Tendencias: toda la cápsula abre la rutina, el perfil o el entrenamiento */
+.trend-row.is-clickable {
+  position: relative;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.trend-row.is-clickable:hover {
+  border-color: #5aa9ff;
+  background: #132b45;
+}
+
+.trend-row-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.trend-row-hit:focus-visible {
+  outline: 2px solid #5aa9ff;
+  outline-offset: 2px;
+}
+
+:root[data-theme="light"] .trend-row.is-clickable:hover {
+  border-color: #5aa9ff;
+  background: #f5f9ff;
+}
+
+/* Detalle de rutina (propia o de otro usuario) */
+.routine-view .muscle-chips {
+  margin-top: 4px;
+}
+
+.routine-view-actions {
+  margin-top: 4px;
+}
+
+.routine-sets-grid {
+  grid-template-columns: minmax(64px, 0.6fr) repeat(2, minmax(80px, 1fr));
+}
+
+.routine-sets-grid.no-weight {
+  grid-template-columns: minmax(64px, 0.6fr) minmax(80px, 1fr);
 }
