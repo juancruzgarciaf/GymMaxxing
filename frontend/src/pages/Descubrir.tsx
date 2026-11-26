@@ -8,6 +8,7 @@ type DescubrirProps = {
   usuario: Usuario;
   onOpenProfile?: (username: string) => void;
   onOpenTraining?: (training: EntrenamientoResumen) => void;
+  onOpenRoutine?: (routineId: number) => void;
 };
 
 type DiscoverBranch = "home" | "rutinas" | "atletas" | "tendencias" | "gimnasios";
@@ -22,7 +23,7 @@ const getBranchFromPath = (pathname: string): DiscoverBranch => {
   return "home";
 };
 
-function Descubrir({ usuario, onOpenProfile, onOpenTraining }: DescubrirProps) {
+function Descubrir({ usuario, onOpenProfile, onOpenTraining, onOpenRoutine }: DescubrirProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const branch = getBranchFromPath(location.pathname);
@@ -65,7 +66,12 @@ function Descubrir({ usuario, onOpenProfile, onOpenTraining }: DescubrirProps) {
           </div>
         </section>
 
-        <Tendencias usuario={usuario} onOpenProfile={onOpenProfile} onOpenTraining={onOpenTraining} />
+        <Tendencias
+          usuario={usuario}
+          onOpenProfile={onOpenProfile}
+          onOpenTraining={onOpenTraining}
+          onOpenRoutine={onOpenRoutine}
+        />
       </main>
     );
   }

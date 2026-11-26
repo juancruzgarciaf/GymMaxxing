@@ -19,6 +19,7 @@ export type RoutineLibraryUpdatedDetail = {
 
 type PersistedRutinaEjercicio = {
   id_ejercicio: number;
+  nota?: string;
   descansoSegundos: number;
   series: Array<{
     kg: string;
@@ -72,6 +73,35 @@ const savePersistedRutinaEjercicios = (
   const all = readRutinaPrefs();
   all[String(idRutina)] = ejercicios;
   writeRutinaPrefs(all);
+};
+
+// Series (kg, reps, tipo) que el creador de una rutina guardó en este navegador.
+export const readPersistedRoutineExercises = (routineId: number): PersistedRutinaEjercicio[] => {
+  const persisted = readRutinaPrefs()[String(routineId)];
+  return Array.isArray(persisted) ? persisted : [];
+};
+
+// Empareja cada ejercicio de una rutina (ordenados por "orden") con lo guardado en este navegador.
+// Si un ejercicio aparece dos veces, cada aparición toma su propio registro, en orden.
+export const matchPersistedByOrder = <
+  T extends { id_ejercicio: number },
+  P extends { id_ejercicio: number },
+>(
+  items: T[],
+  persisted: P[],
+): Array<P | undefined> => {
+  const usados = new Set<number>();
+  return items.map((item) => {
+    const index = persisted.findIndex(
+      (candidato, candidatoIndex) =>
+        !usados.has(candidatoIndex) && candidato?.id_ejercicio === item.id_ejercicio,
+    );
+    if (index < 0) {
+      return undefined;
+    }
+    usados.add(index);
+    return persisted[index];
+  });
 };
 
 const notifyRoutineLibraryUpdated = (detail: RoutineLibraryUpdatedDetail) => {

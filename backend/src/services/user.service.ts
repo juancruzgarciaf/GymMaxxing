@@ -939,7 +939,9 @@ export const updateUser = async (id: number, data: Partial<UsuarioRow> & { gimna
 export const searchUsers = async (query: string, viewerId?: number) => {
   await ensureUserPhotoColumn();
 
-  const params: Array<string | number> = [`%${query.trim()}%`];
+  // Escapamos los comodines de LIKE para que "%" o "_" se busquen literalmente.
+  const likeQuery = query.trim().replace(/[\\%_]/g, "\\$&");
+  const params: Array<string | number> = [`%${likeQuery}%`, `${likeQuery}%`];
   let viewerClause = "";
 
   if (viewerId != null) {
@@ -947,7 +949,7 @@ export const searchUsers = async (query: string, viewerId?: number) => {
     viewerClause = `, EXISTS (
       SELECT 1
       FROM seguimientousuario su
-      WHERE su.id_seguidor = $2
+      WHERE su.id_seguidor = $3
         AND su.id_seguido = u.id
     ) AS lo_sigo`;
   }
@@ -977,7 +979,7 @@ export const searchUsers = async (query: string, viewerId?: number) => {
             ${viewerClause}
      FROM usuario u
      WHERE u.username ILIKE $1
-     ORDER BY u.username ASC
+     ORDER BY (u.username ILIKE $2) DESC, u.username ASC
      LIMIT 20`,
     params
   );

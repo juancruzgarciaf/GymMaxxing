@@ -187,8 +187,8 @@ function GeminiRoutinePanelBody({
             <small>{lastGeneratedRoutine.totalEjercicios} ejercicios generados</small>
             {lastGeneratedRoutine.ejerciciosPreview.length > 0 ? (
               <div className="gemini-panel-result-list">
-                {lastGeneratedRoutine.ejerciciosPreview.map((exercise) => (
-                  <div key={exercise.id_ejercicio} className="gemini-panel-result-item">
+                {lastGeneratedRoutine.ejerciciosPreview.map((exercise, index) => (
+                  <div key={`${exercise.id_ejercicio}-${index}`} className="gemini-panel-result-item">
                     <span>{exercise.nombre}</span>
                     <small>{exercise.grupo_muscular ?? "Sin grupo muscular"}</small>
                   </div>
