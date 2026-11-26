@@ -6,6 +6,7 @@ import VerifiedBadge from "./VerifiedBadge";
 import { resolveMediaUrl } from "../lib/media";
 import UserAvatar from "./UserAvatar";
 import MusicaChips from "./MusicaChips";
+import { useBodyScrollLock } from "../lib/useBodyScrollLock";
 import MusicaEditor from "./MusicaEditor";
 import {
   camposDesdeMusica,
@@ -204,6 +205,12 @@ function TrainingPostCard({
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletingTraining, setDeletingTraining] = useState(false);
   const [hiddenAfterDelete, setHiddenAfterDelete] = useState(false);
+
+  // Mientras hay un modal abierto, el feed de atrás no se mueve.
+  useBodyScrollLock(
+    !hiddenAfterDelete &&
+      (editModalOpen || saveModalOpen || deleteModalOpen || pendingDeleteCommentId != null),
+  );
 
   useEffect(() => {
     setDisplayItem(item);

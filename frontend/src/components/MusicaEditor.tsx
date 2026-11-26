@@ -8,6 +8,7 @@ import {
   type MusicaPlaylist,
 } from "../lib/musica";
 import MusicaChips, { MusicCover, MusicNoteIcon } from "./MusicaChips";
+import { useBodyScrollLock } from "../lib/useBodyScrollLock";
 import "./Musica.css";
 
 type MusicaEditorProps = {
@@ -182,6 +183,7 @@ const SongPickerModal = ({ onClose, onSelect }: SongPickerModalProps) => {
   const [buscando, setBuscando] = useState(false);
   const [busquedaError, setBusquedaError] = useState("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  useBodyScrollLock(true);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
