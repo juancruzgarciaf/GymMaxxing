@@ -1,3 +1,5 @@
+import type { MusicaCampos } from "./lib/musica";
+
 export type ProPlanId = "monthly" | "yearly" | "lifetime";
 
 export type Usuario = {
@@ -76,7 +78,7 @@ export type EntrenamientoResumen = {
   comments_count: number;
   viewer_liked: boolean;
   ejercicios_preview: EjercicioPreview[];
-};
+} & MusicaCampos;
 
 export type RoutinePostPreview = {
   nombre: string;
@@ -149,6 +151,9 @@ export type RoutineSummary = {
   copy_count: number;
   likes_count: number;
   viewer_liked: boolean;
+  playlist_url?: string | null;
+  playlist_titulo?: string | null;
+  playlist_portada_url?: string | null;
 };
 
 export type DiscoverRoutineSummary = RoutineSummary & {

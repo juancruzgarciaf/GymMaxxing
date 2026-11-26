@@ -18,6 +18,7 @@ import {
   deleteSesionEntrenamiento,
   uploadTrainingImage,
 } from "../controllers/entrenamiento.controller";
+import { updateMusicaSesion } from "../controllers/musica.controller";
 import { requireAuth } from "../middleware/auth.middleware";
 import { createImageUpload } from "../middleware/upload.middleware";
 
@@ -31,6 +32,7 @@ router.get("/sesion/:id/interacciones", getSessionInteractionSummary);
 router.get("/sesion/:id/comentarios", getComentariosDeSesion);
 router.put("/:id", updateSesionEntrenamiento);
 router.post("/:id/image", requireAuth, trainingImageUpload.single("image"), uploadTrainingImage);
+router.put("/:id/musica", requireAuth, updateMusicaSesion);
 router.put("/:id/series", replaceSeriesDeSesion);
 router.post("/end", finalizarSesion);
 router.post("/:id/finalizar", finalizarSesion);

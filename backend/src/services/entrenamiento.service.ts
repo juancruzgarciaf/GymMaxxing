@@ -16,6 +16,14 @@ type SesionEntrenamientoRow = {
   volumen_total: number | null;
   nombre_rutina_snapshot: string | null;
   imagen_url: string | null;
+  playlist_url?: string | null;
+  playlist_titulo?: string | null;
+  playlist_portada_url?: string | null;
+  cancion_apple_id?: string | null;
+  cancion_titulo?: string | null;
+  cancion_artista?: string | null;
+  cancion_portada_url?: string | null;
+  cancion_url?: string | null;
 };
 
 type SessionInteractionSummaryRow = {
@@ -438,14 +446,23 @@ const reconstruirRecordsDeUsuario = async (usuario_id: number, queryable: Querya
 export const iniciarSesionEntrenamiento = async (data: any) => {
   const { descripcion, gimnasio_id, usuario_id, rutina_id } = data;
 
+  type RutinaInicioRow = {
+    nombre: string;
+    playlist_url: string | null;
+    playlist_titulo: string | null;
+    playlist_portada_url: string | null;
+  };
+
+  // Si la rutina tiene playlist de Spotify, el entrenamiento arranca con esa playlist.
   const rutinaResult = rutina_id
-    ? await pool.query<{ nombre: string }>(
-        `SELECT nombre
+    ? await pool.query<RutinaInicioRow>(
+        `SELECT nombre, playlist_url, playlist_titulo, playlist_portada_url
          FROM rutina
          WHERE id_rutina = $1`,
         [rutina_id]
       )
-    : { rows: [] as Array<{ nombre: string }> };
+    : { rows: [] as RutinaInicioRow[] };
+  const rutinaInicio = rutinaResult.rows[0];
 
   const result = await pool.query<SesionEntrenamientoRow>(
     `INSERT INTO sesionentrenamiento
@@ -457,16 +474,22 @@ export const iniciarSesionEntrenamiento = async (data: any) => {
        usuario_id,
        rutina_id,
        estado,
-       nombre_rutina_snapshot
+       nombre_rutina_snapshot,
+       playlist_url,
+       playlist_titulo,
+       playlist_portada_url
      )
-     VALUES (NOW(), NOW(), $1, $2, $3, $4, 'en_curso', $5)
+     VALUES (NOW(), NOW(), $1, $2, $3, $4, 'en_curso', $5, $6, $7, $8)
      RETURNING *`,
     [
       limitDescription(descripcion),
       gimnasio_id ?? null,
       usuario_id,
       rutina_id,
-      rutinaResult.rows[0]?.nombre ?? null,
+      rutinaInicio?.nombre ?? null,
+      rutinaInicio?.playlist_url ?? null,
+      rutinaInicio?.playlist_titulo ?? null,
+      rutinaInicio?.playlist_portada_url ?? null,
     ]
   );
 

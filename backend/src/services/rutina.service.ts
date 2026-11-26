@@ -36,6 +36,9 @@ type RutinaRow = {
   creador_id: number;
   id_carpeta: number | null;
   visible_en_descubrir: boolean;
+  playlist_url?: string | null;
+  playlist_titulo?: string | null;
+  playlist_portada_url?: string | null;
   save_count: number;
   copy_count: number;
   likes_count: number;
@@ -275,6 +278,9 @@ const buildRutinaSelectSql = (
          ${alias}.creador_id,
          ${alias}.id_carpeta,
          ${alias}.visible_en_descubrir,
+         ${alias}.playlist_url,
+         ${alias}.playlist_titulo,
+         ${alias}.playlist_portada_url,
          ${
            support.has_save
              ? `(SELECT COUNT(*)::int FROM rutina_guardado rg WHERE rg.rutina_id = ${alias}.id_rutina)`

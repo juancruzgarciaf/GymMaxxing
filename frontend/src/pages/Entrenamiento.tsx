@@ -9,6 +9,15 @@ import type { TrainingSeed, TrainingSetType, Usuario } from "../types";
 import TrashIcon from "../components/TrashIcon";
 import DurationInput from "../components/DurationInput";
 import ExerciseMedia from "../components/ExerciseMedia";
+import MusicaEditor from "../components/MusicaEditor";
+import {
+  guardarMusicaSesion,
+  guardarPlaylistRutina,
+  playlistDesdeCampos,
+  type MusicaCampos,
+  type MusicaCancion,
+  type MusicaPlaylist,
+} from "../lib/musica";
 
 type Ejercicio = {
   id_ejercicio: number;
@@ -71,7 +80,7 @@ type SesionEntrenamiento = {
   estado?: string;
   duracion_segundos?: number | null;
   nombre_rutina_snapshot?: string | null;
-};
+} & MusicaCampos;
 
 type DescansoActivo = {
   restanteSegundos: number;
@@ -372,6 +381,9 @@ function Entrenamiento({
   const [guardarCarpetaId, setGuardarCarpetaId] = useState("");
   const [guardarComoRutina, setGuardarComoRutina] = useState(false);
   const [guardarImagen, setGuardarImagen] = useState<File | null>(null);
+  // Si el entrenamiento arrancó desde una rutina con playlist, viene precargada.
+  const [guardarPlaylist, setGuardarPlaylist] = useState<MusicaPlaylist | null>(null);
+  const [guardarCancion, setGuardarCancion] = useState<MusicaCancion | null>(null);
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
   const [activeTrainingHydrated, setActiveTrainingHydrated] = useState(false);
   const [staleTrainingRestore, setStaleTrainingRestore] = useState<RestoredActiveTraining | null>(null);
@@ -491,6 +503,8 @@ function Entrenamiento({
   const applyRestoredTraining = (restored: RestoredActiveTraining) => {
     setVista(restored.vista);
     setSesionActiva(restored.sesionActiva);
+    setGuardarPlaylist(playlistDesdeCampos(restored.sesionActiva));
+    setGuardarCancion(null);
     setTrainingStartedAt(restored.startedAt);
     setSourceRoutineIdContext(restored.sourceRoutineIdContext ?? null);
     setEjecucionEjercicios(restored.ejecucionEjercicios);
@@ -812,6 +826,8 @@ function Entrenamiento({
     setGuardarCarpetaId("");
     setGuardarComoRutina(false);
     setGuardarImagen(null);
+    setGuardarPlaylist(null);
+    setGuardarCancion(null);
     setFiltroEquipo("");
     setFiltroMusculo("");
     setBusquedaEjercicio("");
@@ -1055,6 +1071,8 @@ function Entrenamiento({
 
       const sesion = (await startRes.json()) as SesionEntrenamiento;
       setSesionActiva(sesion);
+      setGuardarPlaylist(playlistDesdeCampos(sesion));
+      setGuardarCancion(null);
       setTrainingStartedAt(parseTimestamp(sesion.fecha_inicio) ?? Date.now());
       setSourceRoutineIdContext(sourceRoutineId);
       const nextEjecucion = nextSeed ? seedToExecution(nextSeed) : [];
@@ -1647,13 +1665,25 @@ function Entrenamiento({
         }
       }
 
+      // Música: se manda si el usuario eligió algo o si sacó la playlist que venía de la rutina.
+      if (guardarPlaylist || guardarCancion || sesionActiva.playlist_url) {
+        await guardarMusicaSesion(sesionActiva.id_sesion, {
+          playlist_url: guardarPlaylist?.url ?? null,
+          cancion: guardarCancion,
+        });
+      }
+
       if (guardarComoRutina) {
         const currentSeed = buildCurrentTrainingSeed();
-        await saveTrainingSeedAsRoutine(currentSeed, usuario.id, {
+        const nuevaRutina = await saveTrainingSeedAsRoutine(currentSeed, usuario.id, {
           name: nombre || `Entrenamiento ${sesionActiva.id_sesion}`,
           description: descripcion,
           folderId: guardarCarpetaId ? Number(guardarCarpetaId) : null,
         });
+        // La rutina nueva se queda con la playlist del entrenamiento.
+        if (guardarPlaylist && nuevaRutina?.id_rutina) {
+          await guardarPlaylistRutina(nuevaRutina.id_rutina, guardarPlaylist.url);
+        }
       }
 
       resetEntrenamiento();
@@ -1912,6 +1942,13 @@ function Entrenamiento({
                 />
                 {guardarImagen ? <small>{guardarImagen.name}</small> : null}
               </label>
+              <MusicaEditor
+                playlist={guardarPlaylist}
+                onPlaylistChange={setGuardarPlaylist}
+                cancion={guardarCancion}
+                onCancionChange={setGuardarCancion}
+                disabled={loading}
+              />
               <select
                 className="field"
                 value={guardarCarpetaId}

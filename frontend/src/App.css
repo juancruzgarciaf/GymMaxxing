@@ -3041,6 +3041,10 @@ h2 {
 
 .training-edit-modal {
   width: min(880px, calc(100vw - 28px));
+  /* Con el fondo bloqueado, si el modal es más alto que la pantalla se scrollea por dentro. */
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .training-edit-summary {

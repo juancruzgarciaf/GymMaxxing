@@ -4,6 +4,8 @@ import VerifiedBadge from "../components/VerifiedBadge";
 import { resolveMediaUrl } from "../lib/media";
 import UserAvatar from "../components/UserAvatar";
 import ExerciseMedia from "../components/ExerciseMedia";
+import MusicaChips from "../components/MusicaChips";
+import { cancionDesdeCampos, playlistDesdeCampos } from "../lib/musica";
 
 type EntrenamientoDetalleProps = {
   entrenamiento: EntrenamientoResumen;
@@ -345,6 +347,8 @@ function EntrenamientoDetalle({
           alt={`Imagen de ${entrenamiento.titulo}`}
         />
       ) : null}
+
+      <MusicaChips playlist={playlistDesdeCampos(entrenamiento)} cancion={cancionDesdeCampos(entrenamiento)} />
 
       {loading ? <div className="status">Cargando detalle del entrenamiento...</div> : null}
       {error ? <div className="status error">{error}</div> : null}
