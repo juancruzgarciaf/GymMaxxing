@@ -465,13 +465,28 @@ export const getUserProfileByUsername = async (req: Request, res: Response) => {
       });
     }
 
-    const profileUser = await userService.getUserProfileByUsername(username, viewerId, true);
-    const fullHistory =
-      !profileUser?.is_own_profile ||
-      (req.authUser ? await isUserPro(req.authUser.id) : true);
-    const profile = fullHistory
-      ? profileUser
-      : await userService.getUserProfileByUsername(username, viewerId, false);
+    // Antes se armaba el perfil completo y, si era el propio y no era PRO, se armaba
+    // todo de nuevo con el historial recortado (el doble de consultas). Ahora primero
+    // resolvemos id + tipo de usuario y el estado PRO en paralelo, y armamos el perfil una sola vez.
+    const [profileUser, viewerIsPro] = await Promise.all([
+      userService.findUserIdAndRoleByUsername(username),
+      req.authUser ? isUserPro(req.authUser.id) : Promise.resolve(true),
+    ]);
+
+    if (!profileUser) {
+      return res.status(404).json({
+        error: "Usuario no encontrado",
+      });
+    }
+
+    const isOwnProfile = viewerId != null && viewerId === profileUser.id;
+    const fullHistory = !isOwnProfile || viewerIsPro;
+    const profile = await userService.getUserProfile(
+      profileUser.id,
+      viewerId,
+      fullHistory,
+      profileUser.tipo_usuario,
+    );
 
     if (!profile) {
       return res.status(404).json({

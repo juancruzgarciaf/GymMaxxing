@@ -18,6 +18,36 @@ type ProfileHeaderProps = {
 const formatNumber = (value: number) =>
   new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(value);
 
+const LINK_PREVIEW_LENGTH = 20;
+
+const ensureProtocol = (url: string) => (/^https?:\/\//i.test(url) ? url : `https://${url}`);
+
+const shortenLink = (url: string) => {
+  const clean = url.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
+  return clean.length > LINK_PREVIEW_LENGTH ? `${clean.slice(0, LINK_PREVIEW_LENGTH)}...` : clean;
+};
+
+const normalizeInstagramUser = (value?: string | null) => {
+  if (!value) return "";
+  let user = value.trim();
+  const fromUrl = user.match(/instagram\.com\/([^/?#\s]+)/i);
+  if (fromUrl) user = fromUrl[1];
+  return user.replace(/^@/, "").replace(/\/+$/, "").trim();
+};
+
+const LinkIcon = () => (
+  <svg className="profile-meta-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </svg>
+);
+
+const PhoneIcon = () => (
+  <svg className="profile-meta-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+  </svg>
+);
+
 const GENDER_LABELS: Record<string, string> = {
   hombre: "Hombre",
   mujer: "Mujer",
@@ -45,7 +75,8 @@ function ProfileHeader({
     ? gymProfile?.nombre_gimnasio?.trim() || perfil.usuario.username
     : perfil.usuario.username;
   const location = [gymProfile?.ciudad, gymProfile?.provincia].filter(Boolean).join(", ");
-  const gymInstagram = gymProfile?.instagram?.trim().replace(/^@/, "");
+  const gymInstagram = normalizeInstagramUser(gymProfile?.instagram);
+  const gymWebsite = gymProfile?.sitio_web?.trim();
   const profilePhoto = resolveMediaUrl(perfil.usuario.foto_perfil_url);
 
   return (
@@ -131,9 +162,35 @@ function ProfileHeader({
             <span className="tag-soft">{gymProfile.tipo_gimnasio}</span>
           ) : null}
           {isGym && location ? <span className="tag-soft">{location}</span> : null}
-          {isGym && gymProfile?.telefono ? <span className="tag-soft">{gymProfile.telefono}</span> : null}
-          {isGym && gymInstagram ? <span className="tag-soft">@{gymInstagram}</span> : null}
-          {isGym && gymProfile?.sitio_web ? <span className="tag-soft">{gymProfile.sitio_web}</span> : null}
+          {isGym && gymProfile?.telefono ? (
+            <span className="tag-soft profile-meta-item">
+              <PhoneIcon />
+              {gymProfile.telefono}
+            </span>
+          ) : null}
+          {isGym && gymInstagram ? (
+            <a
+              className="tag-soft profile-meta-item profile-meta-link"
+              href={`https://www.instagram.com/${encodeURIComponent(gymInstagram)}/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Instagram de @${gymInstagram}`}
+            >
+              @{gymInstagram}
+            </a>
+          ) : null}
+          {isGym && gymWebsite ? (
+            <a
+              className="tag-soft profile-meta-item profile-meta-link"
+              href={ensureProtocol(gymWebsite)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={gymWebsite}
+            >
+              <LinkIcon />
+              {shortenLink(gymWebsite)}
+            </a>
+          ) : null}
           {isGym && gymProfile?.google_maps_url ? (
             <a className="tag-soft profile-map-link" href={gymProfile.google_maps_url} target="_blank" rel="noreferrer">
               Abrir mapa

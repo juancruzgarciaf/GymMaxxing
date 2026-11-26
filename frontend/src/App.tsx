@@ -21,6 +21,7 @@ import Register from "./pages/Register";
 import NotificationSettingsPanel from "./components/NotificationSettingsPanel";
 import AppSidebar, { type SidebarItemKey } from "./components/AppSidebar";
 import NotificationsDrawer from "./components/NotificationsDrawer";
+import GymBroxx from "./components/GymBroxx/GymBroxx";
 
 import RutinaCompartida from "./pages/RutinaCompartida";
 import Rutinas from "./pages/Rutinas";
@@ -107,7 +108,8 @@ const getTrainingIdFromPath = (pathname: string) => {
 };
 
 const getMainScreenFromPath = (pathname: string): MainScreen => {
-  if (pathname === "/rutinas") {
+  // /rutinas, /rutinas/nueva y /rutinas/:id/editar los maneja la pantalla de Rutinas.
+  if (pathname === "/rutinas" || pathname.startsWith("/rutinas/")) {
     return "rutinas";
   }
   if (pathname === "/buscar") {
@@ -727,6 +729,13 @@ function App() {
               onSeedConsumed={() => setTrainingSeed(null)}
               onActiveTrainingChange={handleActiveTrainingChange}
               discardRequestKey={discardTrainingRequestKey}
+              onTrainingSaved={(text) => {
+                // Al guardar vamos al inicio y recargamos el feed para que aparezca el entrenamiento nuevo.
+                setAppToast({ type: "ok", text });
+                setNotificationsOpen(false);
+                setHomeRefreshKey((prev) => prev + 1);
+                navigate(pathForScreen("home"), { replace: true });
+              }}
             />
           </div>
         ) : null}
@@ -903,6 +912,13 @@ function App() {
           </button>
         </div>
       ) : null}
+      <GymBroxx
+        usuario={usuario}
+        canTrain={canTrain}
+        isTraining={Boolean(activeTraining)}
+        lifted={showActiveTrainingBar}
+        onAction={(action) => navigateTo(action === "training" ? "entrenamientoLibre" : "rutinas")}
+      />
       {discardTrainingModalOpen && activeTraining ? (
         <div
           className="modal-backdrop"

@@ -535,7 +535,7 @@ export const finalizarSesion = async (req: Request, res: Response) => {
       return;
     }
 
-    const resultado = await entrenamientoService.finalizarSesion(sesion_id);
+    const resultado = await entrenamientoService.finalizarSesion(sesion_id, sesion);
 
     if (!resultado) {
       return res.status(404).json({

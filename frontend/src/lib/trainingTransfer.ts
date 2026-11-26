@@ -9,6 +9,22 @@ import type {
 import { limitDescription, limitTitle } from "./textLimits";
 
 const API = "http://localhost:3000";
+const AUTH_STORAGE_KEY = "gymmaxxing_auth_v1";
+
+// Crear rutinas y agregarles ejercicios exige estar logueado (el backend toma el creador del token).
+const authJsonHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    const token = raw ? (JSON.parse(raw) as { token?: string }).token : null;
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+  } catch {
+    // Sin token el backend responde 401 y se muestra el error.
+  }
+  return headers;
+};
 const RUTINA_PREFS_KEY = "gymmaxxing_rutina_series_v1";
 export const ROUTINE_LIBRARY_UPDATED_EVENT = "gymmaxxing:routine-library-updated";
 
@@ -335,7 +351,7 @@ export const saveTrainingSeedAsRoutine = async (
 
   const createRes = await fetch(`${API}/rutinas`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authJsonHeaders(),
     body: JSON.stringify({
       nombre: name,
       descripcion,
@@ -357,7 +373,7 @@ export const saveTrainingSeedAsRoutine = async (
 
     const addRes = await fetch(`${API}/rutinas/ejercicios`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authJsonHeaders(),
       body: JSON.stringify({
         id_rutina: routine.id_rutina,
         id_ejercicio: exercise.id_ejercicio,

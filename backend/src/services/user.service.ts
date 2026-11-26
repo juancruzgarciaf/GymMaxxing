@@ -387,7 +387,23 @@ const upsertGymProfile = async (
   return getGymProfile(userId, fallbackName);
 };
 
+let cachedRutinaMetricsSupport: RutinaMetricSupport | null = null;
+
 const getRutinaMetricsSupport = async (): Promise<RutinaMetricSupport> => {
+  // Una vez que existen las tres tablas no van a desaparecer: no hace falta volver a preguntar.
+  if (cachedRutinaMetricsSupport) {
+    return cachedRutinaMetricsSupport;
+  }
+
+  const support = await queryRutinaMetricsSupport();
+  if (support.has_save && support.has_copy && support.has_like) {
+    cachedRutinaMetricsSupport = support;
+  }
+
+  return support;
+};
+
+const queryRutinaMetricsSupport = async (): Promise<RutinaMetricSupport> => {
   const result = await pool.query<RutinaMetricSupport>(
     `SELECT
        to_regclass('public.rutina_guardado') IS NOT NULL AS has_save,
@@ -404,16 +420,29 @@ const getRutinaMetricsSupport = async (): Promise<RutinaMetricSupport> => {
   );
 };
 
-const ensureRutinaVisibilityColumn = async () => {
-  await pool.query(
-    `ALTER TABLE rutina
-     ADD COLUMN IF NOT EXISTS visible_en_descubrir BOOLEAN NOT NULL DEFAULT TRUE`
-  );
+// Los ALTER TABLE toman un lock exclusivo sobre "rutina" y son un viaje extra a la base:
+// alcanza con correrlos una sola vez por proceso.
+let rutinaVisibilityColumnReady: Promise<void> | null = null;
 
-  await pool.query(
-    `ALTER TABLE rutina
-     ALTER COLUMN visible_en_descubrir SET DEFAULT TRUE`
-  );
+const ensureRutinaVisibilityColumn = () => {
+  if (!rutinaVisibilityColumnReady) {
+    rutinaVisibilityColumnReady = (async () => {
+      await pool.query(
+        `ALTER TABLE rutina
+         ADD COLUMN IF NOT EXISTS visible_en_descubrir BOOLEAN NOT NULL DEFAULT TRUE`
+      );
+
+      await pool.query(
+        `ALTER TABLE rutina
+         ALTER COLUMN visible_en_descubrir SET DEFAULT TRUE`
+      );
+    })().catch((error) => {
+      rutinaVisibilityColumnReady = null;
+      throw error;
+    });
+  }
+
+  return rutinaVisibilityColumnReady;
 };
 
 const getExercisePreviewMap = async (sessionIds: number[]) => {
@@ -1117,10 +1146,21 @@ export const getUserProfile = async (
   profileId: number,
   viewerId?: number,
   fullHistory = true,
+  knownRole?: string | null,
 ) => {
   await ensureUserPhotoColumn();
 
-  const userResult = await pool.query<
+  // Si ya conocemos el tipo de usuario, las consultas del perfil (datos + contadores,
+  // entrenamientos/rutinas y datos del gimnasio) no dependen entre si y van en paralelo.
+  // Con la base en Railway cada consulta es un viaje de red, asi que esto ahorra bastante.
+  const resolvedRole = knownRole ?? (await getUserRoleById(profileId));
+  if (resolvedRole == null) {
+    return null;
+  }
+
+  const gymUser = isGymRole(resolvedRole);
+
+  const userQuery = pool.query<
     UsuarioRow & {
       followers_count: number;
       following_count: number;
@@ -1168,15 +1208,9 @@ export const getUserProfile = async (
     viewerId != null ? [profileId, viewerId] : [profileId]
   );
 
-  const user = userResult.rows[0];
-  if (!user) {
-    return null;
-  }
-
-  const gymUser = isGymRole(user.tipo_usuario);
-  const trainings = gymUser
-    ? []
-    : await getSessionSummaries(
+  const trainingsQuery = gymUser
+    ? Promise.resolve([])
+    : getSessionSummaries(
         `se.usuario_id = $1
           AND se.estado = 'finalizada'
           ${fullHistory ? "" : "AND COALESCE(se.fecha_fin, se.fecha_inicio, se.fecha) >= NOW() - INTERVAL '90 days'"}`,
@@ -1184,14 +1218,30 @@ export const getUserProfile = async (
         20,
         viewerId
       );
-  const routines = gymUser
-    ? await getRoutinePostSummaries(
+  const routinesQuery = gymUser
+    ? getRoutinePostSummaries(
         `r.creador_id = $1`,
         [profileId],
         20
       )
-    : [];
-  const gimnasioPerfil = gymUser ? await getGymProfile(profileId, user.username) : null;
+    : Promise.resolve([]);
+  const gymProfileQuery = gymUser ? getGymProfile(profileId, "") : Promise.resolve(null);
+
+  const [userResult, trainings, routines, gymProfileRaw] = await Promise.all([
+    userQuery,
+    trainingsQuery,
+    routinesQuery,
+    gymProfileQuery,
+  ]);
+
+  const user = userResult.rows[0];
+  if (!user) {
+    return null;
+  }
+
+  const gimnasioPerfil = gymProfileRaw
+    ? { ...gymProfileRaw, nombre_gimnasio: gymProfileRaw.nombre_gimnasio || user.username }
+    : null;
 
   return {
     usuario: sanitizeUser(user),
@@ -1214,19 +1264,23 @@ export const getUserProfileByUsername = async (
   viewerId?: number,
   fullHistory = true,
 ) => {
-  const userResult = await pool.query<{ id: number }>(
-    `SELECT id
+  const user = await findUserIdAndRoleByUsername(username);
+  if (!user) {
+    return null;
+  }
+
+  return getUserProfile(user.id, viewerId, fullHistory, user.tipo_usuario);
+};
+
+export const findUserIdAndRoleByUsername = async (username: string) => {
+  const userResult = await pool.query<{ id: number; tipo_usuario: string }>(
+    `SELECT id, tipo_usuario
      FROM usuario
      WHERE LOWER(username) = LOWER($1)`,
     [username.trim()]
   );
 
-  const userId = userResult.rows[0]?.id;
-  if (userId == null) {
-    return null;
-  }
-
-  return getUserProfile(userId, viewerId, fullHistory);
+  return userResult.rows[0] ?? null;
 };
 
 export const getFeed = async (userId: number, page = 1, pageSize = 10) => {

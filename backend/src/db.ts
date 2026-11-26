@@ -32,4 +32,15 @@ export const pool = new Pool({
   password: getEnv("DB_PASSWORD"),
   port: dbPort,
   options: `-c timezone=${APP_TIMEZONE}`,
+  // Por defecto pg cierra las conexiones que quedan 10 s sin uso. Con la base en Railway
+  // abrir una conexion nueva (TCP + TLS + login) cuesta bastante, y eso hacia que la
+  // primera carga despues de un rato quieto fuera lenta. Las mantenemos vivas mas tiempo.
+  idleTimeoutMillis: 5 * 60 * 1000,
+  keepAlive: true,
+});
+
+// Si Railway corta una conexion inactiva, que no se caiga el proceso: el pool la descarta
+// y abre otra en la proxima consulta.
+pool.on("error", (error) => {
+  console.error("Conexion inactiva a la base cerrada:", error.message);
 });

@@ -26,15 +26,17 @@ export const crearRutina = async (req: Request, res: Response) => {
     así la parte más importante de creación queda centralizada ahí.
   */
   try {
-    const { nombre, creador_id } = req.body;
+    const { nombre } = req.body;
+    const creadorId = req.authUser?.id;
 
-    if (!nombre || !creador_id) {
+    if (!nombre || !creadorId) {
       return res.status(400).json({
         error: "nombre y creador_id son obligatorios",
       });
     }
 
-    const rutina = await rutinaService.crearRutina(req.body);
+    // El creador es siempre el usuario logueado, no lo que venga en el body.
+    const rutina = await rutinaService.crearRutina({ ...req.body, creador_id: creadorId });
     return res.status(201).json(rutina);
   } catch (error) {
     console.error(error);
@@ -221,6 +223,35 @@ export const getRutinaPorId = async (req: Request, res: Response) => {
   }
 };
 
+export const getRutinaParaEditar = async (req: Request, res: Response) => {
+  /*
+    Lo usa la pantalla /rutinas/:id/editar.
+    requireAuth + requireRutinaOwner ya garantizan que el que pide es el creador,
+    así que si alguien pega la URL de una rutina ajena recibe 403 y no ve el editor.
+  */
+  try {
+    const { id } = req.params;
+
+    if (!id || Array.isArray(id)) {
+      return res.status(400).json({ error: "id inválido" });
+    }
+
+    const [rutina, ejercicios] = await Promise.all([
+      rutinaService.getRutinaPorId(id, req.authUser?.id),
+      rutinaService.getEjerciciosDeRutina(id),
+    ]);
+
+    if (!rutina) {
+      return res.status(404).json({ error: "Rutina no encontrada" });
+    }
+
+    return res.json({ rutina, ejercicios });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Error obteniendo rutina para editar" });
+  }
+};
+
 export const updateRutina = async (req: Request, res: Response) => {
   /*
     Actualiza una rutina ya existente.
@@ -237,7 +268,11 @@ export const updateRutina = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "id inválido" });
     }
 
-    const rutina = await rutinaService.updateRutina(id, req.body);
+    // requireRutinaOwner ya verificó que sea el creador; no dejamos cambiar el dueño desde el body.
+    const rutina = await rutinaService.updateRutina(id, {
+      ...req.body,
+      creador_id: req.authUser?.id,
+    });
 
     if (!rutina) {
       return res.status(404).json({ error: "Rutina no encontrada" });
@@ -258,20 +293,13 @@ export const deleteRutina = async (req: Request, res: Response) => {
   */
   try {
     const { id } = req.params;
-    const creadorIdRaw = req.body.creador_id;
 
     if (!id || Array.isArray(id)) {
       return res.status(400).json({ error: "id inválido" });
     }
 
-    const creadorId =
-      creadorIdRaw == null || creadorIdRaw === ""
-        ? undefined
-        : Number(creadorIdRaw);
-
-    if (creadorIdRaw != null && creadorId !== undefined && Number.isNaN(creadorId)) {
-      return res.status(400).json({ error: "creador_id inválido" });
-    }
+    // El dueño sale del token (requireRutinaOwner ya lo validó).
+    const creadorId = req.authUser?.id;
 
     const rutina = await rutinaService.deleteRutina(id, creadorId);
 

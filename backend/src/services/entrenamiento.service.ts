@@ -168,6 +168,41 @@ const ensureRecordTables = async (queryable: Queryable) => {
   recordTablesReady = true;
 };
 
+const MAX_ROWS_PER_INSERT = 500;
+
+/*
+  La base está en Railway: cada consulta es una ida y vuelta por internet (~100-200 ms).
+  Insertar fila por fila hacía que completar un entrenamiento largo tardara ~20 s.
+  Esto arma un solo INSERT con muchas filas: ($1, $2, ...), ($11, $12, ...), ...
+  `extraValuesSql` agrega valores fijos al final de cada fila (por ejemplo NOW()).
+*/
+const insertRows = async (
+  queryable: Queryable,
+  insertSql: string,
+  rows: unknown[][],
+  options: { extraValuesSql?: string; suffixSql?: string } = {}
+) => {
+  for (let start = 0; start < rows.length; start += MAX_ROWS_PER_INSERT) {
+    const chunk = rows.slice(start, start + MAX_ROWS_PER_INSERT);
+    const params: unknown[] = [];
+    const values = chunk.map((row) => {
+      const placeholders = row.map((value) => {
+        params.push(value);
+        return `$${params.length}`;
+      });
+      if (options.extraValuesSql) {
+        placeholders.push(options.extraValuesSql);
+      }
+      return `(${placeholders.join(", ")})`;
+    });
+
+    await queryable.query(
+      `${insertSql} VALUES ${values.join(", ")} ${options.suffixSql ?? ""}`,
+      params
+    );
+  }
+};
+
 const estimateOneRm = (peso: number, repeticiones: number) =>
   peso * (1 + repeticiones / 30);
 
@@ -214,52 +249,79 @@ const evaluarRecordsDeSesion = async (sesion: SesionEntrenamientoRow) => {
       [sesion.id_sesion]
     );
 
+    // Solo cuentan para récords las series con peso y repeticiones.
+    const seriesValidas = seriesResult.rows
+      .map((serie) => ({
+        ejercicio_id: Number(serie.ejercicio_id),
+        orden: serie.orden,
+        peso: Number(serie.peso),
+        repeticiones: Number(serie.repeticiones),
+      }))
+      .filter(
+        (serie) =>
+          Number.isFinite(serie.peso) &&
+          Number.isFinite(serie.repeticiones) &&
+          serie.peso > 0 &&
+          serie.repeticiones > 0
+      );
+
+    const ejercicioIds = Array.from(new Set(seriesValidas.map((serie) => serie.ejercicio_id)));
     const records = new Map<number, ExerciseRecordRow>();
+    const trofeos: unknown[][] = [];
     let totalTrofeos = 0;
 
-    for (const serie of seriesResult.rows) {
-      const peso = Number(serie.peso);
-      const repeticiones = Number(serie.repeticiones);
+    if (ejercicioIds.length > 0) {
+      // Bloquea los récords del usuario de todos estos ejercicios de una vez.
+      await client.query(
+        `SELECT 1
+         FROM usuario_ejercicio_record
+         WHERE usuario_id = $1
+           AND ejercicio_id = ANY($2::int[])
+         ORDER BY ejercicio_id
+         FOR UPDATE`,
+        [sesion.usuario_id, ejercicioIds]
+      );
 
-      if (!Number.isFinite(peso) || !Number.isFinite(repeticiones) || peso <= 0 || repeticiones <= 0) {
+      // Mejores marcas históricas de cada ejercicio, todas en una sola consulta.
+      const historicalResult = await client.query<HistoricalExerciseRecordRow & { ejercicio_id: number }>(
+        `SELECT
+           s.ejercicio_id,
+           COALESCE(MAX(COALESCE(s.peso, 0) * COALESCE(s.repeticiones, 0)), 0)::float AS mejor_volumen,
+           COALESCE(MAX(COALESCE(s.peso, 0)), 0)::float AS mejor_peso,
+           COALESCE(MAX(COALESCE(s.peso, 0) * (1 + COALESCE(s.repeticiones, 0)::float / 30)), 0)::float AS mejor_1rm
+         FROM serie s
+         JOIN sesionentrenamiento se ON se.id_sesion = s.sesion_id
+         WHERE se.usuario_id = $1
+           AND s.ejercicio_id = ANY($2::int[])
+           AND se.estado = 'finalizada'
+           AND se.id_sesion <> $3
+         GROUP BY s.ejercicio_id`,
+        [sesion.usuario_id, ejercicioIds, sesion.id_sesion]
+      );
+
+      const historicos = new Map(
+        historicalResult.rows.map((row) => [Number(row.ejercicio_id), row])
+      );
+
+      for (const ejercicioId of ejercicioIds) {
+        const historico = historicos.get(ejercicioId);
+        records.set(ejercicioId, {
+          mejor_volumen: Number(historico?.mejor_volumen ?? 0),
+          mejor_peso: Number(historico?.mejor_peso ?? 0),
+          mejor_1rm: Number(historico?.mejor_1rm ?? 0),
+        });
+      }
+    }
+
+    // Recorre las series en orden y anota cada mejora (misma lógica que antes, sin tocar la base).
+    for (const serie of seriesValidas) {
+      const current = records.get(serie.ejercicio_id);
+      if (!current) {
         continue;
       }
 
-      let current = records.get(serie.ejercicio_id);
-      if (!current) {
-        await client.query(
-          `SELECT 1
-           FROM usuario_ejercicio_record
-           WHERE usuario_id = $1
-             AND ejercicio_id = $2
-           FOR UPDATE`,
-          [sesion.usuario_id, serie.ejercicio_id]
-        );
-        const historicalResult = await client.query<HistoricalExerciseRecordRow>(
-          `SELECT
-             COALESCE(MAX(COALESCE(s.peso, 0) * COALESCE(s.repeticiones, 0)), 0)::float AS mejor_volumen,
-             COALESCE(MAX(COALESCE(s.peso, 0)), 0)::float AS mejor_peso,
-             COALESCE(MAX(COALESCE(s.peso, 0) * (1 + COALESCE(s.repeticiones, 0)::float / 30)), 0)::float AS mejor_1rm
-           FROM serie s
-           JOIN sesionentrenamiento se ON se.id_sesion = s.sesion_id
-           WHERE se.usuario_id = $1
-             AND s.ejercicio_id = $2
-             AND se.estado = 'finalizada'
-             AND se.id_sesion <> $3`,
-          [sesion.usuario_id, serie.ejercicio_id, sesion.id_sesion]
-        );
-
-        current = {
-          mejor_volumen: Number(historicalResult.rows[0]?.mejor_volumen ?? 0),
-          mejor_peso: Number(historicalResult.rows[0]?.mejor_peso ?? 0),
-          mejor_1rm: Number(historicalResult.rows[0]?.mejor_1rm ?? 0),
-        };
-
-        records.set(serie.ejercicio_id, current);
-      }
-
-      const volumen = peso * repeticiones;
-      const oneRm = estimateOneRm(peso, repeticiones);
+      const volumen = serie.peso * serie.repeticiones;
+      const oneRm = estimateOneRm(serie.peso, serie.repeticiones);
       const mejoras: Array<{
         tipo: "volumen" | "peso" | "1rm";
         anterior: number;
@@ -271,9 +333,9 @@ const evaluarRecordsDeSesion = async (sesion: SesionEntrenamientoRow) => {
         current.mejor_volumen = volumen;
       }
 
-      if (peso > current.mejor_peso) {
-        mejoras.push({ tipo: "peso", anterior: current.mejor_peso, nuevo: peso });
-        current.mejor_peso = peso;
+      if (serie.peso > current.mejor_peso) {
+        mejoras.push({ tipo: "peso", anterior: current.mejor_peso, nuevo: serie.peso });
+        current.mejor_peso = serie.peso;
       }
 
       if (oneRm > current.mejor_1rm) {
@@ -282,45 +344,50 @@ const evaluarRecordsDeSesion = async (sesion: SesionEntrenamientoRow) => {
       }
 
       for (const mejora of mejoras) {
-        await client.query(
-          `INSERT INTO serie_record_trofeo
-           (sesion_id, usuario_id, ejercicio_id, orden, tipo_record, valor_anterior, valor_nuevo)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
-           ON CONFLICT (sesion_id, ejercicio_id, orden, tipo_record) DO NOTHING`,
-          [
-            sesion.id_sesion,
-            sesion.usuario_id,
-            serie.ejercicio_id,
-            serie.orden,
-            mejora.tipo,
-            mejora.anterior,
-            mejora.nuevo,
-          ]
-        );
+        trofeos.push([
+          sesion.id_sesion,
+          sesion.usuario_id,
+          serie.ejercicio_id,
+          serie.orden,
+          mejora.tipo,
+          mejora.anterior,
+          mejora.nuevo,
+        ]);
         totalTrofeos += 1;
       }
     }
 
-    for (const [ejercicioId, record] of records) {
-      await client.query(
-        `INSERT INTO usuario_ejercicio_record
-         (usuario_id, ejercicio_id, mejor_volumen, mejor_peso, mejor_1rm, fecha_actualizacion)
-         VALUES ($1, $2, $3, $4, $5, NOW())
-         ON CONFLICT (usuario_id, ejercicio_id)
+    // Todos los trofeos en un solo INSERT.
+    await insertRows(
+      client,
+      `INSERT INTO serie_record_trofeo
+       (sesion_id, usuario_id, ejercicio_id, orden, tipo_record, valor_anterior, valor_nuevo)`,
+      trofeos,
+      { suffixSql: "ON CONFLICT (sesion_id, ejercicio_id, orden, tipo_record) DO NOTHING" }
+    );
+
+    // Todos los récords actualizados en un solo INSERT ... ON CONFLICT.
+    await insertRows(
+      client,
+      `INSERT INTO usuario_ejercicio_record
+       (usuario_id, ejercicio_id, mejor_volumen, mejor_peso, mejor_1rm, fecha_actualizacion)`,
+      Array.from(records, ([ejercicioId, record]) => [
+        sesion.usuario_id,
+        ejercicioId,
+        record.mejor_volumen,
+        record.mejor_peso,
+        record.mejor_1rm,
+      ]),
+      {
+        extraValuesSql: "NOW()",
+        suffixSql: `ON CONFLICT (usuario_id, ejercicio_id)
          DO UPDATE SET
            mejor_volumen = EXCLUDED.mejor_volumen,
            mejor_peso = EXCLUDED.mejor_peso,
            mejor_1rm = EXCLUDED.mejor_1rm,
            fecha_actualizacion = NOW()`,
-        [
-          sesion.usuario_id,
-          ejercicioId,
-          record.mejor_volumen,
-          record.mejor_peso,
-          record.mejor_1rm,
-        ]
-      );
-    }
+      }
+    );
 
     await client.query(
       `INSERT INTO sesion_record_evaluacion (sesion_id, usuario_id)
@@ -755,34 +822,41 @@ export const replaceSeriesDeSesion = async (
   }>
 ) => {
   await ensureSerieTipoSerieColumn(pool);
+  await ensureRecordTables(pool);
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
-    await ensureRecordTables(pool);
-    await client.query(`DELETE FROM serie_record_trofeo WHERE sesion_id = $1`, [sesion_id]);
-    await client.query(`DELETE FROM sesion_record_evaluacion WHERE sesion_id = $1`, [sesion_id]);
-    await client.query(`DELETE FROM serie WHERE sesion_id = $1`, [sesion_id]);
+    // Borra series, trofeos y evaluación de la sesión en una sola consulta.
+    await client.query(
+      `WITH borrar_trofeos AS (
+         DELETE FROM serie_record_trofeo WHERE sesion_id = $1
+       ),
+       borrar_evaluacion AS (
+         DELETE FROM sesion_record_evaluacion WHERE sesion_id = $1
+       )
+       DELETE FROM serie WHERE sesion_id = $1`,
+      [sesion_id]
+    );
 
-    for (const serie of series) {
-      await client.query(
-        `INSERT INTO serie
-         (repeticiones, peso, descanso, orden, ejercicio_id, sesion_id, tipo_serie, distancia_km, tiempo_segundos, nota_ejercicio)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        [
-          serie.repeticiones ?? 0,
-          serie.peso ?? null,
-          serie.descanso ?? null,
-          serie.orden,
-          serie.ejercicio_id,
-          sesion_id,
-          serie.tipo_serie ?? "serie",
-          serie.distancia_km ?? null,
-          serie.tiempo_segundos ?? null,
-          typeof serie.nota_ejercicio === "string" ? serie.nota_ejercicio.trim() || null : null,
-        ]
-      );
-    }
+    // Todas las series en un solo INSERT (antes era una consulta por serie).
+    await insertRows(
+      client,
+      `INSERT INTO serie
+       (repeticiones, peso, descanso, orden, ejercicio_id, sesion_id, tipo_serie, distancia_km, tiempo_segundos, nota_ejercicio)`,
+      series.map((serie) => [
+        serie.repeticiones ?? 0,
+        serie.peso ?? null,
+        serie.descanso ?? null,
+        serie.orden,
+        serie.ejercicio_id,
+        sesion_id,
+        serie.tipo_serie ?? "serie",
+        serie.distancia_km ?? null,
+        serie.tiempo_segundos ?? null,
+        typeof serie.nota_ejercicio === "string" ? serie.nota_ejercicio.trim() || null : null,
+      ])
+    );
 
     await client.query("COMMIT");
   } catch (error) {
@@ -797,18 +871,15 @@ export const replaceSeriesDeSesion = async (
 
 // esto simula “finalizar” aunque tu DER no tenga fecha_fin.
 // podemos dejarlo como cierre lógico devolviendo la sesión y sus series.
-export const finalizarSesion = async (sesion_id: string) => {
-  const sesion = await getSesionPorId(sesion_id);
+export const finalizarSesion = async (
+  sesion_id: string,
+  sesionExistente?: SesionEntrenamientoRow
+) => {
+  // El controller ya leyó la sesión para validar permisos: la reusamos y nos ahorramos una consulta.
+  const sesion = sesionExistente ?? (await getSesionPorId(sesion_id));
   if (!sesion) {
     return null;
   }
-
-  const volumenResult = await pool.query<{ volumen_total: number }>(
-    `SELECT COALESCE(SUM(COALESCE(peso, 0) * COALESCE(repeticiones, 0)), 0)::float AS volumen_total
-     FROM serie
-     WHERE sesion_id = $1`,
-    [sesion_id]
-  );
 
   const sesionActualizada = await pool.query<SesionEntrenamientoRow>(
     `UPDATE sesionentrenamiento
@@ -822,10 +893,14 @@ export const finalizarSesion = async (sesion_id: string) => {
              ELSE 0
            END
          ),
-         volumen_total = $2
+         volumen_total = (
+           SELECT COALESCE(SUM(COALESCE(peso, 0) * COALESCE(repeticiones, 0)), 0)::float
+           FROM serie
+           WHERE sesion_id = $1
+         )
      WHERE id_sesion = $1
      RETURNING *`,
-    [sesion_id, volumenResult.rows[0]?.volumen_total ?? 0]
+    [sesion_id]
   );
 
   const totalTrofeos = await evaluarRecordsDeSesion(sesionActualizada.rows[0] ?? sesion);
