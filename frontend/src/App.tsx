@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
-import logo from "./assets/logo.png";
 import {
   fetchSessionSeed,
   getSourceRoutineIdFromSeed,
@@ -9,18 +8,19 @@ import {
   saveTrainingSeedAsRoutine,
 } from "./lib/trainingTransfer";
 import { canUseTrainingFeatures } from "./lib/roles";
-import type { EntrenamientoResumen, RoutinePostSummary, SearchUser, TrainingSeed, Usuario } from "./types";
+import type { EntrenamientoResumen, ProPlanId, RoutinePostSummary, SearchUser, TrainingSeed, Usuario } from "./types";
 import Entrenamiento, { type ActiveTrainingSnapshot } from "./pages/Entrenamiento";
 import Home from "./pages/Home";
 import Buscar from "./pages/Buscar";
 import Descubrir from "./pages/Descubrir";
 import EntrenamientoDetalle from "./pages/EntrenamientoDetalle";
 import Login from "./pages/Login";
-import Notificaciones from "./pages/Notificaciones";
 import Perfil from "./pages/Perfil";
 import Pro from "./pages/Pro";
 import Register from "./pages/Register";
 import NotificationSettingsPanel from "./components/NotificationSettingsPanel";
+import AppSidebar, { type SidebarItemKey } from "./components/AppSidebar";
+import NotificationsDrawer from "./components/NotificationsDrawer";
 
 import RutinaCompartida from "./pages/RutinaCompartida";
 import Rutinas from "./pages/Rutinas";
@@ -244,7 +244,8 @@ function App() {
   const [homeRefreshKey, setHomeRefreshKey] = useState(0);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [activeProfileUsername, setActiveProfileUsername] = useState("");
-  const [notificationSettingsOpen, setNotificationSettingsOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [proPlan, setProPlan] = useState<ProPlanId | null>(initialAuth?.usuario.pro_plan ?? null);
   const authScreen: AuthScreen = location.pathname === "/register" ? "register" : "login";
   const mainScreen = getMainScreenFromPath(location.pathname);
   const routeState = location.state as TrainingRouteState | null;
@@ -303,6 +304,14 @@ function App() {
     }
   }, [requestedProfileUsername]);
 
+  // Las notificaciones ahora son un panel lateral: /notificaciones abre el panel sobre el inicio.
+  useEffect(() => {
+    if (usuario && mainScreen === "notificaciones") {
+      setNotificationsOpen(true);
+      navigate(pathForScreen("home"), { replace: true });
+    }
+  }, [mainScreen, navigate, usuario]);
+
   useEffect(() => {
     if (!usuario || canUseTrainingFeatures(usuario)) {
       return;
@@ -330,6 +339,7 @@ function App() {
   }, [sharedRoutineId]);
 
   const navigateTo = (screen: Exclude<MainScreen, "entrenamiento">) => {
+    setNotificationsOpen(false);
     if (screen !== "rutinaCompartida") {
       dismissSharedRoutine();
     }
@@ -350,6 +360,7 @@ function App() {
   };
 
   const openGeminiFromTopbar = () => {
+    setNotificationsOpen(false);
     dismissSharedRoutine();
     setRutinasOpenGeminiRequestKey((prev) => prev + 1);
     navigate(pathForScreen("rutinas"));
@@ -495,6 +506,8 @@ function App() {
     setUsuario(null);
     setAuthToken(null);
     setUnreadNotifications(0);
+    setNotificationsOpen(false);
+    setProPlan(null);
     persistAuth(null);
     dismissSharedRoutine();
     setSelectedTraining(null);
@@ -555,6 +568,49 @@ function App() {
     return () => window.clearInterval(interval);
   }, [authToken, refreshUnreadNotifications, usuario]);
 
+  const isProScreen = mainScreen === "pro";
+
+  // Plan actual para mostrarlo en la barra lateral (se refresca al entrar/salir de la pantalla PRO).
+  useEffect(() => {
+    if (!authToken) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadPlan = async () => {
+      try {
+        const res = await fetch("http://localhost:3000/suscripciones/me", {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+
+        if (!res.ok) {
+          return;
+        }
+
+        const data = (await res.json()) as {
+          isPro?: boolean;
+          subscription?: { plan?: ProPlanId } | null;
+        };
+
+        if (!cancelled) {
+          setProPlan(data.isPro ? data.subscription?.plan ?? "monthly" : null);
+        }
+      } catch {
+        // Es solo informativo para la barra lateral.
+      }
+    };
+
+    void loadPlan();
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken, isProScreen]);
+
+  const closeNotifications = useCallback(() => {
+    setNotificationsOpen(false);
+  }, []);
+
   const toggleTheme = () => {
     setThemeMode((currentTheme) => (currentTheme === "dark" ? "light" : "dark"));
   };
@@ -582,6 +638,7 @@ function App() {
     mainScreen === "perfil" &&
     (routeProfileUsername == null || routeProfileUsername.toLowerCase() === usuario.username.toLowerCase());
   const openOwnProfileFromTopbar = () => {
+    setNotificationsOpen(false);
     if (isOwnProfileScreen) {
       setProfileRefreshKey((prev) => prev + 1);
       return;
@@ -589,6 +646,18 @@ function App() {
 
     openProfile(usuario.username);
   };
+  const sidebarActiveKey: SidebarItemKey | null = (() => {
+    if (notificationsOpen) return "notificaciones";
+    if (mainScreen === "home") return "home";
+    if (mainScreen === "entrenamientoLibre") return "entrenamiento";
+    if (mainScreen === "rutinas") return "rutinas";
+    if (mainScreen === "descubrir") return "descubrir";
+    if (mainScreen === "buscar") return "buscar";
+    if (isOwnProfileScreen) return "perfil";
+    if (mainScreen === "pro") return "plan";
+    if (mainScreen === "ajustes") return "mas";
+    return null;
+  })();
   const showActiveTrainingBar = Boolean(activeTraining && mainScreen !== "entrenamientoLibre");
   const activeRestFinished = Boolean(
     activeTraining?.rest &&
@@ -605,231 +674,37 @@ function App() {
   return (
     <div className={`shell ${showActiveTrainingBar ? "has-active-training" : ""}`}>
       {appToast ? <div className={`toast-pop ${appToast.type}`}>{appToast.text}</div> : null}
-      <header className="topbar">
-        <div className="brand">
-          <img src={logo} alt="GymMaxxing logo" className="brand-logo" />
-          <p>GymMaxxing</p>
-        </div>
-
-        <nav className="topnav">
-          <button
-            type="button"
-            className={`nav-btn icon-only ${mainScreen === "buscar" ? "active" : ""}`}
-            onClick={() => navigateTo("buscar")}
-            aria-label="Buscar"
-            title="Buscar"
-          >
-            <svg
-              className="nav-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <circle cx="11" cy="11" r="7" />
-              <line x1="16.65" y1="16.65" x2="21" y2="21" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className={`nav-btn ${mainScreen === "home" ? "active" : ""}`}
-            onClick={() => navigateTo("home")}
-          >
-            <svg
-              className="nav-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M3 10.5 12 3l9 7.5" />
-              <path d="M5 10v10h14V10" />
-              <path d="M9 20v-6h6v6" />
-            </svg>
-            Inicio
-          </button>
-          {canTrain ? (
-            <button
-              type="button"
-              className={`nav-btn ${mainScreen === "entrenamientoLibre" ? "active" : ""}`}
-              onClick={() => navigateTo("entrenamientoLibre")}
-            >
-              <svg
-                className="nav-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M3 8h18" />
-                <path d="M6 6v4" />
-                <path d="M18 6v4" />
-                <circle cx="12" cy="6" r="2" />
-                <path d="M12 8v5" />
-                <path d="M8 13h8" />
-                <path d="M9 18l3-5 3 5" />
-              </svg>
-              Entrenamiento
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className={`nav-btn ${mainScreen === "rutinas" ? "active" : ""}`}
-            onClick={() => navigateTo("rutinas")}
-          >
-            <svg
-              className="nav-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M8 3h8" />
-              <path d="M9 3v3h6V3" />
-              <path d="M6 5h12v16H6z" />
-              <path d="M9 11h6" />
-              <path d="M9 15h6" />
-            </svg>
-            Rutinas
-          </button>
-          <button
-            type="button"
-            className={`nav-btn ${mainScreen === "descubrir" ? "active" : ""}`}
-            onClick={() => navigateTo("descubrir")}
-          >
-            <svg
-              className="nav-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <circle cx="12" cy="12" r="9" />
-              <path d="M3 12h18" />
-              <path d="M12 3c2.5 2.4 3.8 5.4 3.8 9S14.5 18.6 12 21" />
-              <path d="M12 3C9.5 5.4 8.2 8.4 8.2 12S9.5 18.6 12 21" />
-            </svg>
-            Descubrir
-          </button>
-          <button
-            type="button"
-            className={`nav-btn ${isOwnProfileScreen ? "active" : ""}`}
-            onClick={openOwnProfileFromTopbar}
-          >
-            <svg
-              className="nav-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <circle cx="12" cy="6" r="3" />
-              <path d="M12 9v6" />
-              <path d="M8 12h8" />
-              <path d="M9 21l3-6 3 6" />
-            </svg>
-            Perfil
-          </button>
-        </nav>
-
-        <div className="topbar-actions">
-          <button
-            type="button"
-            className={`settings-nav-btn gemini-nav-btn ${mainScreen === "rutinas" ? "active" : ""}`}
-            onClick={openGeminiFromTopbar}
-            aria-label="Abrir Gemini"
-            title="Abrir Gemini"
-          >
-            <svg
-              className="settings-nav-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M12 2.5c.8 3.3 1.7 4.9 3 6.2s2.9 2.2 6.2 3c-3.3.8-4.9 1.7-6.2 3s-2.2 2.9-3 6.2c-.8-3.3-1.7-4.9-3-6.2s-2.9-2.2-6.2-3c3.3-.8 4.9-1.7 6.2-3s2.2-2.9 3-6.2Z" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className={`pro-nav-btn ${mainScreen === "pro" ? "active" : ""}`}
-            onClick={() => navigateTo("pro")}
-            aria-label="GymMaxxing PRO"
-            title="GymMaxxing PRO"
-          >
-            PRO
-          </button>
-          <button
-            type="button"
-            className={`settings-nav-btn notification-nav-btn ${mainScreen === "notificaciones" ? "active" : ""}`}
-            onClick={() => navigateTo("notificaciones")}
-            aria-label="Notificaciones"
-            title="Notificaciones"
-          >
-            <svg
-              className="settings-nav-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
-              <path d="M9 17a3 3 0 0 0 6 0" />
-            </svg>
-            {unreadNotifications > 0 ? (
-              <span className="notification-badge">
-                {unreadNotifications > 9 ? "9+" : unreadNotifications}
-              </span>
-            ) : null}
-          </button>
-
-          <button
-            type="button"
-            className={`settings-nav-btn ${mainScreen === "ajustes" ? "active" : ""}`}
-            onClick={() => navigateTo("ajustes")}
-            aria-label="Ajustes"
-            title="Ajustes"
-          >
-            <svg
-              className="settings-nav-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" />
-              <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.04.04a2 2 0 0 1-2.83 2.83l-.04-.04A1.7 1.7 0 0 0 15 19.37a1.7 1.7 0 0 0-1 .91l-.02.05a2 2 0 0 1-3.66 0l-.02-.05a1.7 1.7 0 0 0-1-.91 1.7 1.7 0 0 0-1.88.34l-.04.04a2 2 0 0 1-2.83-2.83l.04-.04A1.7 1.7 0 0 0 4.63 15a1.7 1.7 0 0 0-.91-1l-.05-.02a2 2 0 0 1 0-3.66l.05-.02a1.7 1.7 0 0 0 .91-1 1.7 1.7 0 0 0-.34-1.88l-.04-.04a2 2 0 0 1 2.83-2.83l.04.04A1.7 1.7 0 0 0 9 4.63a1.7 1.7 0 0 0 1-.91l.02-.05a2 2 0 0 1 3.66 0l.02.05a1.7 1.7 0 0 0 1 .91 1.7 1.7 0 0 0 1.88-.34l.04-.04a2 2 0 0 1 2.83 2.83l-.04.04A1.7 1.7 0 0 0 19.37 9c.38.14.7.45.91.82l.05.02a2 2 0 0 1 0 3.66l-.05.02a1.7 1.7 0 0 0-.88 1.48Z" />
-            </svg>
-          </button>
-        </div>
-      </header>
+      <AppSidebar
+        usuario={usuario}
+        canTrain={canTrain}
+        activeKey={sidebarActiveKey}
+        unreadNotifications={unreadNotifications}
+        notificationsOpen={notificationsOpen}
+        themeMode={themeMode}
+        proPlan={proPlan}
+        onGoHome={() => navigateTo("home")}
+        onGoTraining={() => navigateTo("entrenamientoLibre")}
+        onGoRoutines={() => navigateTo("rutinas")}
+        onGoDiscover={() => navigateTo("descubrir")}
+        onGoSearch={() => navigateTo("buscar")}
+        onToggleNotifications={() => setNotificationsOpen((prev) => !prev)}
+        onGoProfile={openOwnProfileFromTopbar}
+        onOpenGemini={openGeminiFromTopbar}
+        onGoPlan={() => navigateTo("pro")}
+        onOpenSettings={() => navigateTo("ajustes")}
+        onToggleTheme={toggleTheme}
+        onLogout={handleLogout}
+      />
+      <NotificationsDrawer
+        open={notificationsOpen}
+        usuario={usuario}
+        authToken={authToken}
+        onClose={closeNotifications}
+        onAuthExpired={handleAuthExpired}
+        onUnreadCountChange={setUnreadNotifications}
+        onOpenProfile={openProfile}
+        onOpenSettings={() => navigateTo("ajustes")}
+      />
 
       <div className="content">
         <div className={mainScreen === "home" ? "" : "screen-hidden"}>
@@ -904,13 +779,6 @@ function App() {
             onOpenProfile={openProfile}
           />
         ) : null}
-        {mainScreen === "notificaciones" ? (
-          <Notificaciones
-            authToken={authToken}
-            onAuthExpired={handleAuthExpired}
-            onUnreadCountChange={setUnreadNotifications}
-          />
-        ) : null}
         {mainScreen === "pro" && authToken ? (
           <Pro
             onClose={() => navigateTo("home")}
@@ -948,79 +816,11 @@ function App() {
         </div>
         {mainScreen === "ajustes" ? (
           <main className="page-shell settings-page-shell">
-            <section className="settings-card">
-              <div className="settings-card-head">
-                <span>Ajustes</span>
-                <p>Preferencias de la cuenta</p>
-              </div>
-              <div className="settings-actions">
-                <button type="button" className="settings-action-btn theme-action-btn" onClick={toggleTheme}>
-                  {themeMode === "dark" ? (
-                    <svg
-                      className="settings-action-icon"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <circle cx="12" cy="12" r="4" />
-                      <path d="M12 2v2" />
-                      <path d="M12 20v2" />
-                      <path d="m4.93 4.93 1.41 1.41" />
-                      <path d="m17.66 17.66 1.41 1.41" />
-                      <path d="M2 12h2" />
-                      <path d="M20 12h2" />
-                      <path d="m6.34 17.66-1.41 1.41" />
-                      <path d="m19.07 4.93-1.41 1.41" />
-                    </svg>
-                  ) : (
-                    <svg
-                      className="settings-action-icon"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M12 3a6 6 0 0 0 9 7.4A8 8 0 1 1 12 3Z" />
-                    </svg>
-                  )}
-                  {themeMode === "dark" ? "Tema claro" : "Tema oscuro"}
-                </button>
-                <button
-                  type="button"
-                  className={`settings-action-btn notifications-action-btn ${notificationSettingsOpen ? "active" : ""}`}
-                  onClick={() => setNotificationSettingsOpen((prev) => !prev)}
-                  aria-expanded={notificationSettingsOpen}
-                >
-                  <svg
-                    className="settings-action-icon"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
-                    <path d="M9 17a3 3 0 0 0 6 0" />
-                  </svg>
-                  Notificaciones
-                </button>
-                <button type="button" className="settings-action-btn logout-action-btn" onClick={handleLogout}>
-                  Salir
-                </button>
-              </div>
+            <section className="page-hero compact settings-page-hero">
+              <h1>Configuración</h1>
+              <p className="subtitle">Elegí qué avisos querés recibir y por dónde.</p>
             </section>
-            {notificationSettingsOpen ? (
-              <NotificationSettingsPanel authToken={authToken} onAuthExpired={handleAuthExpired} />
-            ) : null}
+            <NotificationSettingsPanel authToken={authToken} onAuthExpired={handleAuthExpired} />
           </main>
         ) : null}
         {mainScreen === "entrenamiento" && currentTraining ? (

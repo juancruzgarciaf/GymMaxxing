@@ -242,6 +242,9 @@ export type NotificationItem = {
   leida: boolean;
   fecha_creacion: string;
   fecha_lectura: string | null;
+  actor_foto_perfil_url?: string | null;
+  actor_seguido_por_usuario?: boolean;
+  referencia_imagen_url?: string | null;
 };
 
 export type GeminiGeneratedRoutineResponse = {

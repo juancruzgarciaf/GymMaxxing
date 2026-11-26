@@ -20,6 +20,9 @@ type NotificationRow = {
   leida: boolean;
   fecha_creacion: string;
   fecha_lectura: string | null;
+  actor_foto_perfil_url?: string | null;
+  actor_seguido_por_usuario?: boolean;
+  referencia_imagen_url?: string | null;
 };
 
 type NotificationPreferenceRow = {
@@ -236,9 +239,20 @@ export const listNotifications = async (
               n.referencia_id,
               n.leida,
               n.fecha_creacion::text AS fecha_creacion,
-              n.fecha_lectura::text AS fecha_lectura
+              n.fecha_lectura::text AS fecha_lectura,
+              actor.foto_perfil_url AS actor_foto_perfil_url,
+              EXISTS (
+                SELECT 1
+                FROM seguimientousuario su
+                WHERE su.id_seguidor = n.usuario_id
+                  AND su.id_seguido = n.actor_id
+              ) AS actor_seguido_por_usuario,
+              ref_sesion.imagen_url AS referencia_imagen_url
        FROM notificacion n
        LEFT JOIN usuario actor ON actor.id = n.actor_id
+       LEFT JOIN sesionentrenamiento ref_sesion
+         ON n.referencia_tipo = 'sesion_entrenamiento'
+        AND ref_sesion.id_sesion = n.referencia_id
        WHERE n.usuario_id = $1
        ORDER BY n.fecha_creacion DESC, n.id_notificacion DESC
        LIMIT $2
