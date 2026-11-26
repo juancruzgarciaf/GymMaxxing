@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import routineDetailEmptyBodybuilder from "../assets/routine-detail-empty-bodybuilder.png";
 import {
   createRoutineShareUrl,
@@ -258,6 +259,97 @@ const getStoredAuthToken = () => {
   }
 };
 
+// Todo lo que modifica una rutina exige token: el backend verifica que seas el creador.
+const authHeaders = (): Record<string, string> => {
+  const token = getStoredAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+const authJsonHeaders = (): Record<string, string> => ({
+  "Content-Type": "application/json",
+  ...authHeaders(),
+});
+
+type RutinasRoute =
+  | { kind: "lista" }
+  | { kind: "nueva" }
+  | { kind: "editar"; id: number }
+  | { kind: "invalida" };
+
+// /rutinas -> lista, /rutinas/nueva -> crear, /rutinas/:id/editar -> editar esa rutina.
+// Devuelve null si la URL no es de esta pantalla (el componente queda montado aunque esté oculto).
+const parseRutinasRoute = (pathname: string): RutinasRoute | null => {
+  const path = pathname.replace(/\/+$/, "");
+  if (path === "/rutinas") {
+    return { kind: "lista" };
+  }
+  if (path === "/rutinas/nueva") {
+    return { kind: "nueva" };
+  }
+  const match = path.match(/^\/rutinas\/(\d+)\/editar$/);
+  if (match) {
+    return { kind: "editar", id: Number(match[1]) };
+  }
+  if (path.startsWith("/rutinas/")) {
+    return { kind: "invalida" };
+  }
+  return null;
+};
+
+const rutinaEditPath = (idRutina: number) => `/rutinas/${idRutina}/editar`;
+
+// Destello de 4 puntas con degradé, el símbolo que usamos para Gemini.
+const GeminiSparkIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <defs>
+      <linearGradient id="rutinas-gemini-spark" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stopColor="#4285f4" />
+        <stop offset="0.55" stopColor="#9b72cb" />
+        <stop offset="1" stopColor="#d96570" />
+      </linearGradient>
+    </defs>
+    <path
+      fill="url(#rutinas-gemini-spark)"
+      d="M12 2.5c.8 3.3 1.7 4.9 3 6.2s2.9 2.2 6.2 3c-3.3.8-4.9 1.7-6.2 3s-2.2 2.9-3 6.2c-.8-3.3-1.7-4.9-3-6.2s-2.9-2.2-6.2-3c3.3-.8 4.9-1.7 6.2-3s2.2-2.9 3-6.2Z"
+    />
+  </svg>
+);
+
+const PlusIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+
+const FolderPlusIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.2h7.5A2.5 2.5 0 0 1 21 9.7v7.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z" />
+    <path d="M12 11v5.5M9.25 13.75h5.5" />
+  </svg>
+);
+
+const DotsVerticalIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <circle cx="12" cy="5" r="1.9" />
+    <circle cx="12" cy="12" r="1.9" />
+    <circle cx="12" cy="19" r="1.9" />
+  </svg>
+);
+
+const DotsHorizontalIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <circle cx="5" cy="12" r="1.9" />
+    <circle cx="12" cy="12" r="1.9" />
+    <circle cx="19" cy="12" r="1.9" />
+  </svg>
+);
+
+const ChevronIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="m9 6 6 6-6 6" />
+  </svg>
+);
+
 const SET_TIPO_OPTIONS: Array<{ value: SetTipo; label: string }> = [
   { value: "warmup", label: "WarmUp" },
   { value: "serie", label: "Serie" },
@@ -272,6 +364,9 @@ function Rutinas({
   openGeminiPanelRequestKey = 0,
 }: RutinasProps) {
   const canStartTraining = canTrain ?? canUseTrainingFeatures(usuario);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const rutinasRoute = parseRutinasRoute(location.pathname);
   const [vista, setVista] = useState<VistaRutinas>("lista");
   const [loading, setLoading] = useState(false);
   const [mensaje, setMensaje] = useState("");
@@ -284,6 +379,7 @@ function Rutinas({
   const [selectedRutinaId, setSelectedRutinaId] = useState<number | null>(null);
   const [expandedCarpetas, setExpandedCarpetas] = useState<Record<number, boolean>>({});
   const [openFolderMenuId, setOpenFolderMenuId] = useState<number | null>(null);
+  const [detailMenuOpen, setDetailMenuOpen] = useState(false);
   const [renameModal, setRenameModal] = useState<{
     open: boolean;
     id: number | null;
@@ -326,6 +422,37 @@ function Rutinas({
     }>;
   } | null>(null);
   const [geminiPanelError, setGeminiPanelError] = useState("");
+
+  // Los menús (opciones de rutina y de carpeta) se cierran al clickear afuera o con Escape.
+  useEffect(() => {
+    if (!detailMenuOpen && openFolderMenuId == null) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Element | null;
+      if (!target?.closest('[data-menu-root="detail"]')) {
+        setDetailMenuOpen(false);
+      }
+      if (!target?.closest('[data-menu-root="folder"]')) {
+        setOpenFolderMenuId(null);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDetailMenuOpen(false);
+        setOpenFolderMenuId(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [detailMenuOpen, openFolderMenuId]);
 
   const abrirGeminiPanelLimpio = () => {
     setGeminiLastRoutine(null);
@@ -516,6 +643,7 @@ function Rutinas({
       for (const idEjercicio of new Set(ejerciciosActuales.map((ejercicio) => ejercicio.id_ejercicio))) {
         const deleteRes = await fetch(`${API}/rutinas/${rutinaId}/ejercicios/${idEjercicio}`, {
           method: "DELETE",
+          headers: authHeaders(),
         });
         if (!deleteRes.ok) {
           throw new Error(await parseError(deleteRes, "No se pudo eliminar ejercicio de rutina"));
@@ -525,7 +653,7 @@ function Rutinas({
       for (const ejercicio of ejerciciosObjetivo) {
         const addRes = await fetch(`${API}/rutinas/ejercicios`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authJsonHeaders(),
           body: JSON.stringify({
             id_rutina: rutinaId,
             id_ejercicio: ejercicio.id_ejercicio,
@@ -551,7 +679,7 @@ function Rutinas({
       if (!nuevosIds.has(ejercicioActual.id_ejercicio)) {
         const deleteRes = await fetch(
           `${API}/rutinas/${rutinaId}/ejercicios/${ejercicioActual.id_ejercicio}`,
-          { method: "DELETE" },
+          { method: "DELETE", headers: authHeaders() },
         );
         if (!deleteRes.ok) {
           throw new Error(await parseError(deleteRes, "No se pudo eliminar ejercicio de rutina"));
@@ -573,7 +701,7 @@ function Rutinas({
           `${API}/rutinas/${rutinaId}/ejercicios/${ejercicio.id_ejercicio}`,
           {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            headers: authJsonHeaders(),
             body: JSON.stringify(payload),
           },
         );
@@ -583,7 +711,7 @@ function Rutinas({
       } else {
         const addRes = await fetch(`${API}/rutinas/ejercicios`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authJsonHeaders(),
           body: JSON.stringify({
             id_rutina: rutinaId,
             id_ejercicio: ejercicio.id_ejercicio,
@@ -734,7 +862,7 @@ function Rutinas({
     return () => window.clearTimeout(timer);
   }, [error]);
 
-  const abrirEditorNuevaRutina = () => {
+  const resetEditorNuevaRutina = () => {
     setError("");
     setMensaje("");
     setEditorRutinaId(null);
@@ -795,60 +923,168 @@ function Rutinas({
     setGeminiPanelError("");
     setGeminiLastRoutine(null);
     setVista("editor");
+    navigate("/rutinas/nueva");
   };
 
-  const abrirEditorRutina = async (rutina: Rutina) => {
-    try {
-      setLoading(true);
-      setError("");
-      setMensaje("");
+  const abrirEditorNuevaRutina = () => {
+    resetEditorNuevaRutina();
+    navigate("/rutinas/nueva");
+  };
 
-      const ejercicios = await cargarEjerciciosDeRutina(rutina.id_rutina);
-      const persistidos = emparejarPersistidos(ejercicios, getPersistedEjercicios(rutina.id_rutina));
-      const draft = ejercicios.map((item, ejercicioIndex): EjercicioDraft => {
-        const persisted = persistidos[ejercicioIndex];
-        const descanso = descansoToInputs(persisted?.descansoSegundos ?? item.descanso ?? 0);
-        const persistedSeries = persisted?.series ?? [];
-        return {
-          uid: nuevoUidEjercicio(),
-          id_ejercicio: item.id_ejercicio,
-          nombre: item.nombre,
-          grupo_muscular: item.grupo_muscular,
-          tipo_disciplina: item.tipo_disciplina,
-          imagen_url: item.imagen_url ?? null,
-          nota: limitExerciseNote(persisted?.nota ?? ""),
-          descansoMin: descanso.min,
-          descansoSeg: descanso.sec,
-          series: Array.from({ length: Math.max(1, item.series) }, (_, index) => {
-            const serie = nuevaSerie(String(item.repeticiones || ""));
-            const persistedSerie = persistedSeries[index];
-            return persistedSerie
-              ? {
-                  ...serie,
-                  kg: persistedSerie.kg ?? "",
-                  reps: persistedSerie.reps ?? serie.reps,
-                  tipo: persistedSerie.tipo ?? "serie",
-                }
-              : serie;
-          }),
-        };
-      });
+  // Cambia la URL a /rutinas/:id/editar; el efecto de abajo carga la rutina (y chequea permisos).
+  const abrirEditorRutina = (rutina: Rutina) => {
+    setError("");
+    setMensaje("");
+    navigate(rutinaEditPath(rutina.id_rutina));
+  };
 
-      setEditorRutinaId(rutina.id_rutina);
-      setEditorNombre(limitTitle(rutina.nombre));
-      setEditorDescripcion(limitDescription(rutina.descripcion ?? ""));
-      setEditorDuracion(rutina.duracion_estimada ? String(rutina.duracion_estimada) : "");
-      setEditorCarpetaId(rutina.id_carpeta ? String(rutina.id_carpeta) : "");
-      setEditorVisibleEnDescubrir(Boolean(rutina.visible_en_descubrir));
-      setEditorEjercicios(draft);
-      setDraggedEditorExerciseId(null);
-      setVista("editor");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo abrir la rutina");
-    } finally {
-      setLoading(false);
+  // Volver del editor: si venimos de la lista, volvemos en el historial; si se entró por URL directa,
+  // reemplazamos por /rutinas para no dejar el editor en el historial.
+  const salirDelEditor = () => {
+    const historyIndex = (window.history.state as { idx?: unknown } | null)?.idx;
+    if (typeof historyIndex === "number" && historyIndex > 0) {
+      navigate(-1);
+      return;
     }
+    navigate("/rutinas", { replace: true });
   };
+
+  const cargarEditorDesdeRutina = (rutina: Rutina, ejercicios: RutinaEjercicio[]) => {
+    const persistidos = emparejarPersistidos(ejercicios, getPersistedEjercicios(rutina.id_rutina));
+    const draft = ejercicios.map((item, ejercicioIndex): EjercicioDraft => {
+      const persisted = persistidos[ejercicioIndex];
+      const descanso = descansoToInputs(persisted?.descansoSegundos ?? item.descanso ?? 0);
+      const persistedSeries = persisted?.series ?? [];
+      return {
+        uid: nuevoUidEjercicio(),
+        id_ejercicio: item.id_ejercicio,
+        nombre: item.nombre,
+        grupo_muscular: item.grupo_muscular,
+        tipo_disciplina: item.tipo_disciplina,
+        imagen_url: item.imagen_url ?? null,
+        nota: limitExerciseNote(persisted?.nota ?? ""),
+        descansoMin: descanso.min,
+        descansoSeg: descanso.sec,
+        series: Array.from({ length: Math.max(1, item.series) }, (_, index) => {
+          const serie = nuevaSerie(String(item.repeticiones || ""));
+          const persistedSerie = persistedSeries[index];
+          return persistedSerie
+            ? {
+                ...serie,
+                kg: persistedSerie.kg ?? "",
+                reps: persistedSerie.reps ?? serie.reps,
+                tipo: persistedSerie.tipo ?? "serie",
+              }
+            : serie;
+        }),
+      };
+    });
+
+    setEditorRutinaId(rutina.id_rutina);
+    setEditorNombre(limitTitle(rutina.nombre));
+    setEditorDescripcion(limitDescription(rutina.descripcion ?? ""));
+    setEditorDuracion(rutina.duracion_estimada ? String(rutina.duracion_estimada) : "");
+    setEditorCarpetaId(rutina.id_carpeta ? String(rutina.id_carpeta) : "");
+    setEditorVisibleEnDescubrir(Boolean(rutina.visible_en_descubrir));
+    setEditorEjercicios(draft);
+    setDraggedEditorExerciseId(null);
+    setFiltroEquipo("");
+    setFiltroMusculo("");
+    setBusquedaEjercicio("");
+    setSelectedRutinaId(rutina.id_rutina);
+    setVista("editor");
+  };
+
+  // La URL manda: sincroniza la vista con /rutinas, /rutinas/nueva y /rutinas/:id/editar.
+  const routeKind = rutinasRoute?.kind ?? null;
+  const routeEditId = rutinasRoute?.kind === "editar" ? rutinasRoute.id : null;
+
+  useEffect(() => {
+    if (routeKind === "lista") {
+      if (vista === "editor") {
+        setVista("lista");
+      }
+      return;
+    }
+
+    if (routeKind === "invalida") {
+      navigate("/rutinas", { replace: true });
+      return;
+    }
+
+    if (routeKind === "nueva") {
+      // Si ya hay un borrador de rutina nueva abierto (por ejemplo el de Gemini), no lo pisamos.
+      if (vista !== "editor" || editorRutinaId != null) {
+        resetEditorNuevaRutina();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeKind]);
+
+  useEffect(() => {
+    if (routeEditId == null) {
+      return;
+    }
+
+    // Ya estamos editando esa rutina (por ejemplo volvimos con "adelante" del navegador).
+    if (vista === "editor" && editorRutinaId === routeEditId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const cargar = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        // El backend solo responde si el usuario logueado es el creador de la rutina.
+        const res = await fetch(`${API}/rutinas/${routeEditId}/editar`, {
+          headers: authHeaders(),
+        });
+
+        if (!res.ok) {
+          const fallback =
+            res.status === 403
+              ? "No tenés permiso para editar esta rutina"
+              : res.status === 404
+                ? "La rutina no existe"
+                : res.status === 401
+                  ? "Tu sesión expiró, volvé a iniciar sesión"
+                  : "No se pudo abrir la rutina";
+          throw new Error(res.status === 403 || res.status === 404 ? fallback : await parseError(res, fallback));
+        }
+
+        const data = (await res.json()) as { rutina: Rutina; ejercicios: RutinaEjercicio[] };
+
+        // Doble chequeo en el front por las dudas.
+        if (Number(data.rutina.creador_id) !== Number(usuario.id)) {
+          throw new Error("No tenés permiso para editar esta rutina");
+        }
+
+        if (!cancelled) {
+          cargarEditorDesdeRutina(data.rutina, data.ejercicios);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "No se pudo abrir la rutina");
+          setVista("lista");
+          navigate("/rutinas", { replace: true });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void cargar();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeEditId, usuario.id]);
 
   const handleCrearCarpeta = async () => {
     const nombre = createFolderModal.value.trim();
@@ -862,7 +1098,7 @@ function Rutinas({
       setMensaje("");
       const res = await fetch(`${API}/rutinas/carpetas`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authJsonHeaders(),
         body: JSON.stringify({
           nombre,
           usuario_id: usuario.id,
@@ -891,7 +1127,7 @@ function Rutinas({
       setMensaje("");
       const res = await fetch(`${API}/rutinas/${rutina.id_rutina}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: authJsonHeaders(),
         body: JSON.stringify({
           creador_id: usuario.id,
         }),
@@ -907,90 +1143,6 @@ function Rutinas({
       setMensaje("Rutina eliminada");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error eliminando rutina");
-    }
-  };
-
-  const handlePegarRutina = async () => {
-    if (!navigator.clipboard) {
-      setError("Tu navegador no soporta portapapeles en esta pagina");
-      return;
-    }
-
-    try {
-      setError("");
-      setMensaje("");
-
-      const clipboardText = await navigator.clipboard.readText();
-      if (!clipboardText.trim()) {
-        throw new Error("El portapapeles esta vacio");
-      }
-
-      const payload = JSON.parse(clipboardText) as {
-        nombre?: string;
-        descripcion?: string | null;
-        duracion_estimada?: number | null;
-        id_carpeta?: number | null;
-        ejercicios?: Array<{
-          id_ejercicio?: number;
-          repeticiones?: number;
-          series?: number;
-          descanso?: number;
-        }>;
-      };
-
-      if (!payload.nombre?.trim()) {
-        throw new Error("JSON invalido: falta 'nombre' para crear la rutina");
-      }
-
-      const createRes = await fetch(`${API}/rutinas`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nombre: payload.nombre.trim(),
-          descripcion: payload.descripcion ?? null,
-          duracion_estimada: payload.duracion_estimada ?? null,
-          creador_id: usuario.id,
-          id_carpeta: payload.id_carpeta ?? null,
-        }),
-      });
-
-      if (!createRes.ok) {
-        throw new Error(await parseError(createRes, "No se pudo pegar la rutina"));
-      }
-
-      const nuevaRutina = (await createRes.json()) as Rutina;
-
-      if (Array.isArray(payload.ejercicios)) {
-        for (let orden = 0; orden < payload.ejercicios.length; orden += 1) {
-          const ejercicio = payload.ejercicios[orden];
-          if (!ejercicio.id_ejercicio) {
-            continue;
-          }
-
-          await fetch(`${API}/rutinas/ejercicios`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              id_rutina: nuevaRutina.id_rutina,
-              id_ejercicio: ejercicio.id_ejercicio,
-              series: Math.max(1, ejercicio.series ?? 1),
-              repeticiones: Math.max(1, ejercicio.repeticiones ?? 10),
-              descanso: Math.max(0, ejercicio.descanso ?? 90),
-              orden: orden + 1,
-            }),
-          });
-        }
-      }
-
-      await cargarRutinas();
-      setSelectedRutinaId(nuevaRutina.id_rutina);
-      setMensaje("Rutina pegada desde portapapeles");
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "No se pudo pegar rutina. Usa JSON valido en el portapapeles.",
-      );
     }
   };
 
@@ -1041,7 +1193,7 @@ function Rutinas({
       setMensaje("");
       const res = await fetch(`${API}/rutinas/carpetas/${renameModal.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: authJsonHeaders(),
         body: JSON.stringify({
           nombre: renameModal.value.trim(),
           usuario_id: usuario.id,
@@ -1067,7 +1219,7 @@ function Rutinas({
       setMensaje("");
       const res = await fetch(`${API}/rutinas/carpetas`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authJsonHeaders(),
         body: JSON.stringify({
           nombre: `${carpeta.nombre} (copia)`,
           usuario_id: usuario.id,
@@ -1093,7 +1245,7 @@ function Rutinas({
       setMensaje("");
       const res = await fetch(`${API}/rutinas/carpetas/${carpeta.id_carpeta}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: authJsonHeaders(),
         body: JSON.stringify({
           usuario_id: usuario.id,
         }),
@@ -1283,7 +1435,7 @@ function Rutinas({
       if (rutinaId == null) {
         const createRes = await fetch(`${API}/rutinas`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authJsonHeaders(),
           body: JSON.stringify(body),
         });
         if (!createRes.ok) {
@@ -1294,7 +1446,7 @@ function Rutinas({
       } else {
         const updateRes = await fetch(`${API}/rutinas/${rutinaId}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: authJsonHeaders(),
           body: JSON.stringify(body),
         });
         if (!updateRes.ok) {
@@ -1334,6 +1486,7 @@ function Rutinas({
       setSelectedRutinaId(rutinaId);
       setResumenVersion((prev) => prev + 1);
       setVista("lista");
+      salirDelEditor();
       setMensaje("Rutina guardada");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error guardando rutina");
@@ -1361,7 +1514,7 @@ function Rutinas({
 
     const res = await fetch(`${API}/entrenamientos/serie`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authJsonHeaders(),
       body: JSON.stringify(payload),
     });
 
@@ -1391,7 +1544,7 @@ function Rutinas({
 
     const res = await fetch(`${API}/entrenamientos/${sesionId}/series`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: authJsonHeaders(),
       body: JSON.stringify({ series }),
     });
 
@@ -1613,7 +1766,7 @@ function Rutinas({
         await syncSeriesDeSesion(sesionActiva.id_sesion);
         const res = await fetch(`${API}/entrenamientos/${sesionActiva.id_sesion}/finalizar`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authJsonHeaders(),
         });
         if (!res.ok) {
           throw new Error(await parseError(res, "No se pudo finalizar la rutina"));
@@ -1721,6 +1874,22 @@ function Rutinas({
     ),
   );
 
+  const totalSeriesResumen = resumenEjercicios.reduce((acc, ejercicio) => acc + ejercicio.series.length, 0);
+
+  // Por grupo muscular: cuántos ejercicios y series tiene, y qué parte del total de series representa.
+  const gruposDetalle = gruposMuscularesResumen
+    .map((grupo) => {
+      const delGrupo = resumenEjercicios.filter((ejercicio) => ejercicio.grupo_muscular === grupo);
+      const series = delGrupo.reduce((acc, ejercicio) => acc + ejercicio.series.length, 0);
+      return {
+        grupo,
+        ejercicios: delGrupo.length,
+        series,
+        porcentaje: totalSeriesResumen > 0 ? Math.round((series / totalSeriesResumen) * 100) : 0,
+      };
+    })
+    .sort((a, b) => b.series - a.series);
+
   const ajustarDescansoActivo = (delta: number) => {
     setDescansoActivo((prev) => {
       if (!prev) {
@@ -1752,7 +1921,10 @@ function Rutinas({
       key={rutina.id_rutina}
       type="button"
       className={`list-item ${selectedRutinaId === rutina.id_rutina ? "active" : ""}`}
-      onClick={() => setSelectedRutinaId(rutina.id_rutina)}
+      onClick={() => {
+        setSelectedRutinaId(rutina.id_rutina);
+        setDetailMenuOpen(false);
+      }}
     >
       <span>
         {rutina.nombre}
@@ -1781,11 +1953,12 @@ function Rutinas({
     const subcarpetas = carpetasPorPadre.get(carpeta.id_carpeta) ?? [];
 
     return (
-      <div key={carpeta.id_carpeta} className="folder-node" style={{ marginLeft: `${nivel * 16}px` }}>
-        <div className="folder-row">
+      <div key={carpeta.id_carpeta} className="folder-node folder-section" style={{ marginLeft: `${nivel * 14}px` }}>
+        <div className="folder-section-head" data-menu-root="folder">
           <button
             type="button"
-            className="folder-toggle"
+            className={`folder-section-toggle ${isExpanded ? "open" : ""}`}
+            aria-expanded={isExpanded}
             onClick={() =>
               setExpandedCarpetas((prev) => ({
                 ...prev,
@@ -1793,30 +1966,36 @@ function Rutinas({
               }))
             }
           >
-            <span>{isExpanded ? "▾" : "▸"}</span>
+            <span className="folder-section-chevron">
+              <ChevronIcon />
+            </span>
             <strong>{carpeta.nombre}</strong>
             <small>{rutinasDeCarpeta.length}</small>
           </button>
           <button
             type="button"
-            className="folder-menu-trigger"
+            className="folder-section-action"
             onClick={() =>
               setOpenFolderMenuId((prev) => (prev === carpeta.id_carpeta ? null : carpeta.id_carpeta))
             }
-            aria-label="Opciones de carpeta"
+            aria-label={`Opciones de la carpeta ${carpeta.nombre}`}
+            aria-haspopup="menu"
+            aria-expanded={openFolderMenuId === carpeta.id_carpeta}
+            title="Opciones de carpeta"
           >
-            ⋯
+            <DotsHorizontalIcon />
           </button>
           {openFolderMenuId === carpeta.id_carpeta && (
-            <div className="folder-menu">
-              <button type="button" onClick={() => abrirModalRenombrarCarpeta(carpeta)}>
+            <div className="folder-menu" role="menu">
+              <button type="button" role="menuitem" onClick={() => abrirModalRenombrarCarpeta(carpeta)}>
                 Editar carpeta
               </button>
-              <button type="button" onClick={() => duplicarCarpeta(carpeta)}>
+              <button type="button" role="menuitem" onClick={() => duplicarCarpeta(carpeta)}>
                 Duplicar carpeta
               </button>
               <button
                 type="button"
+                role="menuitem"
                 className="danger"
                 onClick={() => {
                   setOpenFolderMenuId(null);
@@ -1829,7 +2008,7 @@ function Rutinas({
           )}
         </div>
 
-        {isExpanded && (
+        {isExpanded && (rutinasDeCarpeta.length > 0 || subcarpetas.length > 0) && (
           <div className="folder-children">
             {rutinasDeCarpeta.map((rutina) => renderRutinaItem(rutina))}
             {subcarpetas.map((subcarpeta) => renderCarpeta(subcarpeta, nivel + 1))}
@@ -1844,7 +2023,7 @@ function Rutinas({
       <main className="app">
         {renderToast()}
         <section className="hero editor-header">
-          <button type="button" className="btn secondary" onClick={() => setVista("lista")}>
+          <button type="button" className="btn secondary" onClick={salirDelEditor}>
             ← Volver
           </button>
           <h1>{editorRutinaId ? "Editar rutina" : "Crear rutina"}</h1>
@@ -2542,95 +2721,215 @@ function Rutinas({
             de guardarlo en tu biblioteca.
           </p>
         </div>
-        <button className="btn" type="button" onClick={abrirGeminiPanelLimpio}>
-          Generar con Gemini
+        <button
+          className="btn rutinas-gemini-btn"
+          type="button"
+          onClick={abrirGeminiPanelLimpio}
+          aria-label="Generar rutina con Gemini (nuevo)"
+          title="Generar rutina con Gemini"
+        >
+          <GeminiSparkIcon />
+          <span className="rutinas-new-badge" aria-hidden="true">
+            Nuevo
+          </span>
         </button>
       </section>
 
       {loading && <p className="status">Cargando datos...</p>}
       <section className="panel two-cols rutinas-main-panels">
         <article className="box rutinas-list-box">
-          <div className="actions-row">
+          <div className="rutinas-search-row">
             <input
               className="field"
               placeholder="Buscar rutinas"
               value={busquedaRutina}
               onChange={(event) => setBusquedaRutina(event.target.value)}
             />
-            <button className="btn" type="button" onClick={abrirEditorNuevaRutina}>
-              Crear rutina
-            </button>
             <button
-              className="btn secondary"
+              className="btn rutinas-add-btn"
               type="button"
-              disabled={!rutinaSeleccionada}
-              onClick={() => {
-                if (rutinaSeleccionada) {
-                  void abrirEditorRutina(rutinaSeleccionada);
-                }
-              }}
+              onClick={abrirEditorNuevaRutina}
+              aria-label="Crear rutina"
+              title="Crear rutina"
             >
-              Modificar rutina
-            </button>
-            <button className="btn secondary" type="button" onClick={handlePegarRutina}>
-              Pegar rutina
-            </button>
-            <button
-              className="btn secondary"
-              type="button"
-              onClick={() => setCreateFolderModal({ open: true, value: "" })}
-            >
-              Nueva carpeta
+              <PlusIcon />
             </button>
           </div>
 
           <div className="folder-tree">
             {carpetasRaiz.map((carpeta) => renderCarpeta(carpeta, 0))}
-            {rutinasSueltas.length > 0 && (
-              <div className="folder-node">
-                <button type="button" className="folder-toggle static">
+            <div className="folder-node folder-section">
+              <div className="folder-section-head">
+                <div className="folder-section-toggle static">
                   <strong>Sin carpeta</strong>
                   <small>{rutinasSueltas.length}</small>
+                </div>
+                <button
+                  type="button"
+                  className="folder-section-action"
+                  onClick={() => setCreateFolderModal({ open: true, value: "" })}
+                  aria-label="Nueva carpeta"
+                  title="Nueva carpeta"
+                >
+                  <FolderPlusIcon />
                 </button>
-                <div className="folder-children">{rutinasSueltas.map((rutina) => renderRutinaItem(rutina))}</div>
               </div>
-            )}
+              {rutinasSueltas.length > 0 && (
+                <div className="folder-children">{rutinasSueltas.map((rutina) => renderRutinaItem(rutina))}</div>
+              )}
+            </div>
             {rutinasFiltradas.length === 0 && (
               <div className="empty-state">
-                <p>No hay rutinas</p>
-                <small>Crea tu primera rutina para empezar.</small>
+                {busquedaRutina.trim() ? (
+                  <>
+                    <p>Sin resultados</p>
+                    <small>No hay rutinas que coincidan con "{busquedaRutina.trim()}".</small>
+                  </>
+                ) : (
+                  <>
+                    <p>No hay rutinas</p>
+                    <small>Crea tu primera rutina con el +.</small>
+                  </>
+                )}
               </div>
             )}
           </div>
         </article>
 
         <article className="box rutinas-detail-box">
-          <h2>Detalle</h2>
           {rutinaSeleccionada ? (
             <div className="routine-detail detail-rich">
-              <h3 className="routine-title-xl">{rutinaSeleccionada.nombre}</h3>
-              <p className="routine-detail-description">{rutinaSeleccionada.descripcion || "Sin descripcion"}</p>
-              <div className="detail-meta">
-                <span>Duracion: {rutinaSeleccionada.duracion_estimada ?? "-"} min</span>
-                <span>ID {rutinaSeleccionada.id_rutina}</span>
-                <span>Guardados: {rutinaSeleccionada.save_count}</span>
-                <span>Copias: {rutinaSeleccionada.copy_count}</span>
+              {/* Queda anclado arriba al scrollear el detalle */}
+              <div className="rutina-detail-sticky">
+                <div className="rutina-detail-topbar">
+                  <h2>Detalle</h2>
+                  <div className="rutina-detail-actions" data-menu-root="detail">
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={iniciarRutina}
+                      disabled={!canStartTraining}
+                      title={canStartTraining ? "Comenzar rutina" : "Disponible para usuario y entrenador"}
+                    >
+                      Comenzar rutina
+                    </button>
+                    <button
+                      type="button"
+                      className="btn secondary rutina-kebab-btn"
+                      onClick={() => setDetailMenuOpen((prev) => !prev)}
+                      aria-label="Más opciones de la rutina"
+                      aria-haspopup="menu"
+                      aria-expanded={detailMenuOpen}
+                      title="Más opciones"
+                    >
+                      <DotsVerticalIcon />
+                    </button>
+                    {detailMenuOpen && (
+                      <div className="folder-menu rutina-detail-menu" role="menu">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setDetailMenuOpen(false);
+                            abrirEditorRutina(rutinaSeleccionada);
+                          }}
+                        >
+                          Modificar
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setDetailMenuOpen(false);
+                            void compartirRutina();
+                          }}
+                        >
+                          Compartir link
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="danger"
+                          onClick={() => {
+                            setDetailMenuOpen(false);
+                            setPendingRoutineDelete(rutinaSeleccionada);
+                          }}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <h3 className="routine-title-xl">{rutinaSeleccionada.nombre}</h3>
+                <p className="routine-detail-description">{rutinaSeleccionada.descripcion || "Sin descripcion"}</p>
               </div>
 
-              <h3 className="detail-subtitle">Grupos musculares</h3>
-              {resumenLoading ? (
-                <p className="helper-text">Cargando grupos musculares...</p>
-              ) : gruposMuscularesResumen.length === 0 ? (
-                <p className="helper-text">Sin grupos musculares identificados.</p>
-              ) : (
-                <div className="muscle-chips">
-                  {gruposMuscularesResumen.map((grupo) => (
-                    <span key={grupo} className="muscle-chip">
-                      {grupo}
-                    </span>
-                  ))}
+              <dl className="rutina-stats">
+                <div className="rutina-stat">
+                  <dt>Duración</dt>
+                  <dd>
+                    {rutinaSeleccionada.duracion_estimada ? `${rutinaSeleccionada.duracion_estimada} min` : "—"}
+                  </dd>
                 </div>
-              )}
+                <div className="rutina-stat">
+                  <dt>Ejercicios</dt>
+                  <dd>{resumenLoading ? "…" : resumenEjercicios.length}</dd>
+                </div>
+                <div className="rutina-stat">
+                  <dt>Series</dt>
+                  <dd>{resumenLoading ? "…" : totalSeriesResumen}</dd>
+                </div>
+                <div className="rutina-stat">
+                  <dt>Guardados</dt>
+                  <dd>{rutinaSeleccionada.save_count}</dd>
+                </div>
+                <div className="rutina-stat">
+                  <dt>Copias</dt>
+                  <dd>{rutinaSeleccionada.copy_count}</dd>
+                </div>
+                <div className="rutina-stat">
+                  <dt>Visibilidad</dt>
+                  <dd>{rutinaSeleccionada.visible_en_descubrir ? "En Descubrir" : "Privada"}</dd>
+                </div>
+                <div className="rutina-stat">
+                  <dt>ID</dt>
+                  <dd>#{rutinaSeleccionada.id_rutina}</dd>
+                </div>
+              </dl>
+
+              <details className="rutina-muscles">
+                <summary>
+                  <span className="rutina-muscles-chevron">
+                    <ChevronIcon />
+                  </span>
+                  <span className="rutina-muscles-title">Grupos musculares</span>
+                  {!resumenLoading && gruposDetalle.length > 0 ? (
+                    <span className="rutina-muscles-count">{gruposDetalle.length}</span>
+                  ) : null}
+                </summary>
+                {resumenLoading ? (
+                  <p className="helper-text">Cargando grupos musculares...</p>
+                ) : gruposDetalle.length === 0 ? (
+                  <p className="helper-text">Sin grupos musculares identificados.</p>
+                ) : (
+                  <ul className="rutina-muscles-list">
+                    {gruposDetalle.map((grupo) => (
+                      <li key={grupo.grupo} className="rutina-muscle-row">
+                        <span className="rutina-muscle-name">{grupo.grupo}</span>
+                        <span className="rutina-muscle-bar" aria-hidden="true">
+                          <span style={{ width: `${Math.max(4, grupo.porcentaje)}%` }} />
+                        </span>
+                        <span className="rutina-muscle-meta">
+                          {grupo.ejercicios} {grupo.ejercicios === 1 ? "ejercicio" : "ejercicios"} · {grupo.series}{" "}
+                          {grupo.series === 1 ? "serie" : "series"} · {grupo.porcentaje}%
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </details>
 
               <h3 className="detail-subtitle">Ejercicios ({resumenEjercicios.length})</h3>
               {resumenLoading ? (
@@ -2680,42 +2979,10 @@ function Rutinas({
                   })}
                 </div>
               )}
-
-              <div className="actions-row">
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => void abrirEditorRutina(rutinaSeleccionada)}
-                >
-                  Modificar
-                </button>
-                <button type="button" className="btn secondary" onClick={() => void compartirRutina()}>
-                  Compartir link
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={iniciarRutina}
-                  disabled={!canStartTraining}
-                  title={
-                    canStartTraining
-                      ? "Comenzar rutina"
-                      : "Disponible para usuario y entrenador"
-                  }
-                >
-                  Comenzar rutina
-                </button>
-                <button
-                  type="button"
-                  className="btn danger"
-                  onClick={() => setPendingRoutineDelete(rutinaSeleccionada)}
-                >
-                  Eliminar
-                </button>
-              </div>
             </div>
           ) : (
             <div className="routine-empty-detail">
+              <h2>Detalle</h2>
               <p className="helper-text">Selecciona una rutina para ver sus detalles.</p>
               <img src={routineDetailEmptyBodybuilder} alt="Fisicoculturista posando" />
             </div>

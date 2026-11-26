@@ -152,6 +152,12 @@ type UserTrainingSearchResponse = {
 type SocialModalMode = "followers" | "following";
 type GymPublicSection = "servicios" | "horarios";
 
+// Cache en memoria de perfiles ya visitados (por usuario logueado + username).
+// Al volver a un perfil se muestra al instante lo que ya teniamos y se actualiza en segundo plano.
+const profileCache = new Map<string, PerfilUsuario>();
+const profileCacheKey = (viewerId: number, username: string) =>
+  `${viewerId}:${username.trim().toLowerCase()}`;
+
 function Perfil({
   usuario,
   profileUsername,
@@ -244,10 +250,21 @@ function Perfil({
     }
   };
 
+  const profileRequestRef = useRef(0);
+
   const cargarPerfil = async () => {
+    const requestId = ++profileRequestRef.current;
+    const cacheKey = profileCacheKey(usuario.id, profileUsername);
+    const cached = profileCache.get(cacheKey);
+
     try {
-      setLoading(true);
       setError("");
+      if (cached) {
+        setPerfil(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
 
       const res = await fetch(`${API}/users/profile/${encodeURIComponent(profileUsername)}?viewer_id=${usuario.id}`, {
         headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
@@ -258,13 +275,27 @@ function Perfil({
         throw new Error("error" in data ? data.error || "No se pudo cargar el perfil" : "No se pudo cargar el perfil");
       }
 
+      // Si mientras tanto se abrio otro perfil, esta respuesta ya no sirve.
+      if (requestId !== profileRequestRef.current) return;
       setPerfil(data as PerfilUsuario);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo cargar el perfil");
+      if (requestId !== profileRequestRef.current) return;
+      if (!cached) {
+        setError(err instanceof Error ? err.message : "No se pudo cargar el perfil");
+      }
     } finally {
-      setLoading(false);
+      if (requestId === profileRequestRef.current) {
+        setLoading(false);
+      }
     }
   };
+
+  // Mantener la cache al dia con cualquier cambio local (seguir, editar, foto, etc.).
+  useEffect(() => {
+    if (perfil) {
+      profileCache.set(profileCacheKey(usuario.id, perfil.usuario.username), perfil);
+    }
+  }, [perfil, usuario.id]);
 
   useEffect(() => {
     savedScrollYRef.current = 0;

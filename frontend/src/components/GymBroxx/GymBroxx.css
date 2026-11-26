@@ -1,0 +1,822 @@
+/* ============================== GymBroxx ==============================
+   Mascota flotante en la esquina inferior derecha (estilo "Mensajes" de Instagram).
+   Colapsada: una píldora con la mascota sentada adentro.
+   Expandida: una tarjeta con la mascota grande y un globo de diálogo.
+   ===================================================================== */
+
+.gymbroxx {
+  --broxx-surface: linear-gradient(150deg, #14304c 0%, #0c1d30 100%);
+  --broxx-border: #29445f;
+  --broxx-border-hover: #3f7fbd;
+  --broxx-text: #dff0ff;
+  --broxx-muted: #91adc0;
+  --broxx-accent: #5aa9ff;
+  --broxx-bubble-bg: #eaf4ff;
+  --broxx-bubble-text: #0b1a2a;
+
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 28;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  pointer-events: none;
+  transition: bottom 0.35s cubic-bezier(0.3, 0.8, 0.4, 1);
+}
+
+.gymbroxx > * {
+  pointer-events: auto;
+}
+
+/* Cuando aparece la barra de "Entrenamiento en curso" se sube para no taparla. */
+.gymbroxx.is-lifted {
+  bottom: 108px;
+}
+
+/* ------------------------------- Píldora ------------------------------- */
+
+/* En reposo se ve solo la mascota. La pastilla (fondo + nombre + estado)
+   aparece recién cuando el usuario interactúa: hover o foco con teclado. */
+.broxx-pill {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  height: 60px;
+  padding: 0 76px 0 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--broxx-text);
+  font: inherit;
+  cursor: pointer;
+  animation: broxx-pill-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  transition: padding 0.28s cubic-bezier(0.3, 0.8, 0.4, 1);
+}
+
+.broxx-pill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 1px solid var(--broxx-border);
+  border-radius: inherit;
+  background: var(--broxx-surface);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transform: scale(0.92);
+  transform-origin: 85% 50%;
+  transition:
+    opacity 0.22s ease,
+    transform 0.28s cubic-bezier(0.3, 0.8, 0.4, 1),
+    border-color 0.18s ease;
+}
+
+.broxx-pill:hover,
+.broxx-pill:focus-visible {
+  padding-left: 24px;
+  padding-right: 84px;
+}
+
+.broxx-pill:hover::before,
+.broxx-pill:focus-visible::before {
+  opacity: 1;
+  transform: none;
+  border-color: var(--broxx-border-hover);
+}
+
+.broxx-pill:focus-visible {
+  outline: 2px solid var(--broxx-accent);
+  outline-offset: 3px;
+}
+
+.gymbroxx.is-open .broxx-pill,
+.gymbroxx.is-closing .broxx-pill {
+  display: none;
+}
+
+.broxx-pill-avatar {
+  position: absolute;
+  right: 10px;
+  bottom: 3px;
+  line-height: 0;
+}
+
+.gymbroxx.is-calling .broxx-pill-avatar .broxx-figure {
+  animation: broxx-jump 0.34s ease-in-out 2;
+}
+
+.broxx-pill-text {
+  display: grid;
+  gap: 1px;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  text-align: left;
+  line-height: 1.1;
+  transition:
+    max-width 0.28s cubic-bezier(0.3, 0.8, 0.4, 1),
+    opacity 0.18s ease;
+}
+
+.broxx-pill:hover .broxx-pill-text,
+.broxx-pill:focus-visible .broxx-pill-text {
+  max-width: 220px;
+  opacity: 1;
+  transition:
+    max-width 0.28s cubic-bezier(0.3, 0.8, 0.4, 1),
+    opacity 0.22s 0.08s ease;
+}
+
+.broxx-pill-text strong,
+.broxx-card-title strong {
+  font-size: 1.14rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.broxx-pill-text small,
+.broxx-card-title small {
+  display: inline-flex;
+  align-items: center;
+  color: var(--broxx-muted);
+  font-size: 0.86rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.broxx-badge {
+  position: absolute;
+  right: -6px;
+  bottom: 0;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #0d2035;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #ffffff;
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  animation: broxx-badge-in 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+/* ------------------------------- Tarjeta ------------------------------- */
+
+.broxx-card {
+  width: 352px;
+  max-width: calc(100vw - 24px);
+  border: 1px solid var(--broxx-border);
+  border-radius: 22px;
+  background: var(--broxx-surface);
+  color: var(--broxx-text);
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.55);
+  transform-origin: 100% 100%;
+  animation: broxx-card-in 0.42s cubic-bezier(0.18, 1.35, 0.4, 1) both;
+}
+
+.gymbroxx.is-closing .broxx-card {
+  animation: broxx-card-out 0.26s ease-in both;
+}
+
+.broxx-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 10px 2px 18px;
+}
+
+.broxx-card-title {
+  display: grid;
+  gap: 1px;
+  line-height: 1.1;
+}
+
+.broxx-card-tools {
+  display: flex;
+  gap: 2px;
+}
+
+.broxx-icon-btn {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--broxx-muted);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.broxx-icon-btn:hover {
+  background: rgba(90, 169, 255, 0.14);
+  color: var(--broxx-text);
+}
+
+.broxx-icon-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.broxx-card-body {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  align-items: end;
+  gap: 12px;
+  padding: 6px 16px 16px 12px;
+}
+
+.broxx-stage {
+  position: relative;
+  padding-bottom: 6px;
+  line-height: 0;
+}
+
+.broxx-floor-shadow {
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  bottom: 1px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  filter: blur(2px);
+  animation: broxx-shadow 3.2s ease-in-out infinite;
+}
+
+.broxx-chat {
+  display: grid;
+  gap: 10px;
+  align-self: center;
+  min-width: 0;
+  padding-bottom: 6px;
+}
+
+.broxx-bubble {
+  position: relative;
+  display: grid;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 16px 16px 16px 5px;
+  background: var(--broxx-bubble-bg);
+  color: var(--broxx-bubble-text);
+  font-family: "DM Sans", "Segoe UI", system-ui, sans-serif;
+  font-size: 0.97rem;
+  font-weight: 600;
+  line-height: 1.38;
+  transform-origin: 0 100%;
+  animation: broxx-bubble-in 0.38s 0.08s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  overflow-wrap: anywhere;
+}
+
+/* Colita del globo apuntando a la mascota */
+.broxx-bubble::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  background: inherit;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+
+/* El texto oculto reserva el tamaño final así el globo no "crece" mientras escribe */
+.broxx-bubble-sizer,
+.broxx-bubble-text {
+  grid-area: 1 / 1;
+}
+
+.broxx-bubble-sizer {
+  visibility: hidden;
+}
+
+.broxx-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: currentColor;
+  animation: broxx-caret 0.7s steps(1) infinite;
+}
+
+.broxx-replies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.broxx-reply {
+  padding: 6px 12px;
+  border: 1px solid var(--broxx-border-hover);
+  border-radius: 999px;
+  background: rgba(90, 169, 255, 0.1);
+  color: #cfe6ff;
+  font-family: "DM Sans", "Segoe UI", system-ui, sans-serif;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  animation: broxx-chip-in 0.32s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.broxx-reply:hover {
+  background: var(--broxx-accent);
+  color: #04121f;
+  transform: translateY(-1px);
+}
+
+.broxx-cta {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--broxx-accent);
+  color: #04121f;
+  font-family: "DM Sans", "Segoe UI", system-ui, sans-serif;
+  font-size: 0.88rem;
+  font-weight: 800;
+  cursor: pointer;
+  animation: broxx-chip-in 0.32s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.broxx-cta:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.broxx-cta svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ------------------------------- Mascota ------------------------------- */
+
+.broxx-figure {
+  --broxx-lx: 0;
+  --broxx-ly: 0;
+  position: relative;
+  aspect-ratio: 816 / 768;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.35));
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.broxx-hop,
+.broxx-body {
+  position: absolute;
+  inset: 0;
+}
+
+.broxx-hop {
+  transform-origin: 50% 100%;
+  animation: broxx-pop 0.42s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+
+.broxx-figure.is-talking .broxx-hop {
+  animation:
+    broxx-pop 0.42s cubic-bezier(0.2, 1.5, 0.4, 1) both,
+    broxx-talk 0.24s 0.1s ease-in-out infinite alternate;
+}
+
+.broxx-body {
+  transform-origin: 50% 96%;
+  animation: broxx-breathe 3.2s ease-in-out infinite;
+}
+
+.broxx-body-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.broxx-eye {
+  position: absolute;
+  border-radius: 14% / 10%;
+  background: #ffffff;
+  transform-origin: 50% 65%;
+  transform: translate(calc(var(--broxx-lx) * 32%), calc(var(--broxx-ly) * 17%)) scaleY(var(--broxx-blink, 1));
+  transition: transform 0.22s cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+
+.broxx-figure.is-happy .broxx-eye {
+  --broxx-blink: 0.36;
+  border-radius: 45% 45% 12% 12% / 80% 80% 12% 12%;
+}
+
+.broxx-figure.is-blinking .broxx-eye {
+  --broxx-blink: 0.08;
+  transition-duration: 0.07s;
+}
+
+/* Animación de cuerpo según lo que esté haciendo */
+.broxx-figure[data-pose="music"] .broxx-body {
+  animation: broxx-groove 1.1s ease-in-out infinite;
+}
+
+.broxx-figure[data-pose="sleep"] .broxx-body {
+  animation: broxx-snore 4.2s ease-in-out infinite;
+}
+
+.broxx-figure[data-pose="dumbbell"] .broxx-body {
+  animation: broxx-pump 2.6s ease-in-out infinite;
+}
+
+.broxx-figure[data-pose="wave"] .broxx-body {
+  animation: broxx-wiggle 1.5s ease-in-out infinite;
+}
+
+.broxx-figure[data-pose="protein"] .broxx-body {
+  animation: broxx-sip 3.6s ease-in-out infinite;
+}
+
+.broxx-figure[data-pose="phone"] .broxx-body {
+  animation: broxx-scroll 2.8s ease-in-out infinite;
+}
+
+/* Capas decorativas: notas, ondas y Z */
+.broxx-decor {
+  position: absolute;
+  height: auto;
+  pointer-events: none;
+}
+
+.broxx-decor-notes-left {
+  animation: broxx-note 1.1s ease-in-out infinite alternate;
+}
+
+.broxx-decor-notes-right {
+  animation: broxx-note 1.1s -0.55s ease-in-out infinite alternate;
+}
+
+.broxx-decor-waves-left {
+  transform-origin: 100% 50%;
+  animation: broxx-sound 1.1s ease-in-out infinite;
+}
+
+.broxx-decor-waves-right {
+  transform-origin: 0% 50%;
+  animation: broxx-sound 1.1s -0.55s ease-in-out infinite;
+}
+
+.broxx-decor-z1,
+.broxx-decor-z2,
+.broxx-decor-z3 {
+  opacity: 0;
+  animation: broxx-z 3.6s ease-in-out infinite;
+}
+
+.broxx-decor-z2 {
+  animation-delay: 0.6s;
+}
+
+.broxx-decor-z3 {
+  animation-delay: 1.2s;
+}
+
+/* ------------------------------ Keyframes ------------------------------ */
+
+@keyframes broxx-pill-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes broxx-jump {
+  0%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  20% {
+    transform: translateY(0) scale(1.08, 0.9);
+  }
+  55% {
+    transform: translateY(-28%) scale(0.95, 1.06);
+  }
+  85% {
+    transform: translateY(0) scale(1.06, 0.92);
+  }
+}
+
+@keyframes broxx-card-in {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.5);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes broxx-card-out {
+  to {
+    opacity: 0;
+    transform: translateY(12px) scale(0.6);
+  }
+}
+
+@keyframes broxx-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px) scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes broxx-chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes broxx-badge-in {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes broxx-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes broxx-pop {
+  0% {
+    transform: scale(1.12, 0.86);
+  }
+  45% {
+    transform: translateY(-6%) scale(0.94, 1.08);
+  }
+  75% {
+    transform: scale(1.03, 0.97);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes broxx-talk {
+  from {
+    transform: translateY(0) scale(1, 1);
+  }
+  to {
+    transform: translateY(-4%) scale(0.98, 1.03);
+  }
+}
+
+@keyframes broxx-breathe {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  50% {
+    transform: scale(0.99, 1.03);
+  }
+}
+
+@keyframes broxx-shadow {
+  0%,
+  100% {
+    transform: scaleX(1);
+  }
+  50% {
+    transform: scaleX(0.94);
+  }
+}
+
+@keyframes broxx-groove {
+  0%,
+  100% {
+    transform: rotate(-4deg);
+  }
+  25% {
+    transform: translateY(-3%) rotate(0deg) scale(0.99, 1.02);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+  75% {
+    transform: translateY(-3%) rotate(0deg) scale(0.99, 1.02);
+  }
+}
+
+@keyframes broxx-snore {
+  0%,
+  100% {
+    transform: rotate(-1deg) scale(1, 1);
+  }
+  45% {
+    transform: rotate(1deg) scale(0.98, 1.045);
+  }
+}
+
+@keyframes broxx-pump {
+  0%,
+  55%,
+  100% {
+    transform: none;
+  }
+  65% {
+    transform: scale(1.05, 0.94);
+  }
+  76% {
+    transform: translateY(-4%) scale(0.97, 1.04);
+  }
+  88% {
+    transform: scale(1.02, 0.98);
+  }
+}
+
+@keyframes broxx-wiggle {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg) translateY(-1%);
+  }
+}
+
+@keyframes broxx-sip {
+  0%,
+  50%,
+  100% {
+    transform: none;
+  }
+  62%,
+  80% {
+    transform: rotate(-6deg) translateY(-1.5%);
+  }
+}
+
+@keyframes broxx-scroll {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  30% {
+    transform: rotate(2.5deg) translateY(1%);
+  }
+  60% {
+    transform: rotate(1deg) translateY(0.5%);
+  }
+}
+
+@keyframes broxx-note {
+  from {
+    transform: translateY(4%) rotate(-7deg);
+  }
+  to {
+    transform: translateY(-12%) rotate(7deg);
+  }
+}
+
+@keyframes broxx-sound {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.82);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes broxx-z {
+  0% {
+    opacity: 0;
+    transform: translate(-45%, 45%) scale(0.45);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(10%, -18%) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(28%, -45%) scale(1.1);
+  }
+}
+
+/* ------------------------------ Tema claro ------------------------------ */
+
+:root[data-theme="light"] .gymbroxx {
+  --broxx-surface: #ffffff;
+  --broxx-border: #d9e2ea;
+  --broxx-border-hover: #5aa9ff;
+  --broxx-text: #111827;
+  --broxx-muted: #4b5563;
+  --broxx-bubble-bg: #eef4fb;
+}
+
+:root[data-theme="light"] .broxx-pill::before,
+:root[data-theme="light"] .broxx-card {
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.16);
+}
+
+:root[data-theme="light"] .broxx-reply {
+  color: #1d4f86;
+}
+
+:root[data-theme="light"] .broxx-badge {
+  border-color: #ffffff;
+}
+
+:root[data-theme="light"] .broxx-floor-shadow {
+  background: rgba(15, 23, 42, 0.22);
+}
+
+/* -------------------------------- Mobile -------------------------------- */
+
+@media (max-width: 767px) {
+  .gymbroxx {
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .gymbroxx.is-lifted {
+    bottom: 132px;
+  }
+
+  .broxx-pill,
+  .broxx-pill:hover,
+  .broxx-pill:focus-visible {
+    width: 66px;
+    height: 66px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .broxx-pill-avatar {
+    left: 0;
+    right: 0;
+    bottom: 7px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .broxx-pill-text {
+    display: none;
+  }
+}
+
+/* --------------------------- Menos movimiento --------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .gymbroxx *,
+  .gymbroxx *::before {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .broxx-decor-z1,
+  .broxx-decor-z2,
+  .broxx-decor-z3 {
+    opacity: 1;
+  }
+}

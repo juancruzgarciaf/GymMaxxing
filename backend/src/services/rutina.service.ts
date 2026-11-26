@@ -190,19 +190,48 @@ const ensureRutinaLikeTable = async () => {
   );
 };
 
-const ensureRutinaVisibilityColumn = async () => {
-  await pool.query(
-    `ALTER TABLE rutina
-     ADD COLUMN IF NOT EXISTS visible_en_descubrir BOOLEAN NOT NULL DEFAULT TRUE`
-  );
+// Los ALTER TABLE toman un lock exclusivo sobre "rutina" y son un viaje extra a la base:
+// alcanza con correrlos una sola vez por proceso.
+let rutinaVisibilityColumnReady: Promise<void> | null = null;
 
-  await pool.query(
-    `ALTER TABLE rutina
-     ALTER COLUMN visible_en_descubrir SET DEFAULT TRUE`
-  );
+const ensureRutinaVisibilityColumn = () => {
+  if (!rutinaVisibilityColumnReady) {
+    rutinaVisibilityColumnReady = (async () => {
+      await pool.query(
+        `ALTER TABLE rutina
+         ADD COLUMN IF NOT EXISTS visible_en_descubrir BOOLEAN NOT NULL DEFAULT TRUE`
+      );
+
+      await pool.query(
+        `ALTER TABLE rutina
+         ALTER COLUMN visible_en_descubrir SET DEFAULT TRUE`
+      );
+    })().catch((error) => {
+      rutinaVisibilityColumnReady = null;
+      throw error;
+    });
+  }
+
+  return rutinaVisibilityColumnReady;
 };
 
+let cachedRutinaMetricsSupport: RutinaMetricSupport | null = null;
+
 const getRutinaMetricsSupport = async (): Promise<RutinaMetricSupport> => {
+  // Una vez que existen las tres tablas no van a desaparecer: no hace falta volver a preguntar.
+  if (cachedRutinaMetricsSupport) {
+    return cachedRutinaMetricsSupport;
+  }
+
+  const support = await queryRutinaMetricsSupport();
+  if (support.has_save && support.has_copy && support.has_like) {
+    cachedRutinaMetricsSupport = support;
+  }
+
+  return support;
+};
+
+const queryRutinaMetricsSupport = async (): Promise<RutinaMetricSupport> => {
   const result = await pool.query<RutinaMetricSupport>(
     `SELECT
        to_regclass('public.rutina_guardado') IS NOT NULL AS has_save,
@@ -949,4 +978,20 @@ export const deleteEjercicioDeRutina = async (
      WHERE id_rutina = $1 AND id_ejercicio = $2`,
     [id_rutina, id_ejercicio]
   );
+};
+
+// =========================
+// PERMISOS
+// =========================
+
+// Devuelve el creador de la rutina, o null si la rutina no existe.
+export const getRutinaCreadorId = async (id_rutina: string | number) => {
+  const result = await pool.query<{ creador_id: number }>(
+    `SELECT creador_id
+     FROM rutina
+     WHERE id_rutina = $1`,
+    [id_rutina]
+  );
+
+  return result.rows[0]?.creador_id ?? null;
 };

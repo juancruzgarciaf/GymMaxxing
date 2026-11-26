@@ -97,6 +97,8 @@ type EntrenamientoProps = {
   onSeedConsumed?: () => void;
   onActiveTrainingChange?: (snapshot: ActiveTrainingSnapshot | null) => void;
   discardRequestKey?: number;
+  // Se llama cuando el entrenamiento terminó de guardarse (App lleva al inicio y recarga el feed).
+  onTrainingSaved?: (message: string) => void;
 };
 
 type VistaEntrenamiento = "inicio" | "ejecucion" | "guardar";
@@ -337,6 +339,7 @@ function Entrenamiento({
   onSeedConsumed,
   onActiveTrainingChange,
   discardRequestKey = 0,
+  onTrainingSaved,
 }: EntrenamientoProps) {
   const [vista, setVista] = useState<VistaEntrenamiento>("inicio");
   const [loading, setLoading] = useState(false);
@@ -1654,11 +1657,14 @@ function Entrenamiento({
       }
 
       resetEntrenamiento();
-      setMensaje(
-        guardarComoRutina
-          ? "Entrenamiento guardado y rutina creada"
-          : "Entrenamiento guardado",
-      );
+      const mensajeGuardado = guardarComoRutina
+        ? "Entrenamiento guardado y rutina creada"
+        : "Entrenamiento guardado";
+      if (onTrainingSaved) {
+        onTrainingSaved(mensajeGuardado);
+      } else {
+        setMensaje(mensajeGuardado);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error guardando entrenamiento");
     } finally {
