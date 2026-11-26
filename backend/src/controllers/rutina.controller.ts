@@ -107,25 +107,11 @@ export const getDiscoverRutinas = async (req: Request, res: Response) => {
       excludeFollowingRaw === "1" ||
       excludeFollowingRaw === "true";
 
-    const soloAdminRaw = req.query.solo_admin;
+    // "solo_admin" queda como alias viejo de "rutinas_oficiales".
     const rutinasOficialesRaw =
       req.query.rutinas_oficiales ?? req.query.solo_admin;
-    const soloAdmin =
-      rutinasOficialesRaw === "1" ||
-      rutinasOficialesRaw === "true" ||
-      soloAdminRaw === "1" ||
-      soloAdminRaw === "true";
-    const adminEmail = "admin@gmail.com";
-
-    const adminIdRaw = req.query.admin_id;
-    const adminId =
-      typeof adminIdRaw === "string" && adminIdRaw.trim()
-        ? Number(adminIdRaw)
-        : undefined;
-
-    if (adminIdRaw != null && (adminId == null || Number.isNaN(adminId))) {
-      return res.status(400).json({ error: "admin_id inválido" });
-    }
+    const soloOficiales =
+      rutinasOficialesRaw === "1" || rutinasOficialesRaw === "true";
 
     const tipoCreadorRaw = req.query.tipo_creador;
     const tipoCreador =
@@ -146,15 +132,12 @@ export const getDiscoverRutinas = async (req: Request, res: Response) => {
       gruposMusculares?: string[];
       orden?: string;
       excludeFollowing?: boolean;
-      soloAdmin?: boolean;
-      adminId?: number;
-      adminEmail?: string;
+      soloOficiales?: boolean;
       tipoCreador?: string;
     } = {
       orden,
       excludeFollowing,
-      soloAdmin,
-      adminEmail,
+      soloOficiales,
     };
 
     if (viewerId != null) {
@@ -167,10 +150,6 @@ export const getDiscoverRutinas = async (req: Request, res: Response) => {
 
     if (gruposMusculares && gruposMusculares.length > 0) {
       discoverFilters.gruposMusculares = gruposMusculares;
-    }
-
-    if (adminId != null) {
-      discoverFilters.adminId = adminId;
     }
 
     if (tipoCreador) {
