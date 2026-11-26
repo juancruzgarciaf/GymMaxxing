@@ -4,6 +4,7 @@ import path from "path";
 import { pool } from "../db";
 import { isUserPro } from "../services/subscription.service";
 import { uploadedFileUrl } from "../middleware/upload.middleware";
+import { deleteUploadFromBucket } from "../utils/storage";
 
 export const getEjercicios = async (req: Request, res: Response) => {
   try {
@@ -205,6 +206,7 @@ export const deleteExerciseImage = async (req: Request, res: Response) => {
     );
 
     const imageUrl = typeof exercise.imagen_url === "string" ? exercise.imagen_url : "";
+    await deleteUploadFromBucket(imageUrl);
     if (imageUrl.startsWith("/uploads/exercises/")) {
       const uploadsDirectory = path.resolve(__dirname, "../../uploads/exercises");
       const filename = path.basename(imageUrl);
