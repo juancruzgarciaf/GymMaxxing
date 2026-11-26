@@ -12,6 +12,11 @@ export type GenerateRoutineDraftInput = {
 export type RoutineGenerationCreateResponse = {
   status: "routine_draft_ready";
   proveedor: "gemini";
+  // "respaldo" = Gemini falló y la rutina se armó por reglas con el catálogo.
+  origen: "gemini" | "respaldo";
+  aviso: string | null;
+  // Error técnico de Gemini (solo fuera de producción) para poder diagnosticar desde el panel.
+  detalle_tecnico: string | null;
   usuario_id: number;
   gemini_configurado: boolean;
   modelo_usado: string;
@@ -81,6 +86,7 @@ export type RoutineGenerationCreateResponse = {
       nombre: string;
       grupo_muscular: string | null;
       tipo_disciplina: string | null;
+      imagen_url: string | null;
       veces_usado_en_rutinas: number;
     }>;
   };
@@ -93,17 +99,8 @@ export type RoutineGenerationCreateResponse = {
     dias_por_semana_recomendados: number | null;
     duracion_estimada: number | null;
     advertencias: string[];
-    ejercicios: Array<{
-      id_ejercicio: number;
-        nombre: string;
-        grupo_muscular: string | null;
-        tipo_disciplina: string | null;
-        series: number;
-        repeticiones: number;
-        descanso: number;
-        orden: number;
-      }>;
-    };
+    ejercicios: ValidatedRoutineExercise[];
+  };
   rutina_borrador: {
     nombre: string;
     descripcion: string | null;
@@ -120,9 +117,24 @@ export type RoutineGenerationCreateResponse = {
       descripcion: string | null;
       grupo_muscular: string | null;
       tipo_disciplina: string | null;
+      imagen_url: string | null;
     }>;
   };
   siguiente_paso: string;
+};
+
+// Ejercicio ya validado contra el catálogo real: todos los datos salen de la tabla `ejercicio`,
+// nunca de lo que escribió Gemini (solo series/reps/descanso/orden vienen de la propuesta).
+type ValidatedRoutineExercise = {
+  id_ejercicio: number;
+  nombre: string;
+  grupo_muscular: string | null;
+  tipo_disciplina: string | null;
+  imagen_url: string | null;
+  series: number;
+  repeticiones: number;
+  descanso: number;
+  orden: number;
 };
 
 type ExerciseUsageRow = {
@@ -131,6 +143,10 @@ type ExerciseUsageRow = {
   grupo_muscular: string | null;
   tipo_disciplina: string | null;
   veces_usado_en_rutinas: number;
+};
+
+type CatalogExerciseRow = ExerciseUsageRow & {
+  imagen_url: string | null;
 };
 
 type TrainerExerciseUsageRow = {
@@ -165,8 +181,13 @@ type GeneratedRoutineProposal = {
 type CatalogExercise = RoutineGenerationCreateResponse["contexto"]["catalogo_referencia"][number];
 
 const GEMINI_ROUTINE_DEBUG_PREFIX = "[GeminiRoutineDebug]";
-const DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 4096;
-const GEMINI_REFERENCE_CATALOG_LIMIT = 24;
+const DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 8192;
+// Se le pasa a Gemini el catálogo completo que el usuario puede usar (ejercicios globales + sus
+// personalizados). Antes eran solo los 24 más usados, y si el pedido era de un grupo muscular que no
+// aparecía ahí Gemini terminaba nombrando ejercicios que no existen en GymMaxxing.
+const GEMINI_REFERENCE_CATALOG_LIMIT = 400;
+// Si de la propuesta de Gemini sobreviven menos ejercicios válidos que esto, se usa el fallback.
+const MIN_VALID_GENERATED_EXERCISES = 3;
 const GEMINI_TREND_ROUTINES_LIMIT = 3;
 const GEMINI_TREND_USERS_LIMIT = 3;
 const GEMINI_POPULAR_EXERCISES_PER_GROUP_LIMIT = 2;
@@ -195,6 +216,22 @@ const debugGeminiRoutine = (...args: Parameters<typeof console.warn>) => {
 
 const getGeminiMaxOutputTokens = () =>
   readPositiveIntEnv("GEMINI_MAX_OUTPUT_TOKENS", DEFAULT_GEMINI_MAX_OUTPUT_TOKENS);
+
+// Los modelos 2.5 "piensan" antes de responder y esos tokens cuentan dentro de maxOutputTokens.
+// Con el catálogo completo en el prompt, el razonamiento se comía el límite y el JSON llegaba
+// cortado (finishReason MAX_TOKENS), así que terminaba usándose la rutina de respaldo.
+// Para armar una rutina con un catálogo cerrado no hace falta pensar: en los modelos flash lo apagamos.
+// Se puede ajustar con GEMINI_THINKING_BUDGET (0 = sin razonamiento).
+const getGeminiThinkingBudget = (model: string): number | null => {
+  const raw = process.env.GEMINI_THINKING_BUDGET;
+  if (raw != null && raw.trim() !== "") {
+    const parsed = Number(raw);
+    if (Number.isInteger(parsed) && parsed >= 0) {
+      return parsed;
+    }
+  }
+  return model.toLowerCase().includes("flash") ? 0 : null;
+};
 
 const ROUTINE_INTENT_KEYWORDS = [
   "rutina",
@@ -234,51 +271,56 @@ const looksLikeRoutineRequest = (prompt: string, objetivo?: string) => {
 };
 
 const getRequestedRoutineStyle = (prompt: string, objetivo?: string) => {
-  const content = `${prompt} ${objetivo ?? ""}`.toLowerCase();
+  // Sin tildes ni mayúsculas, así "glúteos", "bíceps" o "Tríceps" matchean igual.
+  const content = normalizeExerciseNameKey(`${prompt} ${objetivo ?? ""}`);
+  const has = (...words: string[]) => words.some((word) => content.includes(word));
 
-  if (
-    content.includes("push pull legs") ||
-    content.includes("ppl") ||
-    (content.includes("push") && content.includes("pull") && content.includes("legs"))
-  ) {
+  if (has("push pull legs", "ppl") || (has("push") && has("pull") && has("legs"))) {
     return "push-pull-legs";
   }
 
-  if (content.includes("full body")) {
+  if (has("full body", "cuerpo completo", "fullbody")) {
     return "full-body";
   }
 
-  if (content.includes("upper") || content.includes("torso")) {
+  if (has("upper", "torso", "tren superior")) {
     return "upper";
   }
 
-  if (content.includes("lower")) {
+  if (has("lower", "tren inferior")) {
     return "lower";
   }
 
-  if (content.includes("push")) {
+  if (has("push")) {
     return "push";
   }
 
-  if (content.includes("pull")) {
+  if (has("pull")) {
     return "pull";
   }
 
-  if (
-    content.includes("pierna") ||
-    content.includes("piernas") ||
-    content.includes("gluteo") ||
-    content.includes("gluteos")
-  ) {
+  if (has("pierna", "gluteo", "cuadriceps", "isquio", "femoral", "gemelo", "pantorrilla", "legs")) {
     return "legs";
   }
 
-  if (content.includes("pecho") || content.includes("triceps")) {
+  if (has("pecho", "triceps")) {
     return "chest-triceps";
   }
 
-  if (content.includes("espalda") || content.includes("biceps")) {
+  if (has("espalda", "biceps", "dorsal")) {
     return "back-biceps";
+  }
+
+  if (has("hombro", "deltoide")) {
+    return "shoulders";
+  }
+
+  if (has("brazo")) {
+    return "arms";
+  }
+
+  if (has("core", "abdomen", "abdominal", "abs")) {
+    return "core";
   }
 
   return "general";
@@ -310,41 +352,97 @@ const getFallbackObjective = (input: GenerateRoutineDraftInput) => {
   return input.objetivo?.trim() || "hipertrofia";
 };
 
-const pickDistinctExercises = (
+// Grupos del catálogo para cada estilo. `primary` son los grupos pedidos; `secondary` solo se usa si
+// con los primarios no se llega al mínimo. Nunca se rellena con grupos que no tienen que ver.
+type FallbackGroups = { primary: string[]; secondary: string[] };
+
+const FALLBACK_GENERAL_GROUPS: FallbackGroups = {
+  primary: ["Piernas", "Pecho", "Espalda", "Hombros", "Core"],
+  secondary: [],
+};
+
+const FALLBACK_GROUPS: Record<string, FallbackGroups> = {
+  "push-pull-legs": { primary: ["Pecho", "Espalda", "Piernas", "Hombros", "Triceps", "Biceps"], secondary: [] },
+  "full-body": { primary: ["Piernas", "Pecho", "Espalda", "Hombros", "Core"], secondary: [] },
+  upper: { primary: ["Pecho", "Espalda", "Hombros", "Biceps", "Triceps"], secondary: [] },
+  lower: { primary: ["Piernas", "Gluteos"], secondary: ["Core"] },
+  push: { primary: ["Pecho", "Hombros", "Triceps"], secondary: [] },
+  pull: { primary: ["Espalda", "Biceps"], secondary: ["Hombros"] },
+  legs: { primary: ["Piernas", "Gluteos"], secondary: ["Core"] },
+  "chest-triceps": { primary: ["Pecho", "Triceps"], secondary: ["Hombros"] },
+  "back-biceps": { primary: ["Espalda", "Biceps"], secondary: ["Hombros"] },
+  shoulders: { primary: ["Hombros"], secondary: ["Triceps", "Core"] },
+  arms: { primary: ["Biceps", "Triceps"], secondary: ["Hombros"] },
+  core: { primary: ["Core"], secondary: [] },
+  general: { primary: ["Piernas", "Pecho", "Espalda", "Hombros", "Core"], secondary: [] },
+};
+
+const FALLBACK_MIN_EXERCISES = 4;
+
+// Reparte los lugares entre los grupos en ronda (1 de cada grupo, después el 2° de cada uno, etc.),
+// respetando el orden del catálogo, que viene de más a menos usado.
+const pickExercisesRoundRobin = (
   catalog: CatalogExercise[],
   groups: string[],
-  maxExercises: number
+  maxExercises: number,
+  usedIds: Set<number>
 ) => {
-  const picked: CatalogExercise[] = [];
-  const usedIds = new Set<number>();
-
-  const pushExercise = (exercise: CatalogExercise | undefined) => {
-    if (!exercise || usedIds.has(exercise.id_ejercicio)) {
-      return;
-    }
-
-    usedIds.add(exercise.id_ejercicio);
-    picked.push(exercise);
-  };
-
-  groups.forEach((group) => {
-    const candidates = catalog.filter(
-      (exercise) => (exercise.grupo_muscular ?? "").toLowerCase() === group.toLowerCase()
+  const queues = groups.map((group) => {
+    const key = normalizeExerciseNameKey(group);
+    return catalog.filter(
+      (exercise) =>
+        normalizeExerciseNameKey(exercise.grupo_muscular) === key &&
+        !usedIds.has(exercise.id_ejercicio)
     );
-
-    candidates.slice(0, 2).forEach(pushExercise);
   });
 
-  if (picked.length < maxExercises) {
-    catalog.forEach((exercise) => {
-      if (picked.length >= maxExercises) {
-        return;
+  const picked: CatalogExercise[] = [];
+  let added = true;
+  while (picked.length < maxExercises && added) {
+    added = false;
+    for (const queue of queues) {
+      const next = queue.shift();
+      if (!next || usedIds.has(next.id_ejercicio)) {
+        continue;
       }
-      pushExercise(exercise);
-    });
+      usedIds.add(next.id_ejercicio);
+      picked.push(next);
+      added = true;
+      if (picked.length >= maxExercises) {
+        break;
+      }
+    }
   }
 
-  return picked.slice(0, maxExercises);
+  return picked;
+};
+
+const pickFallbackExercises = (
+  catalog: CatalogExercise[],
+  style: string,
+  maxExercises: number
+) => {
+  const groups = FALLBACK_GROUPS[style] ?? FALLBACK_GENERAL_GROUPS;
+  const usedIds = new Set<number>();
+  const picked = pickExercisesRoundRobin(catalog, groups.primary, maxExercises, usedIds);
+
+  if (picked.length < FALLBACK_MIN_EXERCISES && groups.secondary.length > 0) {
+    picked.push(
+      ...pickExercisesRoundRobin(
+        catalog,
+        groups.secondary,
+        FALLBACK_MIN_EXERCISES - picked.length,
+        usedIds
+      )
+    );
+  }
+
+  // Último recurso (catálogo casi vacío para esos grupos): lo más usado en general.
+  if (picked.length === 0) {
+    return catalog.slice(0, maxExercises);
+  }
+
+  return picked;
 };
 
 const buildFallbackRoutineProposal = (
@@ -354,28 +452,9 @@ const buildFallbackRoutineProposal = (
   const style = getRequestedRoutineStyle(input.prompt, input.objetivo);
   const objective = getFallbackObjective(input);
 
-  const groupMap: Record<string, string[]> = {
-    "push-pull-legs": ["Pecho", "Espalda", "Piernas", "Hombros", "Triceps", "Biceps"],
-    "full-body": ["Piernas", "Pecho", "Espalda", "Hombros", "Core"],
-    upper: ["Pecho", "Espalda", "Hombros", "Biceps", "Triceps"],
-    lower: ["Piernas", "Gluteos", "Core"],
-    push: ["Pecho", "Hombros", "Triceps"],
-    pull: ["Espalda", "Biceps", "Hombros"],
-    legs: ["Piernas", "Gluteos", "Core"],
-    "chest-triceps": ["Pecho", "Triceps", "Hombros"],
-    "back-biceps": ["Espalda", "Biceps", "Hombros"],
-    general: ["Piernas", "Pecho", "Espalda", "Hombros", "Core"],
-  };
-
-  const selectedGroups =
-    groupMap[style] ?? ["Piernas", "Pecho", "Espalda", "Hombros", "Core"];
   const maxExercises =
-    style === "push-pull-legs" || style === "full-body" ? 6 : 5;
-  const selectedExercises = pickDistinctExercises(
-    catalog,
-    selectedGroups,
-    maxExercises
-  );
+    style === "push-pull-legs" || style === "full-body" || style === "upper" ? 7 : 6;
+  const selectedExercises = pickFallbackExercises(catalog, style, maxExercises);
 
   if (selectedExercises.length === 0) {
     throw new Error("No se pudo armar una rutina fallback con el catalogo actual");
@@ -404,14 +483,17 @@ const buildFallbackRoutineProposal = (
     pull: "Pull",
     legs: "Piernas",
     "chest-triceps": "Pecho y Triceps",
-    "back-biceps": "Espalda y Biceps",
+    "back-biceps": "Espalda y Bíceps",
+    shoulders: "Hombros",
+    arms: "Brazos",
+    core: "Core",
     general: "General",
   };
 
   return {
-    nombre: `Rutina ${styleLabelMap[style] ?? "General"} generada`,
+    nombre: `Rutina de ${styleLabelMap[style] ?? "General"}`,
     descripcion:
-      "Rutina generada en modo fallback usando el catalogo real de ejercicios de GymMaxxing.",
+      "Rutina básica armada con los ejercicios del catálogo de GymMaxxing.",
     objetivo: objective,
     dias_por_semana_recomendados: input.diasPorSemana ?? null,
     duracion_estimada: selectedExercises.length >= 6 ? 75 : 60,
@@ -435,10 +517,13 @@ const buildSystemPrompt = () =>
     "Sos Gemini integrado en GymMaxxing como motor de generacion de rutinas.",
     "No respondas como chatbot conversacional ni expliques de mas.",
     "Tu tarea es generar una propuesta de rutina personalizada usando el perfil del usuario y datos reales de la plataforma.",
-    "Prioriza ejercicios existentes en GymMaxxing y patrones observados en rutinas populares, guardadas o copiadas.",
+    "Tomá como referencia los patrones observados en rutinas populares, guardadas o copiadas.",
     "Debes responder unicamente JSON valido siguiendo exactamente el schema solicitado.",
     "No agregues markdown, comentarios ni texto fuera del JSON.",
-    "No inventes ejercicios fuera del catalogo de referencia si hay equivalentes disponibles.",
+    "REGLA ESTRICTA: solo podes usar ejercicios del catalogo de GymMaxxing que se te pasa.",
+    "Cada ejercicio debe llevar el id_ejercicio y el nombre EXACTOS de una linea del catalogo.",
+    "Nunca inventes ejercicios, variantes ni nombres nuevos: si algo no esta en el catalogo, elegi el ejercicio del catalogo mas parecido.",
+    "No repitas el mismo id_ejercicio dentro de la rutina.",
     "Genera entre 4 y 8 ejercicios como maximo, salvo que el pedido exija algo mas corto.",
     "Manten nombres, descripciones y advertencias breves para evitar respuestas innecesariamente largas.",
   ].join(" ");
@@ -512,14 +597,14 @@ const buildUserPrompt = (payload: {
         `- ${exercise.nombre} [id ${exercise.id_ejercicio}] | grupo: ${exercise.grupo_muscular ?? "sin grupo"} | usos: ${exercise.veces_usado_por_entrenadores}`
     ),
     "",
-    "Catalogo de referencia disponible para elegir ejercicios:",
+    "CATALOGO DE EJERCICIOS DE GYMMAXXING (unicos ejercicios permitidos; formato: id | nombre | grupo | disciplina):",
     ...payload.catalogoReferencia.map(
       (exercise) =>
-        `- ${exercise.nombre} [id ${exercise.id_ejercicio}] | grupo: ${exercise.grupo_muscular ?? "sin grupo"} | disciplina: ${exercise.tipo_disciplina ?? "sin disciplina"} | usos: ${exercise.veces_usado_en_rutinas}`
+        `${exercise.id_ejercicio} | ${exercise.nombre} | ${exercise.grupo_muscular ?? "sin grupo"} | ${exercise.tipo_disciplina ?? "sin disciplina"}`
     ),
     "",
     "Genera una propuesta de rutina alineada con GymMaxxing.",
-    "Usa entre 4 y 8 ejercicios en total y elegi solo IDs del catalogo de referencia.",
+    "Usa entre 4 y 8 ejercicios en total, todos sacados del CATALOGO de arriba con su id y nombre exactos.",
     "Manten la descripcion y las advertencias cortas.",
     "Responde solo con JSON estructurado.",
   ];
@@ -566,11 +651,11 @@ const routineProposalJsonSchema = {
         properties: {
           id_ejercicio: {
             type: "integer",
-            description: "ID real del ejercicio en GymMaxxing.",
+            description: "ID real del ejercicio, copiado del catalogo de GymMaxxing.",
           },
           nombre: {
             type: "string",
-            description: "Nombre del ejercicio.",
+            description: "Nombre exacto del ejercicio tal como figura en el catalogo.",
           },
           grupo_muscular: {
             anyOf: [{ type: "string" }, { type: "null" }],
@@ -684,6 +769,10 @@ const generateGeminiContentWithRetry = async (params: {
           responseJsonSchema: routineProposalJsonSchema,
           temperature: 0.4,
           maxOutputTokens: getGeminiMaxOutputTokens(),
+          ...(() => {
+            const thinkingBudget = getGeminiThinkingBudget(params.model);
+            return thinkingBudget == null ? {} : { thinkingConfig: { thinkingBudget } };
+          })(),
         },
       });
     } catch (error) {
@@ -725,40 +814,6 @@ const normalizeExerciseNameKey = (value: unknown) => {
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
-};
-
-const getExerciseNameSimilarityScore = (
-  requestedName: string,
-  existingName: string
-) => {
-  if (!requestedName || !existingName) {
-    return 0;
-  }
-
-  if (requestedName === existingName) {
-    return 100;
-  }
-
-  if (
-    requestedName.includes(existingName) ||
-    existingName.includes(requestedName)
-  ) {
-    return 80;
-  }
-
-  const requestedTokens = new Set(requestedName.split(" ").filter(Boolean));
-  const existingTokens = new Set(existingName.split(" ").filter(Boolean));
-  const shared = Array.from(requestedTokens).filter((token) =>
-    existingTokens.has(token)
-  ).length;
-
-  if (shared === 0) {
-    return 0;
-  }
-
-  return Math.round(
-    (shared / Math.max(requestedTokens.size, existingTokens.size)) * 70
-  );
 };
 
 const parseGeminiJsonResponse = (rawText: string) => {
@@ -872,133 +927,69 @@ const normalizeGeneratedRoutineProposal = (
   };
 };
 
-const sanitizeExercisesForPersistence = async (
-  ejercicios: GeneratedRoutineExercise[]
-) => {
-  const requestedNames = Array.from(
-    new Set(
-      ejercicios
-        .map((exercise) => normalizeExerciseNameKey(exercise.nombre))
-        .filter(Boolean)
-    )
-  );
-
-  const requestedIds = Array.from(
-    new Set(
-      ejercicios
-        .map((exercise) => exercise.id_ejercicio)
-        .filter((id) => Number.isInteger(id) && id > 0)
-    )
-  );
-
-  if (requestedIds.length === 0 && requestedNames.length === 0) {
-    throw new Error("La rutina generada no contiene ejercicios validos");
-  }
-
-  const result = await pool.query<{
-    id_ejercicio: number;
-    nombre: string;
-    grupo_muscular: string | null;
-  }>(
-    `SELECT id_ejercicio, nombre, grupo_muscular
-     FROM ejercicio`
-  );
-
-  if (result.rows.length === 0) {
+// Valida la propuesta contra el catálogo permitido. Solo se aceptan ejercicios cuyo id exista en el
+// catálogo (o, si Gemini erró el id, cuyo nombre coincida exactamente con uno del catálogo).
+// Lo que no matchea se descarta: nunca se crean ejercicios nuevos ni se "adivina" por parecido.
+const validateExercisesAgainstCatalog = (
+  ejercicios: GeneratedRoutineExercise[],
+  catalog: CatalogExercise[]
+): ValidatedRoutineExercise[] => {
+  if (catalog.length === 0) {
     throw new Error("No hay ejercicios cargados en GymMaxxing para generar rutinas con Gemini");
   }
 
-  const existingExercises = new Map(
-    result.rows.map((row) => [row.id_ejercicio, row] as const)
-  );
-  const existingExercisesByName = new Map(
-    result.rows.map((row) => [normalizeExerciseNameKey(row.nombre), row] as const)
+  const byId = new Map(catalog.map((row) => [row.id_ejercicio, row] as const));
+  const byName = new Map(
+    catalog.map((row) => [normalizeExerciseNameKey(row.nombre), row] as const)
   );
 
   const seenIds = new Set<number>();
-  const sanitized = ejercicios
-    .map((exercise) => {
-      const byId = existingExercises.get(exercise.id_ejercicio);
-      const byName = existingExercisesByName.get(
-        normalizeExerciseNameKey(exercise.nombre)
-      );
-      let matched = byId ?? byName;
+  const validated: ValidatedRoutineExercise[] = [];
+  const discarded: string[] = [];
+
+  [...ejercicios]
+    .sort((a, b) => a.orden - b.orden)
+    .forEach((exercise) => {
+      const matched =
+        byId.get(exercise.id_ejercicio) ??
+        byName.get(normalizeExerciseNameKey(exercise.nombre));
 
       if (!matched) {
-        const requestedName = normalizeExerciseNameKey(exercise.nombre);
-        let bestMatch: (typeof result.rows)[number] | null = null;
-        let bestScore = 0;
-
-        for (const candidate of result.rows) {
-          const score = getExerciseNameSimilarityScore(
-            requestedName,
-            normalizeExerciseNameKey(candidate.nombre)
-          );
-          if (score > bestScore) {
-            bestScore = score;
-            bestMatch = candidate;
-          }
-        }
-
-        if (bestMatch && bestScore >= 50) {
-          matched = bestMatch;
-        }
-      }
-
-      if (!matched) {
-        return null;
+        discarded.push(`${exercise.nombre} [id ${exercise.id_ejercicio}]`);
+        return;
       }
 
       if (seenIds.has(matched.id_ejercicio)) {
-        return false;
+        return;
       }
 
       seenIds.add(matched.id_ejercicio);
-      return {
+      validated.push({
         id_ejercicio: matched.id_ejercicio,
         nombre: matched.nombre,
         grupo_muscular: matched.grupo_muscular,
+        tipo_disciplina: matched.tipo_disciplina,
+        imagen_url: matched.imagen_url ?? null,
         series: parsePositiveInteger(exercise.series, 3),
         repeticiones: parsePositiveInteger(exercise.repeticiones, 10),
         descanso: Math.max(0, Number(exercise.descanso) || 0),
-        orden: exercise.orden,
-      };
-    })
-    .filter(
-      (
-        exercise
-      ): exercise is {
-        id_ejercicio: number;
-        nombre: string;
-        grupo_muscular: string | null;
-        tipo_disciplina: string | null;
-        series: number;
-        repeticiones: number;
-        descanso: number;
-        orden: number;
-      } => exercise != null
-    )
-    .sort((a, b) => a.orden - b.orden)
-    .map((exercise, index) => {
-      return {
-        id_ejercicio: exercise.id_ejercicio,
-        nombre: exercise.nombre,
-        grupo_muscular: exercise.grupo_muscular,
-        tipo_disciplina: exercise.tipo_disciplina,
-        series: parsePositiveInteger(exercise.series, 3),
-        repeticiones: parsePositiveInteger(exercise.repeticiones, 10),
-        descanso: Math.max(0, Number(exercise.descanso) || 0),
-        orden: index + 1,
-      };
+        orden: validated.length + 1,
+      });
     });
 
-  if (sanitized.length === 0) {
+  if (discarded.length > 0) {
+    console.warn(
+      "Gemini propuso ejercicios que no existen en el catalogo; se descartaron:",
+      discarded
+    );
+  }
+
+  if (validated.length < Math.min(MIN_VALID_GENERATED_EXERCISES, ejercicios.length || 1)) {
     throw new Error("La rutina generada no contiene ejercicios validos");
   }
 
-  return sanitized;
+  return validated;
 };
-
 const getPopularExercisesByMuscleGroup = async () => {
   const result = await pool.query<
     ExerciseUsageRow & {
@@ -1019,6 +1010,7 @@ const getPopularExercisesByMuscleGroup = async () => {
        JOIN ejercicio e ON e.id_ejercicio = re.id_ejercicio
        WHERE e.grupo_muscular IS NOT NULL
          AND e.grupo_muscular <> ''
+         AND COALESCE(e.es_personalizado, FALSE) = FALSE
        GROUP BY e.grupo_muscular, e.id_ejercicio, e.nombre, e.tipo_disciplina
      )
      SELECT grupo_muscular,
@@ -1067,6 +1059,7 @@ const getPopularExercisesByTrainers = async () => {
      JOIN usuario u ON u.id = r.creador_id
      JOIN ejercicio e ON e.id_ejercicio = re.id_ejercicio
      WHERE LOWER(u.tipo_usuario) = 'entrenador'
+       AND COALESCE(e.es_personalizado, FALSE) = FALSE
      GROUP BY e.id_ejercicio, e.nombre, e.grupo_muscular, e.tipo_disciplina
      ORDER BY veces_usado_por_entrenadores DESC, e.nombre ASC
      LIMIT $1`,
@@ -1076,22 +1069,30 @@ const getPopularExercisesByTrainers = async () => {
   return result.rows;
 };
 
-const getReferenceExerciseCatalog = async () => {
-  const result = await pool.query<ExerciseUsageRow>(
+// Catálogo que el usuario ve en su lista de ejercicios: los globales + sus personalizados.
+// Nunca incluye ejercicios personalizados de otros usuarios.
+const getAllowedExerciseCatalog = async (usuarioId: number) => {
+  const result = await pool.query<CatalogExerciseRow>(
     `SELECT e.id_ejercicio,
             e.nombre,
             e.grupo_muscular,
             e.tipo_disciplina,
+            e.imagen_url,
             COUNT(re.id_rutina)::int AS veces_usado_en_rutinas
      FROM ejercicio e
      LEFT JOIN rutinaejercicio re ON re.id_ejercicio = e.id_ejercicio
-     GROUP BY e.id_ejercicio, e.nombre, e.grupo_muscular, e.tipo_disciplina
+     WHERE COALESCE(e.es_personalizado, FALSE) = FALSE
+        OR e.creador_id = $1
+     GROUP BY e.id_ejercicio, e.nombre, e.grupo_muscular, e.tipo_disciplina, e.imagen_url
      ORDER BY veces_usado_en_rutinas DESC, e.nombre ASC
-     LIMIT $1`,
-    [GEMINI_REFERENCE_CATALOG_LIMIT]
+     LIMIT $2`,
+    [usuarioId, GEMINI_REFERENCE_CATALOG_LIMIT]
   );
 
-  return result.rows;
+  return result.rows.map((row) => ({
+    ...row,
+    imagen_url: row.imagen_url ?? null,
+  }));
 };
 
 const buildGeneratedRoutineDraftResponse = async (params: {
@@ -1106,14 +1107,22 @@ const buildGeneratedRoutineDraftResponse = async (params: {
   promptSistema: string;
   promptUsuario: string;
   rutinaGenerada: GeneratedRoutineProposal;
+  origen: "gemini" | "respaldo";
+  aviso: string | null;
+  detalleTecnico?: string | null;
 }) => {
-  const ejerciciosValidados = await sanitizeExercisesForPersistence(
-    params.rutinaGenerada.ejercicios
+  const ejerciciosValidados = validateExercisesAgainstCatalog(
+    params.rutinaGenerada.ejercicios,
+    params.referenceCatalog
   );
 
   return {
     status: "routine_draft_ready" as const,
     proveedor: "gemini" as const,
+    origen: params.origen,
+    aviso: params.aviso,
+    detalle_tecnico:
+      process.env.NODE_ENV === "production" ? null : params.detalleTecnico ?? null,
     usuario_id: params.input.usuarioId,
     gemini_configurado: params.geminiConfigured,
     modelo_usado: params.model,
@@ -1151,11 +1160,35 @@ const buildGeneratedRoutineDraftResponse = async (params: {
         descripcion: null,
         grupo_muscular: exercise.grupo_muscular,
         tipo_disciplina: exercise.tipo_disciplina ?? null,
+        imagen_url: exercise.imagen_url,
       })),
     },
     siguiente_paso:
       "La rutina quedo preparada como borrador en GymMaxxing y se guardara solo si el usuario confirma.",
   };
+};
+
+// Mensaje corto para mostrarle al usuario cuando se usó la rutina de respaldo.
+const describeGeminiFailure = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  if (
+    message.includes("API_KEY_INVALID") ||
+    message.includes("API key not valid") ||
+    message.includes("PERMISSION_DENIED")
+  ) {
+    return "La API key de Gemini no es válida (revisá GEMINI_API_KEY en backend/.env), así que armamos una rutina básica con tu catálogo.";
+  }
+  if (
+    message.includes("RESOURCE_EXHAUSTED") ||
+    message.includes('"code":429') ||
+    message.toLowerCase().includes("quota")
+  ) {
+    return "Gemini llegó al límite de uso de la API key, así que armamos una rutina básica con tu catálogo.";
+  }
+  if (isRetryableGeminiError(error)) {
+    return "Gemini no respondió a tiempo, así que armamos una rutina básica con tu catálogo.";
+  }
+  return "Gemini devolvió una respuesta que no pudimos usar, así que armamos una rutina básica con tu catálogo.";
 };
 
 export const generateRoutineDraftFromPrompt = async (
@@ -1173,7 +1206,7 @@ export const generateRoutineDraftFromPrompt = async (
       getTrends(input.usuarioId),
       getPopularExercisesByMuscleGroup(),
       getPopularExercisesByTrainers(),
-      getReferenceExerciseCatalog(),
+      getAllowedExerciseCatalog(input.usuarioId),
     ]);
 
   if (!user) {
@@ -1261,6 +1294,8 @@ export const generateRoutineDraftFromPrompt = async (
   const model = getGeminiModel();
   let rutinaGenerada: GeneratedRoutineProposal | null = null;
   let routineFromGemini = false;
+  let avisoRespaldo: string | null = null;
+  let detalleRespaldo: string | null = null;
 
   if (geminiConfigured) {
     try {
@@ -1290,16 +1325,31 @@ export const generateRoutineDraftFromPrompt = async (
         promptFeedback: responseDebug.promptFeedback,
       });
       debugGeminiRoutine(`${GEMINI_ROUTINE_DEBUG_PREFIX} raw Gemini text START\n${rawText ?? ""}\n${GEMINI_ROUTINE_DEBUG_PREFIX} raw Gemini text END`);
+      const finishReason = responseDebug.candidates?.[0]?.finishReason;
+      if (finishReason === "MAX_TOKENS") {
+        throw new Error(
+          "Gemini corto la respuesta por limite de tokens (MAX_TOKENS). Subi GEMINI_MAX_OUTPUT_TOKENS."
+        );
+      }
       if (!rawText || !rawText.trim()) {
-        throw new Error("Gemini no devolvio contenido para la rutina");
+        throw new Error(
+          `Gemini no devolvio contenido para la rutina (finishReason: ${finishReason ?? "desconocido"})`
+        );
       }
 
       const parsed = parseGeminiJsonResponse(rawText);
       rutinaGenerada = normalizeGeneratedRoutineProposal(parsed, input);
       routineFromGemini = true;
     } catch (error) {
-      console.warn("Gemini fallo; se usara rutina fallback", error);
+      console.warn(
+        "[Gemini] fallo la generacion; se usa la rutina de respaldo. Motivo:",
+        error instanceof Error ? error.message : error
+      );
+      avisoRespaldo = describeGeminiFailure(error);
+      detalleRespaldo = (error instanceof Error ? error.message : String(error)).slice(0, 600);
     }
+  } else {
+    avisoRespaldo = "Gemini no está configurado en el backend (falta GEMINI_API_KEY).";
   }
 
   if (!rutinaGenerada) {
@@ -1319,6 +1369,9 @@ export const generateRoutineDraftFromPrompt = async (
       promptSistema,
       promptUsuario,
       rutinaGenerada,
+      origen: routineFromGemini ? "gemini" : "respaldo",
+      aviso: routineFromGemini ? null : avisoRespaldo,
+      detalleTecnico: routineFromGemini ? null : detalleRespaldo,
     });
   } catch (error) {
     if (!routineFromGemini) {
@@ -1326,8 +1379,8 @@ export const generateRoutineDraftFromPrompt = async (
     }
 
     console.warn(
-      "La rutina devuelta por Gemini no se pudo persistir; se intentara rutina fallback",
-      error
+      "[Gemini] la propuesta no tenia suficientes ejercicios del catalogo; se usa la rutina de respaldo.",
+      error instanceof Error ? error.message : error
     );
 
     const fallbackRoutine = buildFallbackRoutineProposal(input, referenceCatalog);
@@ -1345,6 +1398,10 @@ export const generateRoutineDraftFromPrompt = async (
         promptSistema,
         promptUsuario,
         rutinaGenerada: fallbackRoutine,
+        origen: "respaldo",
+        aviso:
+          "Gemini propuso ejercicios que no están en tu biblioteca, así que armamos una rutina básica con tu catálogo.",
+        detalleTecnico: error instanceof Error ? error.message : String(error),
       });
     } catch {
       throw new Error(

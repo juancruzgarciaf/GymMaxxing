@@ -250,6 +250,9 @@ export type NotificationItem = {
 export type GeminiGeneratedRoutineResponse = {
   status: "routine_draft_ready";
   proveedor: "gemini";
+  origen?: "gemini" | "respaldo";
+  aviso?: string | null;
+  detalle_tecnico?: string | null;
   usuario_id: number;
   gemini_configurado: boolean;
   modelo_usado: string;
@@ -272,6 +275,7 @@ export type GeminiGeneratedRoutineResponse = {
       nombre: string;
       grupo_muscular: string | null;
       tipo_disciplina: string | null;
+      imagen_url: string | null;
       series: number;
       repeticiones: number;
       descanso: number;
@@ -294,6 +298,7 @@ export type GeminiGeneratedRoutineResponse = {
       descripcion: string | null;
       grupo_muscular: string | null;
       tipo_disciplina: string | null;
+      imagen_url: string | null;
     }>;
   };
   siguiente_paso: string;
