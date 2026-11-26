@@ -12,6 +12,35 @@ El sistema está orientado tanto a usuarios comunes como a entrenadores y gimnas
 
 ---
 
+##  Cómo levantar el proyecto (de cero)
+
+Requisitos: Node 20+ y PostgreSQL 14+ con `psql` en el PATH.
+
+```bash
+# 1. Backend: configurar .env
+cd backend
+cp .env.example .env        # completar DB_PASSWORD y AUTH_TOKEN_SECRET como mínimo
+npm install
+
+# 2. Base de datos: crea la base (si no existe) y aplica todos los SQL en orden
+bash sql/setup_db.sh        # usar --reset para borrarla y crearla de cero
+
+# 3. Levantar el backend (http://localhost:3000)
+npm run dev
+
+# 4. Frontend (otra terminal, http://localhost:5173)
+cd ../frontend
+cp .env.example .env        # VITE_GOOGLE_CLIENT_ID solo hace falta para login con Google
+npm install
+npm run dev
+```
+
+`sql/setup_db.sh` es idempotente: se puede volver a correr sobre una base existente para aplicar migraciones nuevas. Si agregan un `.sql` nuevo, súmenlo a la lista `FILES` del script (el script avisa si encuentra uno que no está en la lista).
+
+La base queda con el usuario `admin@gmail.com` / `admin123`, 8 rutinas oficiales, 32 ejercicios con video y los gimnasios de Pilar.
+
+---
+
 ##  Funcionalidades actuales
 
 ### Usuarios
