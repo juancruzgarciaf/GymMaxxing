@@ -13,6 +13,8 @@ import gimnasioRoutes from "./routes/gimnasio.routes";
 import notificationRoutes from "./routes/notification.routes";
 import routineGenerationRoutes from "./routes/routine-generation.routes";
 import subscriptionRoutes from "./routes/subscription.routes";
+import musicaRoutes from "./routes/musica.routes";
+import { ensureMusicColumns } from "./services/musica.service";
 
 
 const app = express();
@@ -33,6 +35,7 @@ app.use("/gimnasios", gimnasioRoutes);
 app.use("/notificaciones", notificationRoutes);
 app.use("/rutinas/generar", routineGenerationRoutes);
 app.use("/suscripciones", subscriptionRoutes);
+app.use("/musica", musicaRoutes);
 
 // En desarrollo, Mercado Pago necesita una URL publica y luego volvemos al Vite local.
 app.get("/pro", (req, res) => {
@@ -46,7 +49,9 @@ pool.query("SELECT NOW()")
   .then((res) => console.log("DB OK:", res.rows))
   .catch((err) => console.error("DB ERROR:", err));
 
-app.listen(3000, () => {
+// Antes de escuchar, nos aseguramos de que existan las columnas de música
+// (playlist de Spotify y canción de Apple) en entrenamientos y rutinas.
+const startServer = () => app.listen(3000, () => {
   console.log("Servidor corriendo en http://localhost:3000");
   console.log(
     isBucketStorageEnabled
@@ -54,3 +59,7 @@ app.listen(3000, () => {
       : "Fotos: carpeta local backend/uploads (configurá BUCKET_* en el .env para usar el bucket)"
   );
 });
+
+ensureMusicColumns()
+  .catch((err) => console.error("ERROR COLUMNAS MUSICA:", err))
+  .finally(startServer);

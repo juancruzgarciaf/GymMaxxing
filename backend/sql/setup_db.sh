@@ -64,6 +64,7 @@ FILES=(
   2026-11-26_resync_official_routines.sql
   2026-06-15_seed_exercise_media.sql
   2026-06-15_sync_exercise_media_by_name.sql
+  2026-11-26_add_musica.sql
 )
 
 for file in "${FILES[@]}"; do

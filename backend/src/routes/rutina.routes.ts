@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { updatePlaylistRutina } from "../controllers/musica.controller";
 import {
   crearRutina,
   getRutinas,
@@ -37,6 +38,7 @@ router.delete("/carpetas/:id", deleteCarpetaRutina);
 router.get("/:id/editar", requireAuth, requireRutinaOwner, getRutinaParaEditar);
 router.get("/:id", getRutinaPorId);
 router.put("/:id", requireAuth, requireRutinaOwner, updateRutina);
+router.put("/:id/playlist", requireAuth, requireRutinaOwner, updatePlaylistRutina);
 router.delete("/:id", requireAuth, requireRutinaOwner, deleteRutina);
 router.post("/:id/metricas/guardar", recordRutinaSave);
 router.post("/:id/metricas/copiar", recordRutinaCopy);

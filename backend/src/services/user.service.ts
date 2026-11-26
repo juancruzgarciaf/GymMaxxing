@@ -118,6 +118,14 @@ type SessionSummaryRow = {
   titulo: string;
   descripcion: string | null;
   imagen_url: string | null;
+  playlist_url: string | null;
+  playlist_titulo: string | null;
+  playlist_portada_url: string | null;
+  cancion_apple_id: string | null;
+  cancion_titulo: string | null;
+  cancion_artista: string | null;
+  cancion_portada_url: string | null;
+  cancion_url: string | null;
   fecha_inicio: string | null;
   fecha_fin: string | null;
   fecha_actividad: string | null;
@@ -656,6 +664,14 @@ const getSessionSummaries = async (
             COALESCE(se.nombre_rutina_snapshot, r.nombre, se.descripcion, 'Entrenamiento') AS titulo,
             se.descripcion,
             se.imagen_url,
+            se.playlist_url,
+            se.playlist_titulo,
+            se.playlist_portada_url,
+            se.cancion_apple_id,
+            se.cancion_titulo,
+            se.cancion_artista,
+            se.cancion_portada_url,
+            se.cancion_url,
             se.fecha_inicio::text,
             se.fecha_fin::text,
             COALESCE(se.fecha_fin, se.fecha_inicio, se.fecha)::text AS fecha_actividad,

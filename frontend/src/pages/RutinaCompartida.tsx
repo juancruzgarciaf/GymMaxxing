@@ -11,6 +11,8 @@ import type { RoutineSummary, TrainingSeed, TrainingSeedExercise, Usuario } from
 import UserAvatar from "../components/UserAvatar";
 import VerifiedBadge from "../components/VerifiedBadge";
 import ExerciseMedia from "../components/ExerciseMedia";
+import MusicaChips from "../components/MusicaChips";
+import { playlistDesdeCampos } from "../lib/musica";
 
 type RutinaCompartidaProps = {
   usuario: Usuario;
@@ -272,6 +274,7 @@ function RutinaCompartida({
               <p className="eyebrow">{isOwnRoutine ? "Tu rutina" : "Rutina"}</p>
               <h1>{routine.nombre}</h1>
               <p className="subtitle">{routine.descripcion || "Sin descripcion"}</p>
+              <MusicaChips playlist={playlistDesdeCampos(routine)} cancion={null} />
 
               <div className="metrics-row detail-metrics-row">
                 <div className="metric-box detail-metric">

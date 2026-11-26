@@ -15,6 +15,9 @@ import TrashIcon from "../components/TrashIcon";
 import DurationInput from "../components/DurationInput";
 import GeminiRoutinePanel from "../components/GeminiRoutinePanel";
 import ExerciseMedia from "../components/ExerciseMedia";
+import MusicaChips from "../components/MusicaChips";
+import MusicaEditor from "../components/MusicaEditor";
+import { guardarPlaylistRutina, playlistDesdeCampos, type MusicaPlaylist } from "../lib/musica";
 
 type Rutina = {
   id_rutina: number;
@@ -26,6 +29,9 @@ type Rutina = {
   visible_en_descubrir: boolean;
   save_count: number;
   copy_count: number;
+  playlist_url?: string | null;
+  playlist_titulo?: string | null;
+  playlist_portada_url?: string | null;
 };
 
 type CarpetaRutina = {
@@ -483,6 +489,9 @@ function Rutinas({
   const [editorDuracion, setEditorDuracion] = useState("");
   const [editorCarpetaId, setEditorCarpetaId] = useState<string>("");
   const [editorVisibleEnDescubrir, setEditorVisibleEnDescubrir] = useState(false);
+  // Playlist de Spotify de la rutina: se precarga en cada entrenamiento que arranca desde acá.
+  const [editorPlaylist, setEditorPlaylist] = useState<MusicaPlaylist | null>(null);
+  const [editorPlaylistOriginal, setEditorPlaylistOriginal] = useState<string | null>(null);
   const [editorEjercicios, setEditorEjercicios] = useState<EjercicioDraft[]>([]);
   const [pendingEditorScrollId, setPendingEditorScrollId] = useState<string | null>(null);
   const [draggedEditorExerciseId, setDraggedEditorExerciseId] = useState<string | null>(null);
@@ -874,6 +883,8 @@ function Rutinas({
     setEditorDuracion("");
     setEditorCarpetaId("");
     setEditorVisibleEnDescubrir(true);
+    setEditorPlaylist(null);
+    setEditorPlaylistOriginal(null);
     setEditorEjercicios([]);
     setDraggedEditorExerciseId(null);
     setFiltroEquipo("");
@@ -899,6 +910,8 @@ function Rutinas({
     );
     setEditorCarpetaId("");
     setEditorVisibleEnDescubrir(geminiLastRoutine.visible_en_descubrir);
+    setEditorPlaylist(null);
+    setEditorPlaylistOriginal(null);
     setEditorEjercicios(
       geminiLastRoutine.ejerciciosPreview.map((exercise) => {
         const descanso = descansoToInputs(exercise.descanso ?? 90);
@@ -994,6 +1007,8 @@ function Rutinas({
     setEditorDuracion(rutina.duracion_estimada ? String(rutina.duracion_estimada) : "");
     setEditorCarpetaId(rutina.id_carpeta ? String(rutina.id_carpeta) : "");
     setEditorVisibleEnDescubrir(Boolean(rutina.visible_en_descubrir));
+    setEditorPlaylist(playlistDesdeCampos(rutina));
+    setEditorPlaylistOriginal(rutina.playlist_url ?? null);
     setEditorEjercicios(draft);
     setDraggedEditorExerciseId(null);
     setFiltroEquipo("");
@@ -1474,6 +1489,10 @@ function Rutinas({
           orden: index + 1,
         };
       });
+
+      if ((editorPlaylist?.url ?? null) !== editorPlaylistOriginal) {
+        await guardarPlaylistRutina(rutinaId, editorPlaylist?.url ?? null);
+      }
 
       await syncRutinaEjercicios(rutinaId, ejerciciosObjetivo);
       savePersistedRutinaEjercicios(
@@ -2096,6 +2115,12 @@ function Rutinas({
                   Aparecer en Descubrir
                 </label>
               </div>
+              <MusicaEditor
+                playlist={editorPlaylist}
+                onPlaylistChange={setEditorPlaylist}
+                disabled={loading}
+                playlistHint="Pegá el link de una playlist de Spotify. Se va a cargar sola cada vez que entrenes con esta rutina."
+              />
             </div>
 
             <div className="editor-selected">
@@ -2914,6 +2939,8 @@ function Rutinas({
                   <dd>#{rutinaSeleccionada.id_rutina}</dd>
                 </div>
               </dl>
+
+              <MusicaChips playlist={playlistDesdeCampos(rutinaSeleccionada)} cancion={null} />
 
               <details className="rutina-muscles">
                 <summary>

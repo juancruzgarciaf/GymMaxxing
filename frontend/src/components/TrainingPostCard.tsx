@@ -5,6 +5,16 @@ import ProPlanBadge from "./ProPlanBadge";
 import VerifiedBadge from "./VerifiedBadge";
 import { resolveMediaUrl } from "../lib/media";
 import UserAvatar from "./UserAvatar";
+import MusicaChips from "./MusicaChips";
+import MusicaEditor from "./MusicaEditor";
+import {
+  camposDesdeMusica,
+  cancionDesdeCampos,
+  guardarMusicaSesion,
+  playlistDesdeCampos,
+  type MusicaCancion,
+  type MusicaPlaylist,
+} from "../lib/musica";
 
 type TrainingPostCardProps = {
   item: EntrenamientoResumen;
@@ -188,6 +198,8 @@ function TrainingPostCard({
   const [editTitle, setEditTitle] = useState(limitTitle(item.titulo));
   const [editDescription, setEditDescription] = useState(item.descripcion ?? "");
   const [editImage, setEditImage] = useState<File | null>(null);
+  const [editPlaylist, setEditPlaylist] = useState<MusicaPlaylist | null>(playlistDesdeCampos(item));
+  const [editCancion, setEditCancion] = useState<MusicaCancion | null>(cancionDesdeCampos(item));
   const [savingEdit, setSavingEdit] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletingTraining, setDeletingTraining] = useState(false);
@@ -216,6 +228,8 @@ function TrainingPostCard({
     setEditTitle(limitTitle(item.titulo));
     setEditDescription(item.descripcion ?? "");
     setEditImage(null);
+    setEditPlaylist(playlistDesdeCampos(item));
+    setEditCancion(cancionDesdeCampos(item));
     setSavingEdit(false);
     setDeleteModalOpen(false);
     setDeletingTraining(false);
@@ -254,6 +268,8 @@ function TrainingPostCard({
     setEditTitle(limitTitle(displayItem.titulo));
     setEditDescription(limitDescription(displayItem.descripcion ?? ""));
     setEditImage(null);
+    setEditPlaylist(playlistDesdeCampos(displayItem));
+    setEditCancion(cancionDesdeCampos(displayItem));
     setActionsOpen(false);
     setEditModalOpen(true);
   };
@@ -302,11 +318,24 @@ function TrainingPostCard({
         nextImageUrl = imageData.imagen_url ?? null;
       }
 
+      // Música: solo mandamos lo que cambió.
+      let musica = camposDesdeMusica(playlistDesdeCampos(displayItem), cancionDesdeCampos(displayItem));
+      const playlistCambio = (editPlaylist?.url ?? null) !== (displayItem.playlist_url ?? null);
+      const cancionCambio = (editCancion?.url ?? null) !== (displayItem.cancion_url ?? null);
+      if (playlistCambio || cancionCambio) {
+        const guardada = await guardarMusicaSesion(displayItem.id_sesion, {
+          ...(playlistCambio ? { playlist_url: editPlaylist?.url ?? null } : {}),
+          ...(cancionCambio ? { cancion: editCancion } : {}),
+        });
+        musica = camposDesdeMusica(playlistDesdeCampos(guardada), cancionDesdeCampos(guardada));
+      }
+
       const updated = {
         ...displayItem,
         titulo: data.nombre_rutina_snapshot ?? nextTitle,
         descripcion: data.descripcion ?? null,
         imagen_url: nextImageUrl,
+        ...musica,
       };
       setDisplayItem(updated);
       onTrainingUpdated?.(updated);
@@ -571,6 +600,8 @@ function TrainingPostCard({
           alt={`Imagen de ${displayItem.titulo}`}
         />
       ) : null}
+
+      <MusicaChips playlist={playlistDesdeCampos(displayItem)} cancion={cancionDesdeCampos(displayItem)} />
 
       <div className="metrics-row">
         <div className="metric-box">
@@ -855,6 +886,13 @@ function TrainingPostCard({
                 />
                 {editImage ? <small>{editImage.name}</small> : null}
               </label>
+              <MusicaEditor
+                playlist={editPlaylist}
+                onPlaylistChange={setEditPlaylist}
+                cancion={editCancion}
+                onCancionChange={setEditCancion}
+                disabled={savingEdit}
+              />
             </div>
             <div className="modal-actions">
               <button

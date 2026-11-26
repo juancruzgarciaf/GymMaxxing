@@ -72,6 +72,24 @@ La base queda con el usuario `admin@gmail.com` / `admin123`, 8 rutinas oficiales
 
 ---
 
+###  Música (Spotify + Apple Music)
+
+Al guardar o editar un entrenamiento se puede sumar música, sin vincular ninguna cuenta:
+
+* **Playlist de Spotify**: el usuario pega el link (`open.spotify.com/...` o `spotify.link/...`). El backend usa el [oEmbed oficial de Spotify](https://developer.spotify.com/documentation/embeds/reference/oembed) para sacar el título y la portada. Al tocarla se abre en Spotify.
+* **Canción**: se elige de las **tendencias** (lo más escuchado en Argentina según el RSS de Apple Music) o con el **buscador** (iTunes Search API). Al tocarla se abre en Apple Music.
+* Las dos son opcionales e independientes. Las rutinas también pueden tener una playlist: se precarga en cada entrenamiento que arranca desde esa rutina.
+
+Endpoints (todos piden login):
+
+* `GET /musica/tendencias` · `GET /musica/buscar?q=` · `GET /musica/spotify/preview?url=`
+* `PUT /entrenamientos/:id/musica` → body `{ playlist_url?, cancion? }` (lo que no viene no se toca; `null` borra)
+* `PUT /rutinas/:id/playlist` → body `{ playlist_url }`
+
+Las respuestas de Apple y Spotify se cachean en el backend (la búsqueda de Apple tiene un límite de ~20 llamadas por minuto). Las columnas se crean con `sql/2026-11-26_add_musica.sql`, y el backend también las crea solo al arrancar.
+
+---
+
 ##  Arquitectura
 
 El proyecto sigue una estructura backend modular:
