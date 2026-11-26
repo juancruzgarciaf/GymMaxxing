@@ -72,10 +72,24 @@ type DiscoverRutinasFilters = {
   gruposMusculares?: string[];
   orden?: string;
   excludeFollowing?: boolean;
-  soloAdmin?: boolean;
-  adminId?: number;
-  adminEmail?: string;
+  soloOficiales?: boolean;
   tipoCreador?: string;
+};
+
+// Cuenta oficial de GymMaxxing: el usuario real (no de relleno) cuyo username contiene
+// "gymmaxxing" (ej. "GymMaxxing Oficial"). Es el mismo criterio que usan los scripts de seed.
+// Se puede forzar con OFFICIAL_ACCOUNT_USERNAME en el .env si algún día cambia el nombre.
+const SEED_EMAIL_PATTERN = "%@seed.gymmaxxing.test";
+
+const buildOfficialCreatorSql = (alias: string, params: Array<number | string | string[]>) => {
+  const forcedUsername = process.env.OFFICIAL_ACCOUNT_USERNAME?.trim();
+  if (forcedUsername) {
+    params.push(forcedUsername);
+    return `(LOWER(${alias}.username) = LOWER($${params.length}))`;
+  }
+
+  params.push(SEED_EMAIL_PATTERN);
+  return `(${alias}.username ILIKE '%gymmaxxing%' AND ${alias}.email NOT ILIKE $${params.length})`;
 };
 
 const resolveCarpetaTableByFk = async () => {
@@ -447,18 +461,6 @@ export const getRutinas = async (creadorId?: number) => {
   return result.rows;
 };
 
-const getUsuarioIdByEmail = async (email: string) => {
-  const result = await pool.query<{ id: number }>(
-    `SELECT id
-     FROM usuario
-     WHERE LOWER(email) = LOWER($1)
-     LIMIT 1`,
-    [email]
-  );
-
-  return result.rows[0]?.id ?? null;
-};
-
 const getDiscoverOrderSql = (orden: string | undefined) => {
   switch (orden) {
     case "populares":
@@ -487,18 +489,17 @@ export const getDiscoverRutinas = async (filters: DiscoverRutinasFilters) => {
     gruposMusculares,
     orden,
     excludeFollowing,
-    soloAdmin,
-    adminId,
-    adminEmail,
+    soloOficiales,
     tipoCreador,
   } = filters;
-
-  const resolvedAdminId =
-    adminId ?? (await getUsuarioIdByEmail(adminEmail ?? "admin@gmail.com"));
 
   if (viewerId != null) {
     params.push(viewerId);
     whereClauses.push(`r.creador_id <> $${params.length}`);
+  }
+
+  if (soloOficiales) {
+    whereClauses.push(buildOfficialCreatorSql("u", params));
   }
 
   if (excludeFollowing && viewerId != null) {
@@ -510,18 +511,9 @@ export const getDiscoverRutinas = async (filters: DiscoverRutinasFilters) => {
         AND su.id_seguido = r.creador_id
     )`);
 
-    if (!soloAdmin && resolvedAdminId != null) {
-      params.push(resolvedAdminId);
-      whereClauses.push(`r.creador_id <> $${params.length}`);
-    }
-  }
-
-  if (soloAdmin) {
-    if (resolvedAdminId == null) {
-      whereClauses.push("FALSE");
-    } else {
-      params.push(resolvedAdminId);
-      whereClauses.push(`r.creador_id = $${params.length}`);
+    // Las oficiales se muestran aparte (checkbox "Rutinas oficiales").
+    if (!soloOficiales) {
+      whereClauses.push(`NOT ${buildOfficialCreatorSql("u", params)}`);
     }
   }
 
@@ -534,11 +526,10 @@ export const getDiscoverRutinas = async (filters: DiscoverRutinasFilters) => {
     params.push(tipoCreador);
     whereClauses.push(`LOWER(u.tipo_usuario) = LOWER($${params.length})`);
 
-    // Las rutinas oficiales (admin@gmail.com) no deben contaminar filtros
+    // Las rutinas oficiales de GymMaxxing no deben contaminar filtros
     // de creadores comunes, entrenadores o gimnasios.
-    if (!soloAdmin && resolvedAdminId != null) {
-      params.push(resolvedAdminId);
-      whereClauses.push(`r.creador_id <> $${params.length}`);
+    if (!soloOficiales) {
+      whereClauses.push(`NOT ${buildOfficialCreatorSql("u", params)}`);
     }
   }
 

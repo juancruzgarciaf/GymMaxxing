@@ -407,6 +407,8 @@ function Rutinas({
   const [geminiGenerating, setGeminiGenerating] = useState(false);
   const [geminiLastRoutine, setGeminiLastRoutine] = useState<{
     nombre: string;
+    aviso: string | null;
+    detalleTecnico: string | null;
     descripcion: string | null;
     duracion_estimada: number | null;
     visible_en_descubrir: boolean;
@@ -416,6 +418,7 @@ function Rutinas({
       nombre: string;
       grupo_muscular: string | null;
       tipo_disciplina: string | null;
+      imagen_url: string | null;
       series: number;
       repeticiones: number;
       descanso: number;
@@ -905,7 +908,12 @@ function Rutinas({
           nombre: exercise.nombre,
           grupo_muscular: exercise.grupo_muscular ?? "",
           tipo_disciplina: exercise.tipo_disciplina ?? "",
-          imagen_url: null,
+          // La foto viene del catálogo real; si el backend no la trajo, la buscamos en la lista ya cargada.
+          imagen_url:
+            exercise.imagen_url ??
+            catalogoEjercicios.find((item) => item.id_ejercicio === exercise.id_ejercicio)
+              ?.imagen_url ??
+            null,
           nota: "",
           descansoMin: descanso.min,
           descansoSeg: descanso.sec,
@@ -2683,8 +2691,11 @@ function Rutinas({
       const data = (await res.json()) as GeminiGeneratedRoutineResponse;
       const routine = data.rutina_borrador;
 
+      const usoRespaldo = data.origen === "respaldo";
       setGeminiLastRoutine({
         nombre: routine.nombre,
+        aviso: usoRespaldo ? data.aviso ?? "Gemini no respondió; armamos una rutina básica." : null,
+        detalleTecnico: usoRespaldo ? data.detalle_tecnico ?? null : null,
         descripcion: routine.descripcion,
         duracion_estimada: routine.duracion_estimada,
         visible_en_descubrir: routine.visible_en_descubrir,
@@ -2694,12 +2705,17 @@ function Rutinas({
           nombre: exercise.nombre,
           grupo_muscular: exercise.grupo_muscular,
           tipo_disciplina: exercise.tipo_disciplina,
+          imagen_url: exercise.imagen_url ?? null,
           series: exercise.series,
           repeticiones: exercise.repeticiones,
           descanso: exercise.descanso,
         })),
       });
-      setMensaje("Borrador de rutina generado con Gemini");
+      setMensaje(
+        usoRespaldo
+          ? "Gemini no respondió; se armó una rutina básica con tu catálogo"
+          : "Borrador de rutina generado con Gemini",
+      );
       setGeminiPanelError("");
     } catch (err) {
       setGeminiPanelError(
