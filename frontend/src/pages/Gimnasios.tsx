@@ -13,6 +13,19 @@ type Position = {
   lng: number;
 };
 
+// Ubicacion de respaldo (Pilar centro) si el navegador no comparte la ubicacion.
+const FALLBACK_POSITION: Position = { lat: -34.4587, lng: -58.9142 };
+
+const getLocationErrorMessage = (err: GeolocationPositionError) => {
+  if (err.code === err.PERMISSION_DENIED) {
+    return "No diste permiso de ubicacion, asi que te mostramos gimnasios en Pilar. Move el mapa y toca \"Buscar en esta zona\".";
+  }
+  if (err.code === err.TIMEOUT) {
+    return "Tu ubicacion tardo demasiado en llegar, asi que te mostramos gimnasios en Pilar. Move el mapa y toca \"Buscar en esta zona\".";
+  }
+  return "No pudimos obtener tu ubicacion, asi que te mostramos gimnasios en Pilar. Move el mapa y toca \"Buscar en esta zona\".";
+};
+
 type MapCenterTrackerProps = {
   onCenterChange: (position: Position) => void;
 };
@@ -72,6 +85,7 @@ function Gimnasios({ onBack }: GimnasiosProps) {
   const [loadingLocation, setLoadingLocation] = useState(true);
   const [loadingGyms, setLoadingGyms] = useState(false);
   const [error, setError] = useState("");
+  const [locationNotice, setLocationNotice] = useState("");
 
   const loading = loadingLocation || loadingGyms;
 
@@ -107,30 +121,36 @@ function Gimnasios({ onBack }: GimnasiosProps) {
   };
 
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setError("Tu navegador no permite usar geolocalizacion.");
+    const startAt = (position: Position) => {
+      setUserPosition(position);
+      setMapCenter(position);
       setLoadingLocation(false);
+      void buscarGimnasios(position);
+    };
+
+    if (!navigator.geolocation) {
+      setLocationNotice("Tu navegador no permite usar geolocalizacion, asi que te mostramos gimnasios en Pilar.");
+      startAt(FALLBACK_POSITION);
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const nextPosition = {
+        setLocationNotice("");
+        startAt({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
-        };
-        setUserPosition(nextPosition);
-        setMapCenter(nextPosition);
-        setLoadingLocation(false);
-        void buscarGimnasios(nextPosition);
+        });
       },
-      () => {
-        setError("No pudimos acceder a tu ubicacion. Activa permisos para buscar gimnasios cercanos.");
-        setLoadingLocation(false);
+      (err) => {
+        console.warn("Geolocalizacion fallo:", err.code, err.message);
+        setLocationNotice(getLocationErrorMessage(err));
+        startAt(FALLBACK_POSITION);
       },
       {
-        enableHighAccuracy: true,
+        enableHighAccuracy: false,
         timeout: 10000,
+        maximumAge: 5 * 60 * 1000,
       },
     );
   }, []);
@@ -187,6 +207,7 @@ function Gimnasios({ onBack }: GimnasiosProps) {
       </section>
 
       {loadingLocation ? <div className="status">Buscando gimnasios cercanos...</div> : null}
+      {locationNotice ? <div className="status">{locationNotice}</div> : null}
       {error ? <div className="status error">{error}</div> : null}
 
       {userPosition ? (
@@ -209,7 +230,7 @@ function Gimnasios({ onBack }: GimnasiosProps) {
                 radius={9}
                 pathOptions={{ color: "#7ed6a1", fillColor: "#7ed6a1", fillOpacity: 0.9 }}
               >
-                <Popup>Tu ubicacion</Popup>
+                <Popup>{locationNotice ? "Ubicacion de referencia (Pilar)" : "Tu ubicacion"}</Popup>
               </CircleMarker>
               {gimnasios.map((gym) => (
                 <Marker
