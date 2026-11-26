@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import path from "path";
 import { pool } from "./db";
+import { isBucketStorageEnabled, serveUploadFromBucket } from "./utils/storage";
 
 import authRoutes from "./routes/auth.routes";
 import userRoutes from "./routes/user.routes";
@@ -19,6 +20,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static(path.resolve(__dirname, "../uploads")));
+// Lo que no está en la carpeta local (fotos subidas al bucket) se busca en el bucket.
+app.get("/uploads/*splat", serveUploadFromBucket);
 
 // rutas
 app.use("/auth", authRoutes);
@@ -45,4 +48,9 @@ pool.query("SELECT NOW()")
 
 app.listen(3000, () => {
   console.log("Servidor corriendo en http://localhost:3000");
+  console.log(
+    isBucketStorageEnabled
+      ? "Fotos: bucket de Railway"
+      : "Fotos: carpeta local backend/uploads (configurá BUCKET_* en el .env para usar el bucket)"
+  );
 });
